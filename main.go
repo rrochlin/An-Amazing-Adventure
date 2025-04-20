@@ -6,12 +6,11 @@ import (
 )
 
 func main() {
-	maze, err := GenerateMaze(40, 40, 15)
+	_, err := GenerateMaze(40, 40, 15)
 	if err != nil {
 		fmt.Printf("could not gen maze %v\n", err)
 		return
 	}
-	PrintMaze(maze, Position{0, 0})
 	return
 
 	game, err := NewGame(7, 7)
@@ -29,7 +28,7 @@ func main() {
 	}
 
 	fmt.Println("initial game state")
-	PrintMaze(game.Maze, game.Player.Pos)
+	PrintMaze(game.Maze, []Position{game.Player.Pos})
 
 	for {
 		time.Sleep(1 * time.Second)
@@ -47,7 +46,7 @@ func main() {
 			mazeMap[pos.X][pos.Y] = val
 		}
 		fmt.Println("Current Map State")
-		PrintMaze(mazeMap, game.Player.Pos)
+		PrintMaze(mazeMap, []Position{game.Player.Pos})
 		if (Position{}) == door {
 			fmt.Println("You Escaped!")
 			return
@@ -63,13 +62,16 @@ func main() {
 
 }
 
-func PrintMaze(maze [][]int, player Position) {
-	fmt.Printf("\033[2J\033[H")
+func PrintMaze(maze [][]int, players []Position) {
+	// fmt.Printf("\033[2J\033[H")
 	var playerRune rune = '😊'
 	var door rune = '🚪'
 	var wall rune = '🧱'
 	var floor rune = '🟫'
 	fog := "🌫️"
+	for i := range players {
+		safeSet(maze, players[i], 4)
+	}
 	for i := 0; i < len(maze)+2; i += 1 {
 		fmt.Printf("%v", fog)
 	}
@@ -77,19 +79,17 @@ func PrintMaze(maze [][]int, player Position) {
 	for i := range maze {
 		fmt.Printf("%v", fog)
 		for j := range maze[i] {
-			if player.X == i && player.Y == j {
+			switch maze[i][j] {
+			case 0:
+				fmt.Printf("%c", floor)
+			case 1:
+				fmt.Printf("%c", wall)
+			case 2:
+				fmt.Printf("%c", door)
+			case 3:
+				fmt.Printf("%v", fog)
+			case 4:
 				fmt.Printf("%c", playerRune)
-			} else {
-				switch maze[i][j] {
-				case 0:
-					fmt.Printf("%c", floor)
-				case 1:
-					fmt.Printf("%c", wall)
-				case 2:
-					fmt.Printf("%c", door)
-				case 3:
-					fmt.Printf("%v", fog)
-				}
 			}
 
 		}
