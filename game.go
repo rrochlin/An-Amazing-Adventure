@@ -24,16 +24,10 @@ func NewGame(x_dim, y_dim int) (Game, error) {
 		{0, 0, 0, 1, 1, 1, 0},
 		{0, 0, 0, 2, 0, 0, 0},
 		{0, 0, 0, 1, 1, 1, 1},
-		{0, 0, 0, 2, 0, 0, 0},
+		{0, 0, 0, 2, 0, 0, 2},
 	}
 
 	return g, nil
-}
-
-func PrintMaze(maze [][]int) {
-	for i := range maze {
-		fmt.Printf("%v\n", maze[i])
-	}
 }
 
 func (g *Game) DescribeRoom() (map[Position]int, error) {
@@ -49,11 +43,9 @@ func (g *Game) DescribeRoom() (map[Position]int, error) {
 	queue := make([]Position, 0)
 	queue = append(queue, g.Player.Pos)
 	directions := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
-	fmt.Printf("queue: %v\n", queue)
 
 	for len(queue) > 0 {
 		current := queue[0]
-		fmt.Printf("checking position: %v\n", current)
 		queue = queue[1:]
 		for _, dir := range directions {
 			check := current
@@ -102,22 +94,6 @@ func (g *Game) OpenDoor(door Position) error {
 
 	return nil
 
-}
-
-const doorVal = 2
-
-type Game struct {
-	Player struct {
-		Pos       Position
-		Inventory map[string]bool
-	}
-	Maze    [][]int
-	Visited [][]bool
-}
-
-type Position struct {
-	X int
-	Y int
 }
 
 func (g *Game) getMazeValue(p Position) (int, error) {
