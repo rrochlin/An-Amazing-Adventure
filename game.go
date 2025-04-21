@@ -2,64 +2,93 @@ package main
 
 import (
 	"fmt"
+	"math"
 )
 
 func NewGame(x_dim, y_dim int) (Game, error) {
 	g := Game{}
 	g.Player.Pos = Position{0, 0}
 	g.Player.Inventory = map[string]bool{}
-	//g.Maze = make([][]int, y_dim)
-	//for i := range g.Maze {
-	//	g.Maze[i] = make([]int, x_dim, 0)
-	//}
-	// 1 is wall, 0 is a room
-	g.Visited = make([][]bool, x_dim)
-	for i := range g.Visited {
-		g.Visited[i] = make([]bool, y_dim)
+	maze, err := GenerateMaze(40, 40, 15)
+	if err != nil {
+		return Game{}, err
 	}
-	g.Maze = [][]int{
-		{0, 0, 2, 0, 0, 0, 0},
-		{0, 0, 1, 1, 1, 1, 0},
-		{1, 1, 1, 1, 1, 1, 0},
-		{0, 0, 0, 1, 1, 1, 0},
-		{0, 0, 0, 2, 0, 0, 0},
-		{0, 0, 0, 1, 1, 1, 1},
-		{0, 0, 0, 2, 0, 0, 2},
-	}
-
+	g.Maze = maze
+	g.M = x_dim
+	g.N = y_dim
 	return g, nil
 }
 
-func (g *Game) DescribeRoom() (map[Position]int, error) {
-	if ok, _ := g.tryVisit(g.Player.Pos); !ok {
-		return nil, nil
+func (g *Game) Describe() (map[Position]int, error) {
+	val, _ := safeGet(g.Maze, g.Player.Pos)
+	if val == 0 {
+		return g.describeRoom()
 	}
+	return g.describeHall()
+
+}
+
+func (g *Game) describeHall() (map[Position]int, error) {
 	newInfo := map[Position]int{}
-	mazeVal, err := g.getMazeValue(g.Player.Pos)
-	if err != nil {
-		return nil, err
-	}
-	newInfo[g.Player.Pos] = mazeVal
 	queue := make([]Position, 0)
 	queue = append(queue, g.Player.Pos)
 	directions := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
+	visited := g.BoolMatrix()
 
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
 		for _, dir := range directions {
-			check := current
-			check.X += dir[0]
-			check.Y += dir[1]
-			if ok, _ := g.tryVisit(check); !ok {
+			check := current.Add(Position{dir[0], dir[1]})
+			vis, ok := safeGet(visited, check)
+			if !ok {
 				continue
 			}
-			val, err := g.getMazeValue(check)
-			if err != nil {
-				return nil, err
+			val := get(g.Maze, check)
+			safeSet(visited, check, true)
+			if vis || val == 0 { // not in a room or already seen
+				fmt.Printf("room or visit: %v\n", check)
+				continue
 			}
+			canSee := g.checkView(check)
+
+			if !canSee { // can't see the block
+				fmt.Printf("can't see: %v\n", check)
+				continue
+			}
+
 			newInfo[check] = val
-			if val > 0 {
+			queue = append(queue, check)
+		}
+	}
+
+	return newInfo, nil
+}
+
+func (g *Game) describeRoom() (map[Position]int, error) {
+	newInfo := map[Position]int{}
+	queue := make([]Position, 0)
+	queue = append(queue, g.Player.Pos)
+	directions := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
+	visited := g.BoolMatrix()
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, dir := range directions {
+			check := current.Add(Position{dir[0], dir[1]})
+			vis, ok := safeGet(visited, check)
+			if !ok {
+				continue
+			}
+			val := get(g.Maze, check)
+			if vis || val == 1 { // not in a room or already seen
+				continue
+			}
+
+			safeSet(visited, check, true)
+			newInfo[check] = val
+			if val > 0 { // is the door
 				continue
 			}
 			queue = append(queue, check)
@@ -71,75 +100,69 @@ func (g *Game) DescribeRoom() (map[Position]int, error) {
 }
 
 func (g *Game) OpenDoor(door Position) error {
-	val, err := g.getMazeValue(door)
-	if err != nil {
-		return err
-	}
-	if !g.Visited[door.X][door.Y] {
-		return fmt.Errorf("You have not discovered this location")
+	val, ok := safeGet(g.Maze, door)
+	if !ok {
+		return fmt.Errorf("Not a valid door location %v\n", door)
 	}
 	if val != doorVal {
 		return fmt.Errorf("This isn't a door")
 	}
-
-	g.Player.Pos = door
-	err = g.setMazeValue(door, 0)
-	if err != nil {
-		return err
+	tileType := get(g.Maze, g.Player.Pos)
+	directions := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
+	for _, dir := range directions {
+		check := door.Add(Position{dir[0], dir[1]})
+		if val, ok := safeGet(g.Maze, check); ok && val != tileType {
+			g.Player.Pos = check
+			return nil
+		}
 	}
-	err = g.setVisit(door, false)
-	if err != nil {
-		return err
+
+	return fmt.Errorf("Could not find a suitable tile to move player to\n")
+}
+
+func (g *Game) Move(to Position) error {
+	val, ok := safeGet(g.Maze, to)
+	if !ok {
+		return fmt.Errorf("invalid move")
+	}
+	if val == 2 {
+		g.OpenDoor(to)
+	} else {
+		g.Player.Pos = to
 	}
 
 	return nil
-
 }
 
-func (g *Game) getMazeValue(p Position) (int, error) {
-	err := g.boundsCheckPos(p)
-	if err != nil {
-		return 0, err
+func (g *Game) checkView(check Position) bool {
+	diff := check.Diff(g.Player.Pos)
+	if diff.X == 0 && diff.Y == 0 {
+		return true
 	}
-	return g.Maze[p.X][p.Y], nil
-}
+	slope := float64(diff.Y) / float64(diff.X)
+	x_inc := math.Copysign(1, float64(diff.X))
+	y_inc := math.Copysign(1, float64(diff.Y))
+	fmt.Printf("slope: %v\n", slope)
+	fmt.Printf("x_inc: %v\n", x_inc)
+	fmt.Printf("y_inc: %v\n", y_inc)
 
-func (g *Game) setMazeValue(p Position, val int) error {
-	err := g.boundsCheckPos(p)
-	if err != nil {
-		return err
+	rise, run := 0, 0
+	inPath := []Position{}
+	current := check
+	for !current.Equal(g.Player.Pos) {
+		if math.Abs(float64(run)*slope) <= math.Abs(float64(rise)) {
+			current.X -= int(x_inc)
+			run += 1
+		} else {
+			current.Y -= int(y_inc)
+			rise += 1
+		}
+		fmt.Printf("current: %v\n", current)
+		inPath = append(inPath, current)
+		if get(g.Maze, current) == 0 {
+			return false
+		}
 	}
-	g.Maze[p.X][p.Y] = val
-	return nil
-}
+	return true
 
-func (g *Game) tryVisit(p Position) (bool, error) {
-	err := g.boundsCheckPos(p)
-	if err != nil {
-		return false, err
-	}
-	if g.Visited[p.X][p.Y] {
-		return false, nil
-	}
-	g.Visited[p.X][p.Y] = true
-	return true, nil
-}
-
-func (g *Game) setVisit(p Position, state bool) error {
-	err := g.boundsCheckPos(p)
-	if err != nil {
-		return err
-	}
-	g.Visited[p.X][p.Y] = state
-	return nil
-}
-
-func (g *Game) boundsCheckPos(p Position) error {
-	if len(g.Maze) <= p.X || p.X < 0 {
-		return fmt.Errorf("invalid position access X bounds %v", p)
-	}
-	if len(g.Maze[0]) <= p.Y || p.Y < 0 {
-		return fmt.Errorf("invalid position access Y bounds %v", p)
-	}
-	return nil
 }

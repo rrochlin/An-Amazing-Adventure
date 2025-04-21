@@ -42,14 +42,12 @@ func GenerateMaze(x, y, n int) ([][]int, error) {
 		current := queue[0]
 		queue = queue[1:]
 		for _, dir := range directions {
-			check := current.pos
-			check.X += dir[0]
-			check.Y += dir[1]
+			check := current.pos.Add(Position{dir[0], dir[1]})
 			vis, ok := safeGet(visited, check)
 			if !ok { // out of bounds continue
 				continue
 			}
-			val, _ := safeGet(maze, check)
+			val := get(maze, check)
 			if vis && val == current.val { // rexploring own room, continue
 				continue
 			}
@@ -122,15 +120,13 @@ func GenerateMaze(x, y, n int) ([][]int, error) {
 			q = q[1:]
 			door := false
 			for _, dir := range directions {
-				check := current
-				check.X += dir[0]
-				check.Y += dir[1]
+				check := current.Add(Position{dir[0], dir[1]})
 				vis, ok := safeGet(visited, check)
 				if !ok || vis { // out of bounds continue
 					continue
 				}
-				val, ok := safeGet(maze, check)
-				if ok && val == 1 {
+				val := get(maze, check)
+				if val == 1 {
 					safeSet(maze, check, 2)
 					door = true
 					break
@@ -144,8 +140,6 @@ func GenerateMaze(x, y, n int) ([][]int, error) {
 		}
 	}
 
-	PrintMaze(maze, original)
-
 	return maze, nil
 }
 
@@ -157,7 +151,11 @@ func safeGet[T any](slice [][]T, index Position) (T, bool) {
 	if !index.IsInBounds(len(slice), len(slice[0])) {
 		return zero, false
 	}
-	return slice[index.X][index.Y], true
+	return get(slice, index), true
+}
+
+func get[T any](slice [][]T, index Position) T {
+	return slice[index.X][index.Y]
 }
 
 func safeSet[T any](slice [][]T, index Position, val T) {
