@@ -19,11 +19,13 @@ func main() {
 		},
 	}
 
-	mux.HandleFunc("GET /", HandlerMain)
+	mux.Handle("GET /", handler)
+
+	wrappedMux := NewLogger(mux)
 
 	var server = http.Server{
 		Addr:    fmt.Sprintf("%v:%v", cfg.api.host, cfg.api.port),
-		Handler: mux,
+		Handler: wrappedMux,
 	}
 	fmt.Println(server.Addr)
 	err := server.ListenAndServe()
@@ -34,9 +36,7 @@ func main() {
 
 }
 
-var handler = http.StripPrefix("/app/",
-	http.FileServer(http.Dir(".")),
-)
+var handler = http.StripPrefix("/", http.FileServer(http.Dir("static")))
 
 // API related configuration
 type apiSettings struct {
