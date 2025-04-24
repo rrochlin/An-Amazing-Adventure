@@ -10,6 +10,11 @@ import (
 
 func main() {
 	godotenv.Load()
+	game, err := NewGame(40, 40)
+	if err != nil {
+		fmt.Printf("fatal error, game object creation failed: %v", err)
+		return
+	}
 
 	mux := http.NewServeMux()
 	cfg := apiConfig{
@@ -17,9 +22,12 @@ func main() {
 			host: os.Getenv("HOST_URL"),
 			port: os.Getenv("PORT"),
 		},
+		game: game,
 	}
 
-	mux.Handle("GET /", handler)
+	mux.HandleFunc("POST /api/move", cfg.HandlerMove)
+	mux.HandleFunc("GET /api/describe", cfg.HandlerDescribe)
+	mux.HandleFunc("GET /api/startgame", cfg.HandlerStartGame)
 
 	wrappedMux := NewLogger(mux)
 
@@ -28,15 +36,13 @@ func main() {
 		Handler: wrappedMux,
 	}
 	fmt.Println(server.Addr)
-	err := server.ListenAndServe()
+	err = server.ListenAndServe()
 	if err != nil {
 		fmt.Printf("error encountered closing %v\n", err)
 		return
 	}
 
 }
-
-var handler = http.StripPrefix("/", http.FileServer(http.Dir("static")))
 
 // API related configuration
 type apiSettings struct {
@@ -48,5 +54,6 @@ type apiSettings struct {
 
 // Main configuration struct
 type apiConfig struct {
-	api apiSettings
+	api  apiSettings
+	game Game
 }

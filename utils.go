@@ -56,6 +56,16 @@ type Game struct {
 	N    int
 }
 
+func (g *Game) marshal() ([]byte, error) {
+	// TODO
+	return nil, nil
+}
+
+func (g *Game) unmarshal() ([]byte, error) {
+	// TODO
+	return nil, nil
+}
+
 type Position struct {
 	X int
 	Y int
