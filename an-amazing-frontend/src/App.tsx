@@ -2,29 +2,70 @@ import './App.css'
 import { Stage, Layer, Rect } from 'react-konva';
 import axios from 'axios';
 import { useEffect, useState } from 'react';
+import TextField from '@mui/material/TextField'
+import Konva from 'konva';
+
+const APP_URI = import.meta.env.VITE_APP_URI
 
 
 function App() {
 
-  const [newPositions, setNewPositions] = useState<position[]>([])
+  const [newPositions, setNewPositions] = useState<Map<position, number>>()
   const [maze, setMaze] = useState<mazeBlock[]>()
   const [player, setPlayer] = useState<position>()
+  const [command, setCommand] = useState("")
+  const [cols, setCols] = useState(0)
+  const [rows, setRows] = useState(0)
 
   const inc = Math.min(window.innerWidth, window.innerHeight) / Math.sqrt(Math.max(1, (maze || []).length)) / 2
   const getMap = async () => {
-    const result: startgameResponse = (await axios.get("http://localhost:3000/api/startgame")).data
+    const result: startgameResponse = (await axios.get(`${APP_URI}startgame`)).data
     console.log("positions")
     console.log(result.positions)
     const mazeTemp = []
-    for (let i = 0; i < result.positions.length; i++) {
-      for (let j = 0; j < result.positions[0].length; j++) {
-        mazeTemp.push({ x: i, y: j, key: i * result.positions.length + j, val: result.positions[i][j] })
+    setCols(result.cols)
+    setRows(result.rows)
+    for (let i = 0; i < result.rows; i++) {
+      for (let j = 0; j < result.cols; j++) {
+        mazeTemp.push({ x: i, y: j, key: i * 100 + j, val: 4 })
 
       }
     }
     setMaze(mazeTemp)
 
     setPlayer(result.player)
+    await RequestDescribe()
+  }
+
+  //type retVal struct {
+  //	Positions map[Position]int `json:"positions"`
+  //	Player    Position         `json:"player"`
+  //}
+  //
+
+  type describeReq = {
+    positions: position[],
+    values: number[],
+    player: position
+  }
+
+  const RequestDescribe = async () => {
+    if (!maze) return
+    const result = await axios.get<describeReq>(`${APP_URI}describe`)
+    if (result.status != 200) {
+      console.log("error happened\n", result)
+      return
+    }
+    console.log(result)
+    const newPositions = result.data.positions
+    const newValues = result.data.values
+    setPlayer(result.data.player)
+    for (let i = 0; i < newPositions.length; i++) {
+      const index = newPositions[i].X + newPositions[i].Y * cols
+      maze[index].val = newValues[index]
+    }
+
+
   }
 
 
@@ -38,33 +79,62 @@ function App() {
 
 
 
+
+
+  const RequestMove = async (move: position) => {
+    await axios.post(`${APP_URI}move`, {
+      position: move
+    }).then(function(res) {
+      RequestDescribe()
+    }).catch(function(err) {
+      console.log(err)
+    })
+  }
+
+
+  const handleClick = (event: Konva.KonvaEventObject<MouseEvent>) => {
+    const move: position = {
+      X: Math.floor(event.target.index / rows),
+      Y: event.target.index % cols
+    }
+    RequestMove(move)
+
+
+  }
+
+
   return (
-    <Stage width={window.innerWidth / 1.1} height={window.innerHeight / 1.1}>
-      <Layer draggable>
-        {maze && maze.map((block: mazeBlock) => {
-          console.log("writing")
-          return (
-            <Rect
-              key={block.key}
-              x={block.x * inc}
-              y={block.y * inc}
-              width={inc}
-              height={inc}
-              fill={extendedColors[block.val]}
-            />
-          )
-        })
-        }
-      </Layer>
-    </Stage>
+    <div>
+      <Stage width={window.innerWidth / 1.1} height={window.innerHeight / 1.5}>
+        <Layer>
+          {maze && player && maze.map((block: mazeBlock) => {
+            const color = !(player.X == block.x && player.Y == block.y) ?
+              extendedColors[block.val] : extendedColors[3]
+
+            return (
+              <Rect
+                key={block.key}
+                x={block.x * inc}
+                y={block.y * inc}
+                width={inc}
+                height={inc}
+                fill={color}
+                onClick={handleClick}
+              />
+            )
+          })
+          }
+        </Layer>
+      </Stage>
+    </div>
   );
 };
 
 export default App
 
 type position = {
-  x: number;
-  y: number;
+  X: number;
+  Y: number;
 }
 
 type mazeBlock = {

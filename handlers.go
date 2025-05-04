@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -13,7 +14,12 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 		Rows      int      `json:"rows"`
 	}
 
-	RetVal := retVal{Positions: cfg.game.Maze, Player: cfg.game.Player.Pos, Cols: cfg.game.M, Rows: cfg.game.N}
+	RetVal := retVal{
+		Positions: cfg.game.Maze,
+		Player:    cfg.game.Player.Pos,
+		Cols:      cfg.game.M,
+		Rows:      cfg.game.N,
+	}
 	dat, err := json.Marshal(RetVal)
 	if err != nil {
 		ErrorServer("failed to get maze data", w, err)
@@ -65,12 +71,28 @@ func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) 
 	if err != nil {
 		return
 	}
+	fmt.Printf("newInfo: %v\n", newInfo)
 	type retVal struct {
-		Positions map[Position]int `json:"positions"`
-		Player    Position         `json:"player"`
+		Positions []Position `json:"positions"`
+		Values    []int      `json:"values"`
+		Player    Position   `json:"player"`
 	}
-	RetVal := retVal{Positions: newInfo, Player: cfg.game.Player.Pos}
+
+	keys := make([]Position, 0, len(newInfo))
+	for p := range newInfo {
+		keys = append(keys, p)
+	}
+	vals := make([]int, 0, len(newInfo))
+	for p := range newInfo {
+		vals = append(vals, newInfo[p])
+	}
+
+	RetVal := retVal{Positions: keys, Values: vals, Player: cfg.game.Player.Pos}
 	dat, err := json.Marshal(RetVal)
+	if err != nil {
+		ErrorServer("Failed to marshal data", w, err)
+		return
+	}
 
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(200)

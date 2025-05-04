@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -29,7 +30,7 @@ func main() {
 	mux.HandleFunc("GET /api/describe", cfg.HandlerDescribe)
 	mux.HandleFunc("GET /api/startgame", cfg.HandlerStartGame)
 
-	wrappedMux := NewLogger(mux)
+	wrappedMux := cors.Default().Handler(NewLogger(mux))
 
 	var server = http.Server{
 		Addr:    fmt.Sprintf("%v:%v", cfg.api.host, cfg.api.port),

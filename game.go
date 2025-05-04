@@ -9,7 +9,7 @@ func NewGame(x_dim, y_dim int) (Game, error) {
 	g := Game{}
 	g.Player.Pos = Position{0, 0}
 	g.Player.Inventory = map[string]bool{}
-	maze, err := GenerateMaze(40, 40, 15)
+	maze, err := GenerateMaze(x_dim, y_dim, int(math.Min(float64(x_dim), float64(y_dim))/2))
 	if err != nil {
 		return Game{}, err
 	}

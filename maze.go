@@ -61,7 +61,7 @@ func GenerateMaze(x, y, n int) ([][]int, error) {
 			break
 		}
 	}
-	thickness := 4
+	thickness := 3
 	for i := range x {
 		wall := false
 		count := 0
