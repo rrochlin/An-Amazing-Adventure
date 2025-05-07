@@ -34,7 +34,6 @@ function App() {
     setMaze(mazeTemp)
 
     setPlayer(result.player)
-    await RequestDescribe()
   }
 
   //type retVal struct {
@@ -61,8 +60,8 @@ function App() {
     const newValues = result.data.values
     setPlayer(result.data.player)
     for (let i = 0; i < newPositions.length; i++) {
-      const index = newPositions[i].X + newPositions[i].Y * cols
-      maze[index].val = newValues[index]
+      const index = newPositions[i].X * rows + newPositions[i].Y
+      maze[index].val = newValues[i]
     }
 
 
@@ -70,13 +69,13 @@ function App() {
 
 
   useEffect(() => {
-    getMap().then(() => {
-      console.log("maze is set")
-      console.log(maze)
-    }
-    )
+    getMap()
   }, [])
 
+
+  useEffect(() => {
+    RequestDescribe()
+  }, [maze])
 
 
 
@@ -85,6 +84,9 @@ function App() {
     await axios.post(`${APP_URI}move`, {
       position: move
     }).then(function(res) {
+      if (res.status != 200) {
+        console.log("error non 200 response", res)
+      }
       RequestDescribe()
     }).catch(function(err) {
       console.log(err)
@@ -96,6 +98,10 @@ function App() {
     const move: position = {
       X: Math.floor(event.target.index / rows),
       Y: event.target.index % cols
+    }
+    if (maze && maze[event.target.index].val == 4) {
+      alert("invalid move")
+      return
     }
     RequestMove(move)
 

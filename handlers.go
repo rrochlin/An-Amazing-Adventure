@@ -79,11 +79,9 @@ func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) 
 	}
 
 	keys := make([]Position, 0, len(newInfo))
-	for p := range newInfo {
-		keys = append(keys, p)
-	}
 	vals := make([]int, 0, len(newInfo))
 	for p := range newInfo {
+		keys = append(keys, p)
 		vals = append(vals, newInfo[p])
 	}
 
