@@ -17,18 +17,18 @@ function App() {
   const [cols, setCols] = useState(0)
   const [rows, setRows] = useState(0)
 
-  const inc = Math.min(window.innerWidth, window.innerHeight) / Math.sqrt(Math.max(1, (maze || []).length)) / 2
+  const inc = Math.min(window.innerWidth, window.innerHeight) / Math.sqrt(Math.max(1, (maze || []).length)) / 1.4
   const getMap = async () => {
-    const result: startgameResponse = (await axios.get(`${APP_URI}startgame`)).data
+    const result: startgameResponse = (await axios.post(`${APP_URI}startgame`,
+      { columns: 100, rows: 100 })
+    ).data
     console.log("positions")
-    console.log(result.positions)
     const mazeTemp = []
     setCols(result.cols)
     setRows(result.rows)
     for (let i = 0; i < result.rows; i++) {
       for (let j = 0; j < result.cols; j++) {
-        mazeTemp.push({ x: i, y: j, key: i * 100 + j, val: 4 })
-
+        mazeTemp.push({ x: i, y: j, key: i * 100 + j, val: 5 })
       }
     }
     setMaze(mazeTemp)
@@ -81,7 +81,7 @@ function App() {
 
 
   const RequestMove = async (move: position) => {
-    await axios.post(`${APP_URI}move`, {
+    axios.post(`${APP_URI}move`, {
       position: move
     }).then(function(res) {
       if (res.status != 200) {
@@ -99,7 +99,7 @@ function App() {
       X: Math.floor(event.target.index / rows),
       Y: event.target.index % cols
     }
-    if (maze && maze[event.target.index].val == 4) {
+    if (maze && maze[event.target.index].val == 5) {
       alert("invalid move")
       return
     }
@@ -111,7 +111,7 @@ function App() {
 
   return (
     <div>
-      <Stage width={window.innerWidth / 1.1} height={window.innerHeight / 1.5}>
+      <Stage width={window.innerWidth} height={window.innerHeight}>
         <Layer>
           {maze && player && maze.map((block: mazeBlock) => {
             const color = !(player.X == block.x && player.Y == block.y) ?
@@ -151,7 +151,6 @@ type mazeBlock = {
 }
 
 type startgameResponse = {
-  positions: number[][];
   player: position;
   cols: number;
   rows: number;

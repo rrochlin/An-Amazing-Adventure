@@ -11,11 +11,6 @@ import (
 
 func main() {
 	godotenv.Load()
-	game, err := NewGame(40, 40)
-	if err != nil {
-		fmt.Printf("fatal error, game object creation failed: %v", err)
-		return
-	}
 
 	mux := http.NewServeMux()
 	cfg := apiConfig{
@@ -23,12 +18,12 @@ func main() {
 			host: os.Getenv("HOST_URL"),
 			port: os.Getenv("PORT"),
 		},
-		game: game,
+		game: Game{},
 	}
 
 	mux.HandleFunc("POST /api/move", cfg.HandlerMove)
 	mux.HandleFunc("GET /api/describe", cfg.HandlerDescribe)
-	mux.HandleFunc("GET /api/startgame", cfg.HandlerStartGame)
+	mux.HandleFunc("POST /api/startgame", cfg.HandlerStartGame)
 
 	wrappedMux := cors.Default().Handler(NewLogger(mux))
 
@@ -37,7 +32,7 @@ func main() {
 		Handler: wrappedMux,
 	}
 	fmt.Println(server.Addr)
-	err = server.ListenAndServe()
+	err := server.ListenAndServe()
 	if err != nil {
 		fmt.Printf("error encountered closing %v\n", err)
 		return

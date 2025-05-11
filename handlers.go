@@ -7,18 +7,30 @@ import (
 )
 
 func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Columns int `json:"columns"`
+		Rows    int `json:"rows"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		ErrorBadRequest("failed to parse request body", w, nil)
+		return
+	}
+
+	cfg.game, err = NewGame(params.Columns, params.Rows)
+
 	type retVal struct {
-		Positions [][]int  `json:"positions"`
-		Player    Position `json:"player"`
-		Cols      int      `json:"cols"`
-		Rows      int      `json:"rows"`
+		Player Position `json:"player"`
+		Cols   int      `json:"cols"`
+		Rows   int      `json:"rows"`
 	}
 
 	RetVal := retVal{
-		Positions: cfg.game.Maze,
-		Player:    cfg.game.Player.Pos,
-		Cols:      cfg.game.M,
-		Rows:      cfg.game.N,
+		Player: cfg.game.Player.Pos,
+		Cols:   cfg.game.M,
+		Rows:   cfg.game.N,
 	}
 	dat, err := json.Marshal(RetVal)
 	if err != nil {
