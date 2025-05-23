@@ -142,9 +142,9 @@ func (g *Game) checkView(check Position) bool {
 	slope := float64(diff.Y) / float64(diff.X)
 	x_inc := math.Copysign(1, float64(diff.X))
 	y_inc := math.Copysign(1, float64(diff.Y))
-	fmt.Printf("slope: %v\n", slope)
-	fmt.Printf("x_inc: %v\n", x_inc)
-	fmt.Printf("y_inc: %v\n", y_inc)
+	//fmt.Printf("slope: %v\n", slope)
+	//fmt.Printf("x_inc: %v\n", x_inc)
+	//fmt.Printf("y_inc: %v\n", y_inc)
 
 	rise, run := 0, 0
 	inPath := []Position{}

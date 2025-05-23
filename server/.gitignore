@@ -28,3 +28,5 @@ node_modules/
 dist/
 src/static/assets/
 server.log
+
+vendor/

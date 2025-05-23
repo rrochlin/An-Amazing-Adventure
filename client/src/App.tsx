@@ -4,23 +4,27 @@ import axios from 'axios';
 import { useEffect, useState } from 'react';
 import TextField from '@mui/material/TextField'
 import Konva from 'konva';
+import Typography from '@mui/material/Typography';
+import { Button } from '@mui/material';
 
 const APP_URI = import.meta.env.VITE_APP_URI
 
 
 function App() {
 
-  const [newPositions, setNewPositions] = useState<Map<position, number>>()
+  //const [newPositions, setNewPositions] = useState<Map<position, number>>()
   const [maze, setMaze] = useState<mazeBlock[]>()
   const [player, setPlayer] = useState<position>()
-  const [command, setCommand] = useState("")
+  //const [command, setCommand] = useState("")
   const [cols, setCols] = useState(0)
   const [rows, setRows] = useState(0)
+  const [chatResponse, setChatResponse] = useState("")
+  const [chatRequest, setChatRequest] = useState("Where am I?")
 
   const inc = Math.min(window.innerWidth, window.innerHeight) / Math.sqrt(Math.max(1, (maze || []).length)) / 1.4
   const getMap = async () => {
     const result: startgameResponse = (await axios.post(`${APP_URI}startgame`,
-      { columns: 100, rows: 100 })
+      { columns: 25, rows: 25 })
     ).data
     console.log("positions")
     const mazeTemp = []
@@ -34,6 +38,7 @@ function App() {
     setMaze(mazeTemp)
 
     setPlayer(result.player)
+    await submitChat()
   }
 
   //type retVal struct {
@@ -109,9 +114,22 @@ function App() {
   }
 
 
+  const submitChat = async () => {
+    const result = await axios.post(`${APP_URI}chat`, { chat: chatRequest })
+    if (result.status != 200) {
+      console.log("error getting chat")
+      alert(result)
+    }
+    console.log(result)
+    setChatResponse(result.data.Response)
+    await RequestDescribe()
+
+  }
+
+
   return (
     <div>
-      <Stage width={window.innerWidth} height={window.innerHeight}>
+      <Stage width={window.innerWidth} height={window.innerHeight / 1.2}>
         <Layer>
           {maze && player && maze.map((block: mazeBlock) => {
             const color = !(player.X == block.x && player.Y == block.y) ?
@@ -132,6 +150,26 @@ function App() {
           }
         </Layer>
       </Stage>
+      <Typography variant='body1'>
+        {chatResponse}
+      </Typography>
+      <div>
+        <TextField
+          id="outlined-basic"
+          label="Input"
+          variant="outlined"
+          multiline
+
+          value={chatRequest}
+          onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+            setChatRequest(event.target.value);
+          }}
+        />
+        <Button variant="contained" onClick={submitChat}>
+          Submit
+        </Button>
+      </div>
+
     </div>
   );
 };
