@@ -2,167 +2,173 @@ package main
 
 import (
 	"fmt"
-	"math"
 )
 
-func NewGame(x_dim, y_dim int) (Game, error) {
-	g := Game{}
-	g.Player.Pos = Position{0, 0}
-	g.Player.Inventory = map[string]bool{}
-	maze, err := GenerateMaze(x_dim, y_dim, int(math.Min(float64(x_dim), float64(y_dim))/2))
-	if err != nil {
-		return Game{}, err
+func NewGame() Game {
+	return Game{
+		Map:      make(map[string]Area),
+		ItemList: make(map[string]Item),
+		NPCs:     make(map[string]Character),
 	}
-	g.Maze = maze
-	g.M = x_dim
-	g.N = y_dim
-	return g, nil
 }
 
-func (g *Game) Describe() (map[Position]int, error) {
-	val, _ := safeGet(g.Maze, g.Player.Pos)
-	if val == 0 {
-		return g.describeRoom()
-	}
-	return g.describeHall()
-
+type Game struct {
+	Player   Character
+	Map      map[string]Area
+	ItemList map[string]Item
+	NPCs     map[string]Character
 }
 
-func (g *Game) describeHall() (map[Position]int, error) {
-	newInfo := map[Position]int{}
-	queue := make([]Position, 0)
-	queue = append(queue, g.Player.Pos)
-	directions := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
-	visited := g.BoolMatrix()
-
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		for _, dir := range directions {
-			check := current.Add(Position{dir[0], dir[1]})
-			vis, ok := safeGet(visited, check)
-			if !ok {
-				continue
-			}
-			val := get(g.Maze, check)
-			safeSet(visited, check, true)
-			if vis || val == 0 { // not in a room or already seen
-				fmt.Printf("room or visit: %v\n", check)
-				continue
-			}
-			canSee := g.checkView(check)
-
-			if !canSee { // can't see the block
-				fmt.Printf("can't see: %v\n", check)
-				continue
-			}
-
-			newInfo[check] = val
-			queue = append(queue, check)
-		}
+// AddItem adds an item to the game's ItemList
+func (g *Game) AddItem(item Item) error {
+	if item.Name == "" {
+		return fmt.Errorf("item must have a name")
 	}
-
-	return newInfo, nil
-}
-
-func (g *Game) describeRoom() (map[Position]int, error) {
-	newInfo := map[Position]int{}
-	queue := make([]Position, 0)
-	queue = append(queue, g.Player.Pos)
-	directions := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
-	visited := g.BoolMatrix()
-
-	for len(queue) > 0 {
-		current := queue[0]
-		queue = queue[1:]
-		for _, dir := range directions {
-			check := current.Add(Position{dir[0], dir[1]})
-			vis, ok := safeGet(visited, check)
-			if !ok {
-				continue
-			}
-			val := get(g.Maze, check)
-			if vis || val == 1 { // not in a room or already seen
-				continue
-			}
-
-			safeSet(visited, check, true)
-			newInfo[check] = val
-			if val > 0 { // is the door
-				continue
-			}
-			queue = append(queue, check)
-		}
-	}
-
-	return newInfo, nil
-
-}
-
-func (g *Game) OpenDoor(door Position) error {
-	val, ok := safeGet(g.Maze, door)
-	if !ok {
-		return fmt.Errorf("Not a valid door location %v\n", door)
-	}
-	if val != doorVal {
-		return fmt.Errorf("This isn't a door")
-	}
-	tileType := get(g.Maze, g.Player.Pos)
-	directions := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
-	for _, dir := range directions {
-		check := door.Add(Position{dir[0], dir[1]})
-		if val, ok := safeGet(g.Maze, check); ok && val != tileType {
-			g.Player.Pos = check
-			return nil
-		}
-	}
-
-	return fmt.Errorf("Could not find a suitable tile to move player to\n")
-}
-
-func (g *Game) Move(to Position) error {
-	val, ok := safeGet(g.Maze, to)
-	if !ok {
-		return fmt.Errorf("invalid move")
-	}
-	if val == 2 {
-		g.OpenDoor(to)
-	} else {
-		g.Player.Pos = to
-	}
-
+	g.ItemList[item.Name] = item
 	return nil
 }
 
-func (g *Game) checkView(check Position) bool {
-	diff := check.Diff(g.Player.Pos)
-	if diff.X == 0 && diff.Y == 0 {
-		return true
+// RemoveItem removes an item from the game's ItemList
+func (g *Game) RemoveItem(itemName string) error {
+	if _, exists := g.ItemList[itemName]; !exists {
+		return fmt.Errorf("item %s not found", itemName)
 	}
-	slope := float64(diff.Y) / float64(diff.X)
-	x_inc := math.Copysign(1, float64(diff.X))
-	y_inc := math.Copysign(1, float64(diff.Y))
-	//fmt.Printf("slope: %v\n", slope)
-	//fmt.Printf("x_inc: %v\n", x_inc)
-	//fmt.Printf("y_inc: %v\n", y_inc)
+	delete(g.ItemList, itemName)
+	return nil
+}
 
-	rise, run := 0, 0
-	inPath := []Position{}
-	current := check
-	for !current.Equal(g.Player.Pos) {
-		if math.Abs(float64(run)*slope) <= math.Abs(float64(rise)) {
-			current.X -= int(x_inc)
-			run += 1
-		} else {
-			current.Y -= int(y_inc)
-			rise += 1
-		}
-		fmt.Printf("current: %v\n", current)
-		inPath = append(inPath, current)
-		if get(g.Maze, current) == 0 {
-			return false
+// GetItem retrieves an item from the game's ItemList
+func (g *Game) GetItem(itemName string) (Item, error) {
+	item, exists := g.ItemList[itemName]
+	if !exists {
+		return Item{}, fmt.Errorf("item %s not found", itemName)
+	}
+	return item, nil
+}
+
+// AddArea adds an area to the game's Map
+func (g *Game) AddArea(areaID string, area Area) error {
+	if areaID == "" {
+		return fmt.Errorf("area ID cannot be empty")
+	}
+	g.Map[areaID] = area
+	return nil
+}
+
+// RemoveArea removes an area from the game's Map
+func (g *Game) RemoveArea(areaID string) error {
+	if _, exists := g.Map[areaID]; !exists {
+		return fmt.Errorf("area %s not found", areaID)
+	}
+	delete(g.Map, areaID)
+	return nil
+}
+
+// GetArea retrieves an area from the game's Map
+func (g *Game) GetArea(areaID string) (Area, error) {
+	area, exists := g.Map[areaID]
+	if !exists {
+		return Area{}, fmt.Errorf("area %s not found", areaID)
+	}
+	return area, nil
+}
+
+// AddNPC adds an NPC to the game's NPCs map
+func (g *Game) AddNPC(npc Character) error {
+	if npc.Name == "" {
+		return fmt.Errorf("NPC must have a name")
+	}
+	g.NPCs[npc.Name] = npc
+	return nil
+}
+
+// RemoveNPC removes an NPC from the game's NPCs map
+func (g *Game) RemoveNPC(npcName string) error {
+	if _, exists := g.NPCs[npcName]; !exists {
+		return fmt.Errorf("NPC %s not found", npcName)
+	}
+	delete(g.NPCs, npcName)
+	return nil
+}
+
+// GetNPC retrieves an NPC from the game's NPCs map
+func (g *Game) GetNPC(npcName string) (Character, error) {
+	npc, exists := g.NPCs[npcName]
+	if !exists {
+		return Character{}, fmt.Errorf("NPC %s not found", npcName)
+	}
+	return npc, nil
+}
+
+// AddItemToArea adds an item to a specific area
+func (g *Game) AddItemToArea(areaID string, item Item) error {
+	area, err := g.GetArea(areaID)
+	if err != nil {
+		return err
+	}
+	area.Items = append(area.Items, item)
+	g.Map[areaID] = area
+	return nil
+}
+
+// RemoveItemFromArea removes an item from a specific area
+func (g *Game) RemoveItemFromArea(areaID string, itemName string) error {
+	area, err := g.GetArea(areaID)
+	if err != nil {
+		return err
+	}
+
+	for i, item := range area.Items {
+		if item.Name == itemName {
+			area.Items = append(area.Items[:i], area.Items[i+1:]...)
+			g.Map[areaID] = area
+			return nil
 		}
 	}
-	return true
+	return fmt.Errorf("item %s not found in area %s", itemName, areaID)
+}
 
+// AddNPCToArea adds an NPC to a specific area
+func (g *Game) AddNPCToArea(areaID string, npcName string) error {
+	area, err := g.GetArea(areaID)
+	if err != nil {
+		return err
+	}
+
+	npc, err := g.GetNPC(npcName)
+	if err != nil {
+		return err
+	}
+
+	area.Occupants = append(area.Occupants, npcName)
+	npc.Location = area
+	g.Map[areaID] = area
+	g.NPCs[npcName] = npc
+	return nil
+}
+
+// RemoveNPCFromArea removes an NPC from a specific area
+func (g *Game) RemoveNPCFromArea(areaID string, npcName string) error {
+	area, err := g.GetArea(areaID)
+	if err != nil {
+		return err
+	}
+
+	for i, occupant := range area.Occupants {
+		if occupant == npcName {
+			area.Occupants = append(area.Occupants[:i], area.Occupants[i+1:]...)
+			g.Map[areaID] = area
+			return nil
+		}
+	}
+	return fmt.Errorf("NPC %s not found in area %s", npcName, areaID)
+}
+
+// GetAllAreas returns all areas in the game
+func (g *Game) GetAllAreas() []*Area {
+	areas := make([]*Area, 0, len(g.Map))
+	for _, area := range g.Map {
+		areas = append(areas, &area)
+	}
+	return areas
 }
