@@ -47,19 +47,20 @@ func GetTools() []Tool {
 			},
 		},
 		{
-			Name:        "add_item_to_room",
-			Description: "Adds an existing item to a room",
+			Name:        "set_item_location",
+			Description: "Sets the location of an item to a room or character inventory",
 			Arguments: map[string]string{
-				"room_id":   "ID of the room",
-				"item_name": "Name of the item to add",
+				"item_name":     "Name of the item to move",
+				"location_type": "Type of location ('room' or 'inventory')",
+				"location_id":   "ID of the room or name of the character (use 'player' for player inventory)",
 			},
 		},
 		{
-			Name:        "add_character_to_room",
-			Description: "Adds an existing character to a room",
+			Name:        "set_character_location",
+			Description: "Sets the location of any character (including the player) to a specified room",
 			Arguments: map[string]string{
-				"room_id":        "ID of the room",
-				"character_name": "Name of the character to add",
+				"character_name": "Name of the character to move (use 'player' for the player character)",
+				"room_id":        "ID of the room to move the character to",
 			},
 		},
 		{
@@ -71,17 +72,10 @@ func GetTools() []Tool {
 			},
 		},
 		{
-			Name:        "describe_room",
-			Description: "Returns a detailed description of a room and its contents",
-			Arguments: map[string]string{
-				"room_id": "ID of the room to describe",
-			},
-		},
-		{
 			Name:        "get_room_info",
-			Description: "Gets basic information about a room",
+			Description: "Gets comprehensive information about a room, including its description, items, occupants, and connections",
 			Arguments: map[string]string{
-				"room_id": "ID of the room to get info for",
+				"room_id": "ID of the room to get information for",
 			},
 		},
 		{
@@ -96,22 +90,6 @@ func GetTools() []Tool {
 			Description: "Gets information about a character",
 			Arguments: map[string]string{
 				"character_name": "Name of the character to get info for",
-			},
-		},
-		{
-			Name:        "remove_item_from_room",
-			Description: "Removes an item from a room",
-			Arguments: map[string]string{
-				"room_id":   "ID of the room",
-				"item_name": "Name of the item to remove",
-			},
-		},
-		{
-			Name:        "remove_character_from_room",
-			Description: "Removes a character from a room",
-			Arguments: map[string]string{
-				"room_id":        "ID of the room",
-				"character_name": "Name of the character to remove",
 			},
 		},
 		{
@@ -133,13 +111,6 @@ func GetTools() []Tool {
 			Description: "Lists all characters in a given room",
 			Arguments: map[string]string{
 				"room_id": "ID of the room to get characters for",
-			},
-		},
-		{
-			Name:        "set_player_starting_room",
-			Description: "Sets the player's starting room",
-			Arguments: map[string]string{
-				"room_id": "ID of the room to set as player's starting location",
 			},
 		},
 		{
@@ -251,16 +222,21 @@ func (cfg *apiConfig) ExecuteCreateCharacter(args map[string]any) string {
 	return fmt.Sprintf("Successfully created character %s", name)
 }
 
-// ExecuteAddItemToRoom adds an item to a room
-func (cfg *apiConfig) ExecuteAddItemToRoom(args map[string]any) string {
-	roomID, ok := args["room_id"].(string)
-	if !ok {
-		return "Invalid room ID"
-	}
-
+// ExecuteSetItemLocation sets the location of an item
+func (cfg *apiConfig) ExecuteSetItemLocation(args map[string]any) string {
 	itemName, ok := args["item_name"].(string)
 	if !ok {
 		return "Invalid item name"
+	}
+
+	locationType, ok := args["location_type"].(string)
+	if !ok || (locationType != "room" && locationType != "inventory") {
+		return "Invalid location type (must be 'room' or 'inventory')"
+	}
+
+	locationID, ok := args["location_id"].(string)
+	if !ok {
+		return "Invalid location ID"
 	}
 
 	item, err := cfg.game.GetItem(itemName)
@@ -268,32 +244,96 @@ func (cfg *apiConfig) ExecuteAddItemToRoom(args map[string]any) string {
 		return fmt.Sprintf("Item not found: %v", err)
 	}
 
-	err = cfg.game.AddItemToArea(roomID, item)
-	if err != nil {
-		return fmt.Sprintf("Failed to add item to room: %v", err)
+	// Remove item from current location if it exists
+	if currentLoc := item.GetLocation(); currentLoc != nil {
+		switch loc := currentLoc.(type) {
+		case Area:
+			if err := loc.RemoveItem(itemName); err != nil {
+				return fmt.Sprintf("Failed to remove item from current location: %v", err)
+			}
+		case Character:
+			if err := loc.RemoveItem(itemName); err != nil {
+				return fmt.Sprintf("Failed to remove item from current location: %v", err)
+			}
+		}
 	}
 
-	return fmt.Sprintf("Successfully added item %s to room %s", itemName, roomID)
+	if locationType == "room" {
+		// Move item to room
+		room, err := cfg.game.GetArea(locationID)
+		if err != nil {
+			return fmt.Sprintf("Room not found: %v", err)
+		}
+		if err := room.AddItem(item); err != nil {
+			return fmt.Sprintf("Failed to add item to room: %v", err)
+		}
+		item.SetLocation(room)
+		return fmt.Sprintf("Successfully moved item %s to room %s", itemName, locationID)
+	} else {
+		// Move item to inventory
+		if locationID == "player" {
+			if err := cfg.game.AddItemToInventory(item); err != nil {
+				return fmt.Sprintf("Failed to add item to player inventory: %v", err)
+			}
+			item.SetLocation(&cfg.game.Player)
+			return fmt.Sprintf("Successfully moved item %s to player inventory", itemName)
+		} else {
+			character, err := cfg.game.GetNPC(locationID)
+			if err != nil {
+				return fmt.Sprintf("Character not found: %v", err)
+			}
+			if err := character.AddItem(item); err != nil {
+				return fmt.Sprintf("Failed to add item to character inventory: %v", err)
+			}
+			item.SetLocation(character)
+			return fmt.Sprintf("Successfully moved item %s to %s's inventory", itemName, locationID)
+		}
+	}
 }
 
-// ExecuteAddCharacterToRoom adds a character to a room
-func (cfg *apiConfig) ExecuteAddCharacterToRoom(args map[string]any) string {
-	roomID, ok := args["room_id"].(string)
-	if !ok {
-		return "Invalid room ID"
-	}
-
+// ExecuteSetCharacterLocation sets the location of a character
+func (cfg *apiConfig) ExecuteSetCharacterLocation(args map[string]any) string {
 	characterName, ok := args["character_name"].(string)
 	if !ok {
 		return "Invalid character name"
 	}
 
-	err := cfg.game.AddNPCToArea(roomID, characterName)
-	if err != nil {
-		return fmt.Sprintf("Failed to add character to room: %v", err)
+	roomID, ok := args["room_id"].(string)
+	if !ok {
+		return "Invalid room ID"
 	}
 
-	return fmt.Sprintf("Successfully added character %s to room %s", characterName, roomID)
+	room, err := cfg.game.GetArea(roomID)
+	if err != nil {
+		return fmt.Sprintf("Room not found: %v", err)
+	}
+
+	if characterName == "player" {
+		cfg.game.Player.Location = room
+		return fmt.Sprintf("Successfully moved player to room %s", roomID)
+	}
+
+	// For NPCs, we'll need to update their location in the game state
+	character, err := cfg.game.GetNPC(characterName)
+	if err != nil {
+		return fmt.Sprintf("Character not found: %v", err)
+	}
+
+	// Remove character from current room if they're in one
+	if character.Location.ID != "" {
+		if err := character.Location.RemoveOccupant(characterName); err != nil {
+			return fmt.Sprintf("Failed to remove character from current room: %v", err)
+		}
+	}
+
+	// Add character to new room
+	if err := room.AddOccupant(characterName); err != nil {
+		return fmt.Sprintf("Failed to add character to new room: %v", err)
+	}
+
+	// Update character's location
+	character.Location = room
+	return fmt.Sprintf("Successfully moved character %s to room %s", characterName, roomID)
 }
 
 // ExecuteConnectRooms creates a connection between two rooms
@@ -335,84 +375,53 @@ func (cfg *apiConfig) ExecuteConnectRooms(args map[string]any) string {
 	return fmt.Sprintf("Successfully connected rooms %s and %s", roomID1, roomID2)
 }
 
-// ExecuteDescribeRoom returns a detailed description of a room
-func (cfg *apiConfig) ExecuteDescribeRoom(args map[string]any) string {
-	roomID, ok := args["room_id"].(string)
-	if !ok {
-		return "Invalid room ID"
-	}
-
-	room, err := cfg.game.GetArea(roomID)
-	if err != nil {
-		return fmt.Sprintf("Room not found: %v", err)
-	}
-
-	// Create a detailed description of the room
-	description := fmt.Sprintf("Room %s:\n", room.ID)
-
-	// Add items
-	description += "\nItems:\n"
-	for _, item := range room.GetItems() {
-		description += fmt.Sprintf("- %s: %s\n", item.Name, item.Description)
-	}
-
-	// Add occupants
-	description += "\nOccupants:\n"
-	for _, occupant := range room.GetOccupants() {
-		description += fmt.Sprintf("- %s\n", occupant)
-	}
-
-	// Add connections
-	description += "\nConnections:\n"
-	for _, conn := range room.GetConnections() {
-		description += fmt.Sprintf("- Room %s\n", conn.ID)
-	}
-
-	return description
-}
-
 // GetSystemInstructions returns the complete system instructions for the AI
 func GetSystemInstructions() string {
-	introduction := fmt.Sprintf("You are a D&D DM AI with access to these tools:"+
-		"\n\n%v\nChoose whether to respond to the user with narrative or invoking one or more "+
-		"tools and then responding with narrative afterwards.\n\n", GetTools())
+	tools := GetTools()
+	var toolsInfo strings.Builder
+	toolsInfo.WriteString("Available tools:\n")
+	for _, tool := range tools {
+		toolsInfo.WriteString(fmt.Sprintf("- %s: %s\n", tool.Name, tool.Description))
+		if len(tool.Arguments) > 0 {
+			toolsInfo.WriteString("  Arguments:\n")
+			for argName, argDesc := range tool.Arguments {
+				toolsInfo.WriteString(fmt.Sprintf("    - %s: %s\n", argName, argDesc))
+			}
+		}
+		toolsInfo.WriteString("\n")
+	}
 
-	toolFormatInstruction := "IMPORTANT: When you need to use tools, you must ONLY respond " +
-		"with the exact format below, nothing else:\n" +
-		"[\n" +
-		"    {\n" +
-		"        \"tool\": \"tool-name\",\n" +
-		"        \"arguments\": {\n" +
-		"            \"argument-name\": \"value\"\n" +
-		"        }\n" +
-		"    },\n" +
-		"    {\n" +
-		"        \"tool\": \"another-tool-name\",\n" +
-		"        \"arguments\": {\n" +
-		"            \"argument-name\": \"value\"\n" +
-		"        }\n" +
-		"    }\n" +
-		"]\n\n" +
-		"Or for a single tool call:\n" +
-		"{\n" +
-		"    \"tool\": \"tool-name\",\n" +
-		"    \"arguments\": {\n" +
-		"        \"argument-name\": \"value\"\n" +
-		"    }\n" +
-		"}\n\n"
+	return fmt.Sprintf(`You are an AI Game Master for a text-based adventure game. Your role is to create an engaging and immersive experience for the player.
 
-	worldExplanation := "You are a D&D Dungeon Master creating an interactive adventure. " +
-		"You can create rooms, populate them with items and characters, and connect them together. " +
-		"Use the available tools to build the world as the player explores it. " +
-		"Create interesting characters (both friendly and unfriendly) and meaningful items " +
-		"that contribute to the story. Connect rooms logically to create a coherent world. " +
-		"Respond to player actions by describing what they see and experience."
+IMPORTANT: You must structure your responses as valid JSON objects with the following format:
+{
+    "narrative": "Your narrative response describing what happens, what the player sees, etc.",
+    "tool_calls": [
+        {
+            "tool": "tool_name",
+            "arguments": {
+                "arg1": "value1",
+                "arg2": "value2"
+            }
+        }
+    ]
+}
 
-	finalConstraint := "After invoking tools you will receive another chat with the results " +
-		"of having invoked the tools, you can then respond with narrative. Please use only the tools " +
-		"that are explicitly defined above."
+The narrative field should contain your descriptive text about what happens in the game. The tool_calls field should contain an array of tools you want to use to modify the game state.
 
-	return introduction + toolFormatInstruction + worldExplanation + finalConstraint
+%s
+
+Use the available tools to modify the game state as needed. The tool definitions above contain all the information you need about how to use each tool, including required and optional arguments.
+
+Game state management guidelines:
+- To move characters (including the player): use tools to set the character's location to the appropriate room
+- To manage inventory: use tools to move items to the appropriate inventory (player or character)
+- To place items in rooms: use tools to set the item's location to the desired room
+- To create new content: use tools to create new rooms, items, or characters as needed
+- To connect areas: use tools to establish connections between rooms
+- To gather information: use tools to get details about rooms, items, or characters
+
+Always maintain consistency in the game world and provide clear, engaging descriptions.`, toolsInfo.String())
 }
 
 // ExecuteTool executes a tool based on its name and arguments
@@ -427,14 +436,12 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		return cfg.ExecuteCreateItem(args)
 	case "create_character":
 		return cfg.ExecuteCreateCharacter(args)
-	case "add_item_to_room":
-		return cfg.ExecuteAddItemToRoom(args)
-	case "add_character_to_room":
-		return cfg.ExecuteAddCharacterToRoom(args)
+	case "set_item_location":
+		return cfg.ExecuteSetItemLocation(args)
+	case "set_character_location":
+		return cfg.ExecuteSetCharacterLocation(args)
 	case "connect_rooms":
 		return cfg.ExecuteConnectRooms(args)
-	case "describe_room":
-		return cfg.ExecuteDescribeRoom(args)
 	case "get_room_info":
 		roomID, ok := args["room_id"].(string)
 		if !ok {
@@ -444,7 +451,32 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		if err != nil {
 			return fmt.Sprintf("Room not found: %v", err)
 		}
-		return fmt.Sprintf("Room %s: %s", room.ID, room.Description)
+
+		// Create a comprehensive room description
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("Room %s:\n", room.ID))
+		sb.WriteString(fmt.Sprintf("Description: %s\n", room.Description))
+
+		// Add items
+		sb.WriteString("\nItems:\n")
+		for _, item := range room.GetItems() {
+			sb.WriteString(fmt.Sprintf("- %s\n", item.String()))
+		}
+
+		// Add occupants
+		sb.WriteString("\nOccupants:\n")
+		for _, occupant := range room.GetOccupants() {
+			sb.WriteString(fmt.Sprintf("- %s\n", occupant))
+		}
+
+		// Add connections
+		sb.WriteString("\nConnections:\n")
+		for _, conn := range room.GetConnections() {
+			sb.WriteString(fmt.Sprintf("- Room %s\n", conn.ID))
+		}
+
+		// Return as JSON with only the narrative key
+		return fmt.Sprintf(`{"narrative": %q}`, sb.String())
 	case "get_item_info":
 		itemName, ok := args["item_name"].(string)
 		if !ok {
@@ -454,7 +486,7 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		if err != nil {
 			return fmt.Sprintf("Item not found: %v", err)
 		}
-		return fmt.Sprintf("Item %s: %s", item.Name, item.Description)
+		return fmt.Sprintf(`{"narrative": %q}`, fmt.Sprintf("Item %s: %s", item.Name, item.Description))
 	case "get_character_info":
 		characterName, ok := args["character_name"].(string)
 		if !ok {
@@ -464,41 +496,7 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		if err != nil {
 			return fmt.Sprintf("Character not found: %v", err)
 		}
-		return fmt.Sprintf("Character %s: %s", character.Name, character.Description)
-	case "remove_item_from_room":
-		roomID, ok := args["room_id"].(string)
-		if !ok {
-			return "Invalid room ID"
-		}
-		itemName, ok := args["item_name"].(string)
-		if !ok {
-			return "Invalid item name"
-		}
-		room, err := cfg.game.GetArea(roomID)
-		if err != nil {
-			return fmt.Sprintf("Room not found: %v", err)
-		}
-		if err := room.RemoveItem(itemName); err != nil {
-			return fmt.Sprintf("Failed to remove item: %v", err)
-		}
-		return fmt.Sprintf("Successfully removed item %s from room %s", itemName, roomID)
-	case "remove_character_from_room":
-		roomID, ok := args["room_id"].(string)
-		if !ok {
-			return "Invalid room ID"
-		}
-		characterName, ok := args["character_name"].(string)
-		if !ok {
-			return "Invalid character name"
-		}
-		room, err := cfg.game.GetArea(roomID)
-		if err != nil {
-			return fmt.Sprintf("Room not found: %v", err)
-		}
-		if err := room.RemoveOccupant(characterName); err != nil {
-			return fmt.Sprintf("Failed to remove character: %v", err)
-		}
-		return fmt.Sprintf("Successfully removed character %s from room %s", characterName, roomID)
+		return fmt.Sprintf(`{"narrative": %q}`, fmt.Sprintf("Character %s: %s", character.Name, character.Description))
 	case "list_connected_rooms":
 		roomID, ok := args["room_id"].(string)
 		if !ok {
@@ -544,17 +542,6 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 			sb.WriteString(fmt.Sprintf("- %s\n", occupant))
 		}
 		return sb.String()
-	case "set_player_starting_room":
-		roomID, ok := args["room_id"].(string)
-		if !ok {
-			return "Invalid room ID"
-		}
-		room, err := cfg.game.GetArea(roomID)
-		if err != nil {
-			return fmt.Sprintf("Room not found: %v", err)
-		}
-		cfg.game.Player.SetLocation(room)
-		return fmt.Sprintf("Successfully set player starting room to %s", roomID)
 	case "stop_generation":
 		return "World generation complete"
 	default:

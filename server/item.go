@@ -13,6 +13,7 @@ type Item struct {
 	Damage      int
 	Consumable  bool
 	Uses        int
+	Location    interface{} // Can be Area or Character
 }
 
 // NewItem creates a new item with the given name and description
@@ -131,6 +132,16 @@ func (i *Item) IsConsumable() bool {
 // GetUses returns the number of uses remaining
 func (i *Item) GetUses() int {
 	return i.Uses
+}
+
+// SetLocation sets the item's location
+func (i *Item) SetLocation(location interface{}) {
+	i.Location = location
+}
+
+// GetLocation returns the item's current location
+func (i *Item) GetLocation() interface{} {
+	return i.Location
 }
 
 // String returns a string representation of the item

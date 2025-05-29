@@ -127,7 +127,7 @@ const calculateRoomPositions = (rooms: { [key: string]: RoomInfo }, currentRoom:
 };
 
 // RoomMap Component
-const RoomMap = ({ gameState, onRoomClick }: { gameState: GameState, onRoomClick: (roomId: string) => void }) => {
+const RoomMap = ({ gameState }: { gameState: GameState }) => {
   const stageWidth = 600;
   const stageHeight = 500;
   const roomRadius = 20;
@@ -147,7 +147,7 @@ const RoomMap = ({ gameState, onRoomClick }: { gameState: GameState, onRoomClick
     if (isCurrent) {
       tooltipText = "You are here";
     } else if (isAdjacent) {
-      tooltipText = `Click to move to ${roomId}`;
+      tooltipText = `Connected to ${roomId}`;
     } else {
       tooltipText = "This room is not accessible from your current location";
     }
@@ -158,13 +158,6 @@ const RoomMap = ({ gameState, onRoomClick }: { gameState: GameState, onRoomClick
   const handleRoomLeave = () => {
     setHoveredRoom(null);
     setTooltip(null);
-  };
-
-  const handleRoomClick = (roomId: string) => {
-    const isAdjacent = gameState.rooms[gameState.current_room].connections.includes(roomId);
-    if (isAdjacent) {
-      onRoomClick(roomId);
-    }
   };
 
   return (
@@ -222,11 +215,9 @@ const RoomMap = ({ gameState, onRoomClick }: { gameState: GameState, onRoomClick
                 shadowColor="black"
                 shadowBlur={isCurrentRoom ? 15 : isConnectedToCurrent ? 12 : 10}
                 shadowOpacity={isCurrentRoom ? 0.5 : isConnectedToCurrent ? 0.4 : 0.3}
-                onClick={() => handleRoomClick(roomId)}
                 onMouseEnter={() => handleRoomHover(roomId, pos)}
                 onMouseLeave={handleRoomLeave}
                 opacity={isAdjacent ? 1 : 0.5}
-                cursor={isAdjacent ? "pointer" : "not-allowed"}
               />
               {/* Add player icon in current room */}
               {isCurrentRoom && (
@@ -329,6 +320,24 @@ const GameInfo = ({ gameState, onItemClick }: { gameState: GameState, onItemClic
       <Typography variant="h6">Current Location: {gameState.current_room}</Typography>
       <Typography variant="body1">{currentRoom?.description || 'No description available'}</Typography>
       
+      <Typography variant="h6" sx={{ mt: 2 }}>Your Inventory:</Typography>
+      {gameState.inventory && gameState.inventory.length > 0 ? (
+        <ul>
+          {gameState.inventory.map(item => (
+            <li key={item}>
+              <Button 
+                onClick={() => onItemClick(item)}
+                sx={{ textTransform: 'none', color: '#2196F3' }}
+              >
+                {item}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Typography>Your inventory is empty</Typography>
+      )}
+      
       <Typography variant="h6" sx={{ mt: 2 }}>Items in Room:</Typography>
       {currentRoom?.items && currentRoom.items.length > 0 ? (
         <ul>
@@ -403,12 +412,21 @@ const Chat = ({
   isLoading: boolean
 }) => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatHistory]);
+
+  const handleSubmit = () => {
+    handleCommand();
+    // Focus the input after sending the message
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  };
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -447,13 +465,15 @@ const Chat = ({
         backgroundColor: '#2D2D2D'
       }}>
         <TextField
+          inputRef={inputRef}
           fullWidth
           value={command}
           onChange={(e) => setCommand(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleCommand()}
+          onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
           placeholder="Type your command..."
           disabled={isLoading}
           size="small"
+          autoComplete="off"
           sx={{
             '& .MuiOutlinedInput-root': {
               backgroundColor: '#424242',
@@ -477,7 +497,7 @@ const Chat = ({
         />
         <Button
           variant="contained"
-          onClick={handleCommand}
+          onClick={handleSubmit}
           disabled={isLoading || !command.trim()}
           sx={{ minWidth: '100px' }}
         >
@@ -599,8 +619,22 @@ function App() {
         setError('Received invalid response from server');
       }
 
-      const gameResponse = await axios.get(`${APP_URI}describe`);
-      setGameState(gameResponse.data);
+      // Update game state from chat response if available
+      if (response.data && response.data.game_state) {
+        setGameState(prev => ({
+          ...prev!,
+          current_room: response.data.game_state.current_room,
+          inventory: response.data.game_state.inventory,
+          rooms: {
+            ...prev!.rooms,
+            ...response.data.game_state.rooms
+          }
+        }));
+      } else {
+        // Fallback to regular game state update
+        const gameResponse = await axios.get(`${APP_URI}describe`);
+        setGameState(gameResponse.data);
+      }
       
       setCommand('');
     } catch (err) {
@@ -634,46 +668,6 @@ function App() {
     } catch (err) {
       setError('Failed to interact with item. Please try again.');
       console.error('Error interacting with item:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleRoomClick = async (roomId: string) => {
-    if (isLoading || !gameState) return;
-    
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Add player movement message
-      setChatHistory(prev => [...prev, { type: 'player', content: `Moving to ${roomId}` }]);
-
-      const moveResponse = await axios.post(`${APP_URI}move`, { room_id: roomId });
-      
-      // Add the narrative response to chat history
-      if (moveResponse.data && moveResponse.data.Response) {
-        setChatHistory(prev => [...prev, { type: 'narrative', content: moveResponse.data.Response }]);
-      }
-
-      // Check if the server generated new areas
-      if (moveResponse.data && moveResponse.data.NewAreas) {
-        // Update game state with new areas
-        setGameState(prev => ({
-          ...prev!,
-          rooms: {
-            ...prev!.rooms,
-            ...moveResponse.data.NewAreas
-          }
-        }));
-      } else {
-        // Regular game state update
-        const gameResponse = await axios.get(`${APP_URI}describe`);
-        setGameState(gameResponse.data);
-      }
-    } catch (err) {
-      setError('Failed to move to room. Please try again.');
-      console.error('Error moving to room:', err);
     } finally {
       setIsLoading(false);
     }
@@ -715,12 +709,12 @@ function App() {
       <Box sx={{ flex: '0 0 auto', p: 2 }}>
         <Paper sx={{ p: 2, backgroundColor: '#2D2D2D' }}>
           <Grid container spacing={2}>
-            <Grid item xs={8}>
+            <Grid size={8}>
               <Box sx={{ height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <RoomMap gameState={gameState} onRoomClick={handleRoomClick} />
+                <RoomMap gameState={gameState} />
               </Box>
             </Grid>
-            <Grid item xs={4}>
+            <Grid size={4}>
               <GameInfo gameState={gameState} onItemClick={handleItemClick} />
             </Grid>
           </Grid>

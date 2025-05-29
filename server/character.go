@@ -129,6 +129,15 @@ func (c *Character) IsFriendly() bool {
 	return c.Friendly
 }
 
+// GetInventoryNames returns a list of item names in the character's inventory
+func (c *Character) GetInventoryNames() []string {
+	names := make([]string, len(c.Inventory))
+	for i, item := range c.Inventory {
+		names[i] = item.GetName()
+	}
+	return names
+}
+
 // String returns a string representation of the character
 func (c *Character) String() string {
 	status := "alive"
@@ -140,4 +149,29 @@ func (c *Character) String() string {
 		disposition = "hostile"
 	}
 	return fmt.Sprintf("%s (%s) - Health: %d, Status: %s, Disposition: %s", c.Name, c.Description, c.Health, status, disposition)
+}
+
+// AddItem adds an item to the character's inventory
+func (c *Character) AddItem(item Item) error {
+	// Check if item is already in inventory
+	for _, invItem := range c.Inventory {
+		if invItem.Name == item.Name {
+			return fmt.Errorf("item already in inventory")
+		}
+	}
+	c.Inventory = append(c.Inventory, item)
+	return nil
+}
+
+// RemoveItem removes an item from the character's inventory
+func (c *Character) RemoveItem(itemName string) error {
+	for i, item := range c.Inventory {
+		if item.Name == itemName {
+			// Remove item by swapping with last element and truncating
+			c.Inventory[i] = c.Inventory[len(c.Inventory)-1]
+			c.Inventory = c.Inventory[:len(c.Inventory)-1]
+			return nil
+		}
+	}
+	return fmt.Errorf("item not found in inventory")
 }

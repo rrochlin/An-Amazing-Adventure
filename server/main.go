@@ -61,10 +61,10 @@ func main() {
 		chat:   chat,
 	}
 
-	mux.HandleFunc("POST /api/move", cfg.HandlerMove)
+	// Set up routes
 	mux.HandleFunc("GET /api/describe", cfg.HandlerDescribe)
-	mux.HandleFunc("POST /api/startgame", cfg.HandlerStartGame)
-	mux.HandleFunc("POST /api/chat", cfg.HandlerChat)
+	mux.HandleFunc("POST /api/startgame", cfg.gameStateMiddleware(cfg.HandlerStartGame))
+	mux.HandleFunc("POST /api/chat", cfg.gameStateMiddleware(cfg.HandlerChat))
 	mux.HandleFunc("GET /api/worldready", cfg.HandlerWorldReady)
 
 	wrappedMux := cors.Default().Handler(NewLogger(mux))
@@ -89,17 +89,11 @@ type apiSettings struct {
 	port string
 }
 
-type ChatMessage struct {
-	Type    string `json:"type"`
-	Content string `json:"content"`
-}
-
 // Main configuration struct
 type apiConfig struct {
-	api         apiSettings
-	game        Game
-	worldGen    *WorldGenerator
-	gemini      *genai.Client
-	chat        *genai.Chat
-	chatHistory []ChatMessage
+	api      apiSettings
+	game     Game
+	worldGen *WorldGenerator
+	gemini   *genai.Client
+	chat     *genai.Chat
 }

@@ -28,11 +28,19 @@ func (cfg *apiConfig) getGameState() GameState {
 	player := cfg.game.Player
 	currentRoom := player.GetLocation()
 
+	// Get NPCs in current room
+	var visibleNPCs []Character
+	for _, occupant := range currentRoom.GetOccupants() {
+		if npc, err := cfg.game.GetNPC(occupant); err == nil {
+			visibleNPCs = append(visibleNPCs, npc)
+		}
+	}
+
 	return GameState{
 		CurrentRoom:    currentRoom,
 		Player:         player,
 		VisibleItems:   currentRoom.GetItems(),
-		VisibleNPCs:    make([]Character, 0), // TODO: Get NPCs in current room
+		VisibleNPCs:    visibleNPCs,
 		ConnectedRooms: currentRoom.GetConnections(),
 	}
 }
@@ -49,6 +57,11 @@ func (state GameState) String() string {
 		sb.WriteString(fmt.Sprintf("- %s\n", item.String()))
 	}
 
+	sb.WriteString("\nInventory:\n")
+	for _, item := range state.Player.Inventory {
+		sb.WriteString(fmt.Sprintf("- %s\n", item.String()))
+	}
+
 	sb.WriteString("\nConnected rooms:\n")
 	for _, room := range state.ConnectedRooms {
 		sb.WriteString(fmt.Sprintf("- %s\n", room.ID))
@@ -57,9 +70,10 @@ func (state GameState) String() string {
 	return sb.String()
 }
 
+// HandlerChat handles chat messages from the player
 func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	type parameters struct {
-		Message string `json:"message"`
+		Chat string `json:"chat"`
 	}
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
@@ -72,21 +86,21 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	// Get current game state
 	gameState := cfg.getGameState()
 
-	// Send message to AI
+	// Send message to AI for processing
 	part := genai.Part{Text: fmt.Sprintf(`Game State:
-%s
-
 Player: %s
 
-You can:
-1. Provide a narrative response
-2. Generate new areas if needed (using create_room and connect_rooms tools)
-3. Add items or NPCs to the current or new rooms
-4. Modify the environment based on the player's actions
+You can either:
+- Provide a narrative response
+- or - 
+Generate new areas if needed (using create_room and connect_rooms tools)
+Add items or NPCs to the new or existing rooms
+Modify the environment based on the player's actions
+
 
 Respond with a JSON object containing:
-1. A narrative response
-2. Any tool calls needed to modify the world`, gameState.String(), params.Message)}
+1. A narrative response or an empty string if you're calling tools
+2. Any tool calls needed to modify the world or an empty array if you're providing a narrative response`, params.Chat)}
 
 	result, err := cfg.chat.SendMessage(req.Context(), part)
 	if err != nil {
@@ -96,103 +110,149 @@ Respond with a JSON object containing:
 
 	// Parse the AI's response
 	text := result.Text()
-	pattern := `(?is)\s*(\{.*\}|\[.*\])\s*`
-	regex := regexp.MustCompile(pattern)
-	matches := regex.FindStringSubmatch(text)
+	fmt.Printf("AI Response: %s\n", text) // Debug log
 
-	var narrativeResponse string
-	var newAreas map[string]RoomInfo
+	// Find JSON between triple backticks
+	codeBlockPattern := regexp.MustCompile("```(?:json)?\\s*([\\s\\S]*?)\\s*```")
+	codeBlockMatches := codeBlockPattern.FindStringSubmatch(text)
 
-	if len(matches) > 1 {
-		// Try to parse as tool calls
-		var toolCalls []struct {
+	var jsonStr string
+	if len(codeBlockMatches) > 1 {
+		jsonStr = strings.TrimSpace(codeBlockMatches[1])
+	} else {
+		jsonStr = text
+	}
+
+	// Parse the response as JSON
+	type AIResponse struct {
+		Narrative string `json:"narrative"`
+		ToolCalls []struct {
 			Tool      string         `json:"tool"`
 			Arguments map[string]any `json:"arguments"`
+		} `json:"tool_calls"`
+	}
+
+	var aiResponse AIResponse
+	maxRetries := 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		err = json.Unmarshal([]byte(jsonStr), &aiResponse)
+		if err == nil {
+			break
 		}
 
-		err := json.Unmarshal([]byte(matches[1]), &toolCalls)
+		if attempt == maxRetries {
+			ErrorServer("failed to parse AI response after multiple attempts", w, err)
+			return
+		}
+
+		// Ask AI to fix the JSON format
+		part = genai.Part{Text: fmt.Sprintf(`Your response was not valid JSON. Error: %v`, err)}
+
+		result, err = cfg.chat.SendMessage(req.Context(), part)
 		if err != nil {
-			// If array parsing fails, try single tool call
-			var singleToolCall struct {
-				Tool      string         `json:"tool"`
-				Arguments map[string]any `json:"arguments"`
-			}
-			err = json.Unmarshal([]byte(matches[1]), &singleToolCall)
-			if err == nil {
-				toolCalls = []struct {
-					Tool      string         `json:"tool"`
-					Arguments map[string]any `json:"arguments"`
-				}{singleToolCall}
-			}
+			ErrorServer("failed to get retry response", w, err)
+			return
 		}
 
-		if len(toolCalls) > 0 {
-			// Execute all tool calls
-			var toolResults []string
-			for _, toolCall := range toolCalls {
-				toolResult := cfg.ExecuteTool(toolCall.Tool, toolCall.Arguments)
-				toolResults = append(toolResults, fmt.Sprintf("Tool %s: %s", toolCall.Tool, toolResult))
-			}
+		text = result.Text()
+		fmt.Printf("AI Retry Response (attempt %d): %s\n", attempt, text)
 
-			// Get updated game state
-			updatedState := cfg.getGameState()
+		// Try to find JSON in the new response
+		codeBlockMatches = codeBlockPattern.FindStringSubmatch(text)
+		if len(codeBlockMatches) > 1 {
+			jsonStr = strings.TrimSpace(codeBlockMatches[1])
+		} else {
+			jsonStr = text
+		}
+	}
 
-			// Send tool results back to AI for final narrative
-			part = genai.Part{Text: fmt.Sprintf(`Tool Results:
+	// Execute any tool calls
+	var toolResults []string
+	if len(aiResponse.ToolCalls) > 0 {
+		for _, toolCall := range aiResponse.ToolCalls {
+			toolResult := cfg.ExecuteTool(toolCall.Tool, toolCall.Arguments)
+			toolResults = append(toolResults, fmt.Sprintf("Tool %s: %s", toolCall.Tool, toolResult))
+		}
+
+		// Get updated game state
+		updatedState := cfg.getGameState()
+
+		// Send tool results back to AI for final narrative
+		part = genai.Part{Text: fmt.Sprintf(`I executed the following tool calls:
 %s
 
 Updated Game State:
 %s
 
-Please provide a narrative response about the changes to the world.`, strings.Join(toolResults, "\n"), updatedState.String())}
-			result, err = cfg.chat.SendMessage(req.Context(), part)
-			if err != nil {
-				ErrorServer("failed to process tool results", w, err)
-				return
-			}
-			narrativeResponse = result.Text()
-
-			// Collect any new areas that were created
-			newAreas = make(map[string]RoomInfo)
-			for _, area := range cfg.game.GetAllAreas() {
-				if !gameState.CurrentRoom.IsConnected(*area) {
-					newAreas[area.ID] = RoomInfo{
-						ID:          area.ID,
-						Description: area.GetDescription(),
-						Connections: area.GetConnectionIDs(),
-						Items:       area.GetItemNames(),
-						Occupants:   area.GetOccupantNames(),
-					}
-				}
-			}
-		} else {
-			narrativeResponse = text
+Please provide a narrative response about what happened and what the player sees now.`, strings.Join(toolResults, "\n"), updatedState.String())}
+		fmt.Printf("Sending to AI: %s\n", part.Text) // Debug log
+		result, err = cfg.chat.SendMessage(req.Context(), part)
+		if err != nil {
+			ErrorServer("failed to process tool results", w, err)
+			return
 		}
-	} else {
-		narrativeResponse = text
+		text = result.Text()
+		fmt.Printf("AI Response: %s\n", text) // Debug log
+
+		// Parse the final narrative response
+		parsedText := codeBlockPattern.FindStringSubmatch(text)
+		if len(parsedText) < 1 {
+			ErrorServer("failed to parse AI response", w, err)
+			return
+		}
+		err = json.Unmarshal([]byte(parsedText[1]), &aiResponse)
+		if err != nil {
+			fmt.Printf("err hit parsing the json response: %v\n", err)
+			ErrorServer("failed to parse AI response", w, err)
+			return
+		}
 	}
 
-	// Add message to chat history
-	cfg.chatHistory = append(cfg.chatHistory, ChatMessage{
-		Type:    "player",
-		Content: params.Message,
-	})
-	cfg.chatHistory = append(cfg.chatHistory, ChatMessage{
-		Type:    "assistant",
-		Content: narrativeResponse,
-	})
+	// At this point, aiResponse.Narrative contains the final narrative
+	narrativeResponse := aiResponse.Narrative
+
+	// Collect any new areas that were created
+	newAreas := make(map[string]RoomInfo)
+	for _, area := range cfg.game.GetAllAreas() {
+		if !gameState.CurrentRoom.IsConnected(area) {
+			newAreas[area.ID] = RoomInfo{
+				ID:          area.ID,
+				Description: area.GetDescription(),
+				Connections: area.GetConnectionIDs(),
+				Items:       area.GetItemNames(),
+				Occupants:   area.GetOccupantNames(),
+			}
+		}
+	}
 
 	type retVal struct {
-		Status   string              `json:"status"`
-		Response string              `json:"Response"`
-		NewAreas map[string]RoomInfo `json:"NewAreas,omitempty"`
+		Response  string              `json:"Response"`
+		NewAreas  map[string]RoomInfo `json:"NewAreas,omitempty"`
+		GameState struct {
+			CurrentRoom string              `json:"current_room"`
+			Inventory   []string            `json:"inventory"`
+			Rooms       map[string]RoomInfo `json:"rooms"`
+		} `json:"game_state"`
 	}
 	RetVal := retVal{
-		Status:   "Message processed",
 		Response: narrativeResponse,
 	}
 	if len(newAreas) > 0 {
 		RetVal.NewAreas = newAreas
+	}
+
+	// Add game state updates
+	RetVal.GameState.CurrentRoom = cfg.game.Player.GetLocation().ID
+	RetVal.GameState.Inventory = cfg.game.Player.GetInventoryNames()
+	RetVal.GameState.Rooms = make(map[string]RoomInfo)
+	for _, area := range cfg.game.GetAllAreas() {
+		RetVal.GameState.Rooms[area.ID] = RoomInfo{
+			ID:          area.ID,
+			Description: area.GetDescription(),
+			Connections: area.GetConnectionIDs(),
+			Items:       area.GetItemNames(),
+			Occupants:   area.GetOccupantNames(),
+		}
 	}
 
 	dat, err := json.Marshal(RetVal)

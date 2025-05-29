@@ -18,6 +18,11 @@ type WorldGenAction struct {
 	Arguments map[string]interface{} `json:"arguments"`
 }
 
+type WorldGenActions struct {
+	Narrative string           `json:"narrative"`
+	Actions   []WorldGenAction `json:"tool_calls"`
+}
+
 // WorldGenerator handles the world generation process
 type WorldGenerator struct {
 	game    *Game
@@ -81,6 +86,10 @@ After describing your plan, you will receive a blank chat where you can start im
 	fmt.Println(result.Text())
 	fmt.Println("=========================")
 
+	// Log the initial prompt and response
+	fmt.Printf("\n[World Gen] Initial Prompt:\n%s\n", initialPrompt)
+	fmt.Printf("\n[World Gen] AI Response:\n%s\n", result.Text())
+
 	// Create the player character
 	player := NewCharacter("Player", "The main character of the adventure")
 	wg.game.Player = player
@@ -117,47 +126,51 @@ Tool calls should be in JSON format:
 			return fmt.Errorf("failed to get next action: %w", err)
 		}
 
+		// Log the iteration prompt and response
+		fmt.Printf("\n[World Gen] Iteration Prompt:\n%s\n", iterationPrompt)
+		fmt.Printf("\n[World Gen] AI Response:\n%s\n", result.Text())
+
 		// Extract JSON from AI response
 		text := result.Text()
-		pattern := `(?is)\s*(\{.*\}|\[.*\])\s*`
-		regex := regexp.MustCompile(pattern)
-		matches := regex.FindStringSubmatch(text)
 
-		if len(matches) < 2 {
-			return fmt.Errorf("no valid JSON found in AI response")
+		// Find JSON between triple backticks
+		codeBlockPattern := regexp.MustCompile("```(?:json)?\\s*([\\s\\S]*?)\\s*```")
+		codeBlockMatches := codeBlockPattern.FindStringSubmatch(text)
+
+		if len(codeBlockMatches) < 2 {
+			return fmt.Errorf("no JSON code block found in AI response")
 		}
+
+		// Clean up the JSON string
+		jsonStr := strings.TrimSpace(codeBlockMatches[1])
 
 		// Parse actions
-		var actions []WorldGenAction
-		err = json.Unmarshal([]byte(matches[1]), &actions)
+		var actions WorldGenActions
+		err = json.Unmarshal([]byte(jsonStr), &actions)
 		if err != nil {
-			// Try parsing as single action
-			var singleAction WorldGenAction
-			err = json.Unmarshal([]byte(matches[1]), &singleAction)
-			if err != nil {
-				return fmt.Errorf("failed to parse AI action: %w", err)
-			}
-			actions = []WorldGenAction{singleAction}
+			return fmt.Errorf("failed to parse AI action: %w", err)
 		}
+		stopGeneration := false
 
 		// Execute all actions
-		for _, action := range actions {
+		for _, action := range actions.Actions {
 			// Check if generation is complete
 			if action.Tool == "stop_generation" {
 				// Verify that player has a starting room
 				if wg.game.Player.GetLocation().ID == "" {
 					return fmt.Errorf("world generation complete but player has no starting room")
 				}
+				stopGeneration = true
 				break
 			}
 
 			// Execute the action
 			result := wg.cfg.ExecuteTool(action.Tool, action.Arguments)
-			fmt.Printf("World gen action: %s - Result: %s\n", action.Tool, result)
+			fmt.Printf("[World Gen] Action: %s - Result: %s\n", action.Tool, result)
 		}
 
 		// If we hit stop_generation, break the loop
-		if len(actions) > 0 && actions[len(actions)-1].Tool == "stop_generation" {
+		if stopGeneration {
 			break
 		}
 	}

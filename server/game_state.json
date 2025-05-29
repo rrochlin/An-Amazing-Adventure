@@ -1,0 +1,248 @@
+{
+  "player": {
+    "Location": {
+      "ID": "watchtower_01",
+      "Connections": [
+        {
+          "ID": "forest_path_01",
+          "Connections": [],
+          "Items": [],
+          "Occupants": [],
+          "Description": ""
+        }
+      ],
+      "Items": [],
+      "Occupants": [],
+      "Description": ""
+    },
+    "Name": "Player",
+    "Description": "The main character of the adventure",
+    "Alive": true,
+    "Health": 100,
+    "Inventory": [
+      {
+        "Name": "tattered_map",
+        "Description": "A map of the surrounding region, though much of it is faded and difficult to read.",
+        "Weight": 0.1,
+        "Value": 1,
+        "Weapon": false,
+        "Damage": 0,
+        "Consumable": false,
+        "Uses": 1,
+        "Location": null
+      },
+      {
+        "Name": "waterskin",
+        "Description": "A small waterskin, about half-full of surprisingly fresh water.",
+        "Weight": 1.5,
+        "Value": 1,
+        "Weapon": false,
+        "Damage": 0,
+        "Consumable": true,
+        "Uses": 1,
+        "Location": null
+      },
+      {
+        "Name": "worn_book",
+        "Description": "A leather-bound book filled with handwritten notes and diagrams. The script is ancient and difficult to decipher.",
+        "Weight": 1,
+        "Value": 1,
+        "Weapon": false,
+        "Damage": 0,
+        "Consumable": false,
+        "Uses": 1,
+        "Location": null
+      }
+    ],
+    "Friendly": true
+  },
+  "areas": [
+    {
+      "ID": "forest_path_01",
+      "Connections": [
+        {
+          "ID": "watchtower_01",
+          "Connections": [
+            {
+              "ID": "forest_path_01",
+              "Connections": [],
+              "Items": [],
+              "Occupants": [],
+              "Description": ""
+            }
+          ],
+          "Items": [],
+          "Occupants": [],
+          "Description": ""
+        },
+        {
+          "ID": "clearing_01",
+          "Connections": [],
+          "Items": [],
+          "Occupants": [],
+          "Description": ""
+        },
+        {
+          "ID": "hidden_grove",
+          "Connections": [],
+          "Items": [],
+          "Occupants": [],
+          "Description": ""
+        }
+      ],
+      "Items": [],
+      "Occupants": [],
+      "Description": ""
+    },
+    {
+      "ID": "clearing_01",
+      "Connections": [
+        {
+          "ID": "forest_path_01",
+          "Connections": [
+            {
+              "ID": "watchtower_01",
+              "Connections": [
+                {
+                  "ID": "forest_path_01",
+                  "Connections": [],
+                  "Items": [],
+                  "Occupants": [],
+                  "Description": ""
+                }
+              ],
+              "Items": [],
+              "Occupants": [],
+              "Description": ""
+            },
+            {
+              "ID": "clearing_01",
+              "Connections": [],
+              "Items": [],
+              "Occupants": [],
+              "Description": ""
+            }
+          ],
+          "Items": [],
+          "Occupants": [],
+          "Description": ""
+        }
+      ],
+      "Items": [],
+      "Occupants": [],
+      "Description": ""
+    },
+    {
+      "ID": "hidden_grove",
+      "Connections": [
+        {
+          "ID": "forest_path_01",
+          "Connections": [
+            {
+              "ID": "watchtower_01",
+              "Connections": [
+                {
+                  "ID": "forest_path_01",
+                  "Connections": [],
+                  "Items": [],
+                  "Occupants": [],
+                  "Description": ""
+                }
+              ],
+              "Items": [],
+              "Occupants": [],
+              "Description": ""
+            },
+            {
+              "ID": "clearing_01",
+              "Connections": [],
+              "Items": [],
+              "Occupants": [],
+              "Description": ""
+            },
+            {
+              "ID": "hidden_grove",
+              "Connections": [],
+              "Items": [],
+              "Occupants": [],
+              "Description": ""
+            }
+          ],
+          "Items": [],
+          "Occupants": [],
+          "Description": ""
+        }
+      ],
+      "Items": [],
+      "Occupants": [],
+      "Description": ""
+    },
+    {
+      "ID": "watchtower_01",
+      "Connections": [
+        {
+          "ID": "forest_path_01",
+          "Connections": [],
+          "Items": [],
+          "Occupants": [],
+          "Description": ""
+        }
+      ],
+      "Items": [],
+      "Occupants": [],
+      "Description": ""
+    }
+  ],
+  "items": [
+    {
+      "Name": "tattered_map",
+      "Description": "A map of the surrounding region, though much of it is faded and difficult to read.",
+      "Weight": 0.1,
+      "Value": 1,
+      "Weapon": false,
+      "Damage": 0,
+      "Consumable": false,
+      "Uses": 1,
+      "Location": null
+    },
+    {
+      "Name": "waterskin",
+      "Description": "A small waterskin, about half-full of surprisingly fresh water.",
+      "Weight": 1.5,
+      "Value": 1,
+      "Weapon": false,
+      "Damage": 0,
+      "Consumable": true,
+      "Uses": 1,
+      "Location": null
+    },
+    {
+      "Name": "worn_book",
+      "Description": "A leather-bound book filled with handwritten notes and diagrams. The script is ancient and difficult to decipher.",
+      "Weight": 1,
+      "Value": 1,
+      "Weapon": false,
+      "Damage": 0,
+      "Consumable": false,
+      "Uses": 1,
+      "Location": null
+    }
+  ],
+  "characters": {
+    "elmsworth": {
+      "Location": {
+        "ID": "",
+        "Connections": null,
+        "Items": null,
+        "Occupants": null,
+        "Description": ""
+      },
+      "Name": "elmsworth",
+      "Description": "An old man with a long, white beard and piercing blue eyes. He seems wise and carries an air of mystery.",
+      "Alive": true,
+      "Health": 100,
+      "Inventory": null,
+      "Friendly": true
+    }
+  }
+}

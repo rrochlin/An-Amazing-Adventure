@@ -1,8 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 )
+
+const SAVE_FILE = "game_state.json"
 
 func NewGame() Game {
 	return Game{
@@ -164,11 +168,128 @@ func (g *Game) RemoveNPCFromArea(areaID string, npcName string) error {
 	return fmt.Errorf("NPC %s not found in area %s", npcName, areaID)
 }
 
+// AddItemToInventory adds an item to the player's inventory
+func (g *Game) AddItemToInventory(item Item) error {
+	// Check if item exists in the game
+	if _, err := g.GetItem(item.Name); err != nil {
+		return fmt.Errorf("item %s not found in game", item.Name)
+	}
+
+	// Add item to player's inventory
+	g.Player.Inventory = append(g.Player.Inventory, item)
+	return nil
+}
+
+// RemoveItemFromInventory removes an item from the player's inventory
+func (g *Game) RemoveItemFromInventory(itemName string) error {
+	for i, item := range g.Player.Inventory {
+		if item.Name == itemName {
+			g.Player.Inventory = append(g.Player.Inventory[:i], g.Player.Inventory[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("item %s not found in inventory", itemName)
+}
+
 // GetAllAreas returns all areas in the game
-func (g *Game) GetAllAreas() []*Area {
-	areas := make([]*Area, 0, len(g.Map))
+func (g *Game) GetAllAreas() []Area {
+	areas := make([]Area, 0, len(g.Map))
 	for _, area := range g.Map {
-		areas = append(areas, &area)
+		areas = append(areas, area)
 	}
 	return areas
+}
+
+// SaveGameState saves the current game state to a JSON file
+func (g *Game) SaveGameState() error {
+	// Create a struct that contains all the necessary game state
+	type SaveState struct {
+		Player     Character            `json:"player"`
+		Areas      []Area               `json:"areas"`
+		Items      []Item               `json:"items"`
+		Characters map[string]Character `json:"characters"`
+	}
+
+	// Collect all areas
+	areas := g.GetAllAreas()
+
+	// Collect all items from areas and player inventory
+	items := make([]Item, 0)
+	itemMap := make(map[string]bool) // To track unique items
+	for _, area := range areas {
+		for _, item := range area.GetItems() {
+			if !itemMap[item.GetName()] {
+				items = append(items, item)
+				itemMap[item.GetName()] = true
+			}
+		}
+	}
+	for _, item := range g.Player.Inventory {
+		if !itemMap[item.GetName()] {
+			items = append(items, item)
+			itemMap[item.GetName()] = true
+		}
+	}
+
+	// Create save state
+	saveState := SaveState{
+		Player:     g.Player,
+		Areas:      areas,
+		Items:      items,
+		Characters: g.NPCs,
+	}
+
+	// Marshal to JSON
+	data, err := json.MarshalIndent(saveState, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal game state: %v", err)
+	}
+
+	// Write to file
+	err = os.WriteFile(SAVE_FILE, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write game state: %v", err)
+	}
+
+	return nil
+}
+
+// LoadGameState loads the game state from a JSON file
+func (g *Game) LoadGameState() error {
+	// Read file
+	data, err := os.ReadFile(SAVE_FILE)
+	if err != nil {
+		return fmt.Errorf("failed to read game state: %v", err)
+	}
+
+	// Create a struct that matches the save state
+	type SaveState struct {
+		Player     Character            `json:"player"`
+		Areas      []Area               `json:"areas"`
+		Items      []Item               `json:"items"`
+		Characters map[string]Character `json:"characters"`
+	}
+
+	// Unmarshal JSON
+	var saveState SaveState
+	err = json.Unmarshal(data, &saveState)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal game state: %v", err)
+	}
+
+	// Restore game state
+	g.Player = saveState.Player
+	g.Map = make(map[string]Area)
+	for _, area := range saveState.Areas {
+		g.Map[area.ID] = area
+	}
+	g.ItemList = make(map[string]Item)
+	for _, item := range saveState.Items {
+		g.ItemList[item.Name] = item
+	}
+	g.NPCs = saveState.Characters
+
+	fmt.Printf("game state loaded: %v\n", g)
+
+	return nil
 }
