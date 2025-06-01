@@ -80,6 +80,8 @@ After describing your plan, you will receive a blank chat where you can start im
 		return fmt.Errorf("failed to get initial plan: %w", err)
 	}
 
+	wg.game.Narrative = result.Text()
+
 	// Print the AI's plan
 	fmt.Println("\nAI's World Generation Plan:")
 	fmt.Println("=========================")

@@ -17,10 +17,11 @@ func NewGame() Game {
 }
 
 type Game struct {
-	Player   Character
-	Map      map[string]Area
-	ItemList map[string]Item
-	NPCs     map[string]Character
+	Player    Character
+	Map       map[string]Area
+	ItemList  map[string]Item
+	NPCs      map[string]Character
+	Narrative string
 }
 
 // AddItem adds an item to the game's ItemList
@@ -208,6 +209,7 @@ func (g *Game) SaveGameState() error {
 		Areas      []Area               `json:"areas"`
 		Items      []Item               `json:"items"`
 		Characters map[string]Character `json:"characters"`
+		Narrative  string               `json:"narrative"`
 	}
 
 	// Collect all areas
@@ -237,6 +239,7 @@ func (g *Game) SaveGameState() error {
 		Areas:      areas,
 		Items:      items,
 		Characters: g.NPCs,
+		Narrative:  g.Narrative,
 	}
 
 	// Marshal to JSON

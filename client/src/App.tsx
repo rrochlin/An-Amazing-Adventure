@@ -75,7 +75,7 @@ const calculateRoomPositions = (rooms: { [key: string]: RoomInfo }, currentRoom:
         const dx = pos2.x - pos1.x;
         const dy = pos2.y - pos1.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
+
         if (distance > 0) {
           const force = repulsion / (distance * distance);
           const fx = (dx / distance) * force;
@@ -98,7 +98,7 @@ const calculateRoomPositions = (rooms: { [key: string]: RoomInfo }, currentRoom:
         const dx = pos2.x - pos1.x;
         const dy = pos2.y - pos1.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
+
         if (distance > 0) {
           const force = (distance - targetDistance) * attraction;
           const fx = (dx / distance) * force;
@@ -142,7 +142,7 @@ const RoomMap = ({ gameState }: { gameState: GameState }) => {
     setHoveredRoom(roomId);
     const isAdjacent = gameState.rooms[gameState.current_room].connections.includes(roomId);
     const isCurrent = roomId === gameState.current_room;
-    
+
     let tooltipText = roomId;
     if (isCurrent) {
       tooltipText = "You are here";
@@ -151,7 +151,7 @@ const RoomMap = ({ gameState }: { gameState: GameState }) => {
     } else {
       tooltipText = "This room is not accessible from your current location";
     }
-    
+
     setTooltip({ x: pos.x, y: pos.y - 40, text: tooltipText });
   };
 
@@ -164,24 +164,24 @@ const RoomMap = ({ gameState }: { gameState: GameState }) => {
     <Stage width={stageWidth} height={stageHeight}>
       <Layer>
         {/* Draw connections */}
-        {Object.entries(gameState.rooms).map(([roomId, room]) => 
+        {Object.entries(gameState.rooms).map(([roomId, room]) =>
           room.connections.map(connId => {
             const start = roomPositions[roomId];
             const end = roomPositions[connId];
             if (!start || !end) return null;
-            
+
             const dx = end.x - start.x;
             const dy = end.y - start.y;
             const angle = Math.atan2(dy, dx);
-            
+
             const startX = start.x + Math.cos(angle) * roomRadius;
             const startY = start.y + Math.sin(angle) * roomRadius;
             const endX = end.x - Math.cos(angle) * roomRadius;
             const endY = end.y - Math.sin(angle) * roomRadius;
-            
-            const isCurrentRoomConnection = 
+
+            const isCurrentRoomConnection =
               (roomId === gameState.current_room || connId === gameState.current_room);
-            
+
             return (
               <Line
                 key={`${roomId}-${connId}`}
@@ -202,7 +202,7 @@ const RoomMap = ({ gameState }: { gameState: GameState }) => {
           const isCurrentRoom = roomId === gameState.current_room;
           const isConnectedToCurrent = room.connections.includes(gameState.current_room);
           const isAdjacent = isConnectedToCurrent || isCurrentRoom;
-          
+
           return (
             <React.Fragment key={roomId}>
               <Circle
@@ -242,15 +242,15 @@ const RoomMap = ({ gameState }: { gameState: GameState }) => {
           const pos = roomPositions[roomId];
           if (!pos) return null;
           const isHovered = hoveredRoom === roomId;
-          const isAdjacent = room.connections.includes(gameState.current_room) || 
-                           roomId === gameState.current_room;
-          
+          const isAdjacent = room.connections.includes(gameState.current_room) ||
+            roomId === gameState.current_room;
+
           // Format room name: replace underscores with spaces and title case
           const formattedName = roomId
             .split('_')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
             .join(' ');
-          
+
           return (
             <React.Fragment key={`label-${roomId}`}>
               {/* Label background */}
@@ -314,18 +314,18 @@ const RoomMap = ({ gameState }: { gameState: GameState }) => {
 // GameInfo Component
 const GameInfo = ({ gameState, onItemClick }: { gameState: GameState, onItemClick: (item: string) => void }) => {
   const currentRoom = gameState.rooms[gameState.current_room];
-  
+
   return (
     <Box sx={{ p: 2 }}>
       <Typography variant="h6">Current Location: {gameState.current_room}</Typography>
       <Typography variant="body1">{currentRoom?.description || 'No description available'}</Typography>
-      
+
       <Typography variant="h6" sx={{ mt: 2 }}>Your Inventory:</Typography>
       {gameState.inventory && gameState.inventory.length > 0 ? (
         <ul>
           {gameState.inventory.map(item => (
             <li key={item}>
-              <Button 
+              <Button
                 onClick={() => onItemClick(item)}
                 sx={{ textTransform: 'none', color: '#2196F3' }}
               >
@@ -337,13 +337,13 @@ const GameInfo = ({ gameState, onItemClick }: { gameState: GameState, onItemClic
       ) : (
         <Typography>Your inventory is empty</Typography>
       )}
-      
+
       <Typography variant="h6" sx={{ mt: 2 }}>Items in Room:</Typography>
       {currentRoom?.items && currentRoom.items.length > 0 ? (
         <ul>
           {currentRoom.items.map(item => (
             <li key={item}>
-              <Button 
+              <Button
                 onClick={() => onItemClick(item)}
                 sx={{ textTransform: 'none', color: '#2196F3' }}
               >
@@ -355,7 +355,7 @@ const GameInfo = ({ gameState, onItemClick }: { gameState: GameState, onItemClic
       ) : (
         <Typography>No items in this room</Typography>
       )}
-      
+
       <Typography variant="h6" sx={{ mt: 2 }}>Occupants:</Typography>
       {currentRoom?.occupants && currentRoom.occupants.length > 0 ? (
         <ul>
@@ -398,16 +398,16 @@ const ChatMessage = ({ message }: { message: ChatMessage }) => {
 };
 
 // Chat Component
-const Chat = ({ 
-  chatHistory, 
-  command, 
-  setCommand, 
-  handleCommand, 
-  isLoading 
-}: { 
-  chatHistory: ChatMessage[], 
-  command: string, 
-  setCommand: (cmd: string) => void, 
+const Chat = ({
+  chatHistory,
+  command,
+  setCommand,
+  handleCommand,
+  isLoading
+}: {
+  chatHistory: ChatMessage[],
+  command: string,
+  setCommand: (cmd: string) => void,
   handleCommand: () => void,
   isLoading: boolean
 }) => {
@@ -455,12 +455,12 @@ const Chat = ({
           <ChatMessage key={index} message={msg} />
         ))}
       </Box>
-      
-      <Box sx={{ 
-        display: 'flex', 
-        gap: 1, 
-        p: 2, 
-        borderTop: 1, 
+
+      <Box sx={{
+        display: 'flex',
+        gap: 1,
+        p: 2,
+        borderTop: 1,
         borderColor: 'divider',
         backgroundColor: '#2D2D2D'
       }}>
@@ -516,7 +516,12 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [worldReady, setWorldReady] = useState(false);
   const [pollingStatus, setPollingStatus] = useState<string>('');
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
+
+  useEffect(() => {
+    const history = { 'body': chatHistory }
+    localStorage.setItem('chatHistory', JSON.stringify(history))
+  }, [chatHistory])
 
   const checkWorldReady = async () => {
     try {
@@ -542,7 +547,7 @@ function App() {
     while (Date.now() - startTime < MAX_WAIT_TIME) {
       attempts++;
       setPollingStatus(`Checking world status (attempt ${attempts})...`);
-      
+
       const isReady = await checkWorldReady();
       if (isReady) {
         setPollingStatus('World generation complete!');
@@ -571,23 +576,31 @@ function App() {
     setIsLoading(true);
     setError(null);
     setPollingStatus('Starting game...');
-    
+
     try {
       const response = await axios.post(`${APP_URI}startgame`);
+      if (response.status != 200) {
+        setError(`World Generation Failed ${response}`)
+      }
       setGameStarted(true);
-      
+
       // Poll for world generation completion
       const worldGenerated = await pollWorldStatus();
       if (!worldGenerated) {
         setError('World generation is taking longer than expected. You can still try to play, but some features might not be available yet.');
       }
-      
+
       // Get initial game state
       setPollingStatus('Loading initial game state...');
       const gameResponse = await axios.get(`${APP_URI}describe`);
       setGameState(gameResponse.data);
 
       // Get initial narrative
+      const previousChat = localStorage.getItem('chatHistory')
+      if (previousChat) {
+        setChatHistory(JSON.parse(previousChat)['body'])
+      }
+
       const narrativeResponse = await axios.post(`${APP_URI}chat`, { chat: "Please provide an introductory narrative for the player." });
       if (narrativeResponse.data && narrativeResponse.data.Response) {
         setChatHistory(prev => [...prev, { type: 'narrative', content: narrativeResponse.data.Response }]);
@@ -603,7 +616,7 @@ function App() {
 
   const handleCommand = async () => {
     if (!command.trim()) return;
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -611,7 +624,7 @@ function App() {
       setChatHistory(prev => [...prev, { type: 'player', content: command }]);
 
       const response = await axios.post(`${APP_URI}chat`, { chat: command });
-      
+
       if (response.data && response.data.Response) {
         setChatHistory(prev => [...prev, { type: 'narrative', content: response.data.Response }]);
       } else {
@@ -635,7 +648,7 @@ function App() {
         const gameResponse = await axios.get(`${APP_URI}describe`);
         setGameState(gameResponse.data);
       }
-      
+
       setCommand('');
     } catch (err) {
       setError('Failed to process command. Please try again.');
@@ -647,7 +660,7 @@ function App() {
 
   const handleItemClick = async (item: string) => {
     if (isLoading || !gameState) return;
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -657,7 +670,7 @@ function App() {
 
       // Send item interaction to server
       const response = await axios.post(`${APP_URI}chat`, { chat: `Take ${item}` });
-      
+
       if (response.data && response.data.Response) {
         setChatHistory(prev => [...prev, { type: 'narrative', content: response.data.Response }]);
       }

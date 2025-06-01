@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"google.golang.org/genai"
 )
 
 // gameStateMiddleware wraps an http.HandlerFunc and saves the game state after execution
@@ -58,6 +60,21 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(200)
 		w.Write(dat)
+
+		gameState := cfg.getGameState()
+
+		cfg.chat.SendMessage(req.Context(), genai.Part{Text: fmt.Sprintf(`You have been loaded from a save state,
+		you are in the room %s,
+		you have the following items: %s,
+		you have the following occupants: %s,
+		you have the following connections: %s,
+		you previously defined your narrative as: %s,
+		You will receive further instructions in the next message respond with "ok"`,
+			gameState.CurrentRoom.ID,
+			gameState.CurrentRoom.GetItems(),
+			gameState.CurrentRoom.GetOccupants(),
+			cfg.game.Narrative,
+			gameState.CurrentRoom.GetConnections())})
 
 		cfg.worldGen = NewWorldGenerator(&cfg.game)
 		cfg.worldGen.mu.Lock()

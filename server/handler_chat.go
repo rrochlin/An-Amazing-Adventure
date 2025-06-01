@@ -21,6 +21,7 @@ type GameState struct {
 	VisibleItems   []Item
 	VisibleNPCs    []Character
 	ConnectedRooms []Area
+	Narrative      string
 }
 
 // getGameState returns the current state of the game for the AI
@@ -42,6 +43,7 @@ func (cfg *apiConfig) getGameState() GameState {
 		VisibleItems:   currentRoom.GetItems(),
 		VisibleNPCs:    visibleNPCs,
 		ConnectedRooms: currentRoom.GetConnections(),
+		Narrative:      cfg.game.Narrative,
 	}
 }
 
@@ -87,22 +89,23 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	gameState := cfg.getGameState()
 
 	// Send message to AI for processing
-	part := genai.Part{Text: fmt.Sprintf(`Game State:
-Player: %s
-
-You can either:
-- Provide a narrative response
-- or - 
-Generate new areas if needed (using create_room and connect_rooms tools)
-Add items or NPCs to the new or existing rooms
-Modify the environment based on the player's actions
-
-
-Respond with a JSON object containing:
-1. A narrative response or an empty string if you're calling tools
-2. Any tool calls needed to modify the world or an empty array if you're providing a narrative response`, params.Chat)}
+	part := genai.Part{Text: fmt.Sprintf(`
+	Player Says: %s
+	respond ONLY with a plan for your next actions and how these will help build 
+	and reinforce the narrative you are building for the player.`,
+		params.Chat,
+		gameState.Player.GetInventoryNames())}
 
 	result, err := cfg.chat.SendMessage(req.Context(), part)
+	if err != nil {
+		ErrorServer("failed to get response", w, err)
+		return
+	}
+	fmt.Printf("planning result: %v\n", result.Text())
+
+	part = genai.Part{Text: "Execute the plan you've outlined and provide engaging narrative to the player"}
+
+	result, err = cfg.chat.SendMessage(req.Context(), part)
 	if err != nil {
 		ErrorServer("failed to get response", w, err)
 		return
@@ -116,12 +119,7 @@ Respond with a JSON object containing:
 	codeBlockPattern := regexp.MustCompile("```(?:json)?\\s*([\\s\\S]*?)\\s*```")
 	codeBlockMatches := codeBlockPattern.FindStringSubmatch(text)
 
-	var jsonStr string
-	if len(codeBlockMatches) > 1 {
-		jsonStr = strings.TrimSpace(codeBlockMatches[1])
-	} else {
-		jsonStr = text
-	}
+	jsonStr := codeBlockMatches[1]
 
 	// Parse the response as JSON
 	type AIResponse struct {
@@ -133,37 +131,10 @@ Respond with a JSON object containing:
 	}
 
 	var aiResponse AIResponse
-	maxRetries := 3
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err = json.Unmarshal([]byte(jsonStr), &aiResponse)
-		if err == nil {
-			break
-		}
 
-		if attempt == maxRetries {
-			ErrorServer("failed to parse AI response after multiple attempts", w, err)
-			return
-		}
-
-		// Ask AI to fix the JSON format
-		part = genai.Part{Text: fmt.Sprintf(`Your response was not valid JSON. Error: %v`, err)}
-
-		result, err = cfg.chat.SendMessage(req.Context(), part)
-		if err != nil {
-			ErrorServer("failed to get retry response", w, err)
-			return
-		}
-
-		text = result.Text()
-		fmt.Printf("AI Retry Response (attempt %d): %s\n", attempt, text)
-
-		// Try to find JSON in the new response
-		codeBlockMatches = codeBlockPattern.FindStringSubmatch(text)
-		if len(codeBlockMatches) > 1 {
-			jsonStr = strings.TrimSpace(codeBlockMatches[1])
-		} else {
-			jsonStr = text
-		}
+	err = json.Unmarshal([]byte(jsonStr), &aiResponse)
+	if err != nil {
+		ErrorServer("failed to parse AI response", w, err)
 	}
 
 	// Execute any tool calls
@@ -173,42 +144,8 @@ Respond with a JSON object containing:
 			toolResult := cfg.ExecuteTool(toolCall.Tool, toolCall.Arguments)
 			toolResults = append(toolResults, fmt.Sprintf("Tool %s: %s", toolCall.Tool, toolResult))
 		}
-
-		// Get updated game state
-		updatedState := cfg.getGameState()
-
-		// Send tool results back to AI for final narrative
-		part = genai.Part{Text: fmt.Sprintf(`I executed the following tool calls:
-%s
-
-Updated Game State:
-%s
-
-Please provide a narrative response about what happened and what the player sees now.`, strings.Join(toolResults, "\n"), updatedState.String())}
-		fmt.Printf("Sending to AI: %s\n", part.Text) // Debug log
-		result, err = cfg.chat.SendMessage(req.Context(), part)
-		if err != nil {
-			ErrorServer("failed to process tool results", w, err)
-			return
-		}
-		text = result.Text()
-		fmt.Printf("AI Response: %s\n", text) // Debug log
-
-		// Parse the final narrative response
-		parsedText := codeBlockPattern.FindStringSubmatch(text)
-		if len(parsedText) < 1 {
-			ErrorServer("failed to parse AI response", w, err)
-			return
-		}
-		err = json.Unmarshal([]byte(parsedText[1]), &aiResponse)
-		if err != nil {
-			fmt.Printf("err hit parsing the json response: %v\n", err)
-			ErrorServer("failed to parse AI response", w, err)
-			return
-		}
 	}
 
-	// At this point, aiResponse.Narrative contains the final narrative
 	narrativeResponse := aiResponse.Narrative
 
 	// Collect any new areas that were created
