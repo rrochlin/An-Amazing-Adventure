@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 )
 
 const SAVE_FILE = "game_state.json"
@@ -125,7 +126,7 @@ func (g *Game) RemoveItemFromArea(areaID string, itemName string) error {
 
 	for i, item := range area.Items {
 		if item.Name == itemName {
-			area.Items = append(area.Items[:i], area.Items[i+1:]...)
+			area.Items = slices.Delete(area.Items, i, i+1)
 			g.Map[areaID] = area
 			return nil
 		}
@@ -161,7 +162,7 @@ func (g *Game) RemoveNPCFromArea(areaID string, npcName string) error {
 
 	for i, occupant := range area.Occupants {
 		if occupant == npcName {
-			area.Occupants = append(area.Occupants[:i], area.Occupants[i+1:]...)
+			area.Occupants = slices.Delete(area.Occupants, i, i+1)
 			g.Map[areaID] = area
 			return nil
 		}
@@ -185,7 +186,7 @@ func (g *Game) AddItemToInventory(item Item) error {
 func (g *Game) RemoveItemFromInventory(itemName string) error {
 	for i, item := range g.Player.Inventory {
 		if item.Name == itemName {
-			g.Player.Inventory = append(g.Player.Inventory[:i], g.Player.Inventory[i+1:]...)
+			g.Player.Inventory = slices.Delete(g.Player.Inventory, i, i+1)
 			return nil
 		}
 	}
