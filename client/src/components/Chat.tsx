@@ -1,4 +1,4 @@
-import { Box, Button, CircularProgress, Paper, TextField, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Paper, TextField } from '@mui/material';
 import { useEffect, useRef } from 'react';
 import { ChatMessageType } from '../models';
 import Markdown from 'react-markdown';

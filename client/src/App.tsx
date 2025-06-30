@@ -168,24 +168,16 @@ function App() {
   }
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#1E1E1E' }}>
-      {/* Top section - Game Info and Map */}
-      <Box sx={{ flex: '0 0 auto', p: 2 }}>
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'row', overflow: 'hidden', backgroundColor: '#1E1E1E' }}>
+      <Box sx={{ flex: '0', width: '20vw', p: 2 }}>
         <Paper sx={{ p: 2, backgroundColor: '#2D2D2D' }}>
-          <Grid container spacing={2}>
-            <Grid size={8}>
-              <Box sx={{ height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <RoomMap gameState={gameState} />
-              </Box>
-            </Grid>
-            <Grid size={4}>
-              <GameInfo gameState={gameState} onItemClick={handleItemClick} />
-            </Grid>
-          </Grid>
+          <Box sx={{ height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <RoomMap gameState={gameState} />
+          </Box>
+          <GameInfo gameState={gameState} onItemClick={handleItemClick} />
         </Paper>
       </Box>
 
-      {/* Bottom section - Chat */}
       <Box sx={{ flex: '1 1 auto', p: 2, minHeight: 0 }}>
         <Paper sx={{ height: '100%', backgroundColor: '#2D2D2D' }}>
           <Chat

@@ -8,21 +8,34 @@ import (
 	"os"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 	"google.golang.org/genai"
 )
 
 func main() {
-	godotenv.Load()
+	err := godotenv.Load()
+	if err != nil {
+		log.Printf("warning: assuming default configuration. .env unreadable: %v", err)
+	}
+	log.Printf("%v", os.Getenv("AWS_SECRET_ACCESS_KEY"))
 
 	mux := http.NewServeMux()
+	awsCfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithRegion("us-west-2"),
+	)
+	if err != nil {
+		log.Fatalf("unable to load SDK config, %v", err)
+	}
 
-	// Create a context with timeout for API client initialization
+	svc := dynamodb.NewFromConfig(awsCfg)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Initialize Gemini API client with proper configuration
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  os.Getenv("GCP_KEY"),
 		Backend: genai.BackendGeminiAPI,
@@ -31,13 +44,11 @@ func main() {
 		log.Fatal("Failed to create Gemini client:", err)
 	}
 
-	// Create system instructions
 	partsys := genai.Part{Text: GetSystemInstructions()}
 	psys := make([]*genai.Part, 1)
 	psys[0] = &partsys
 	instructions := genai.Content{Role: "system", Parts: psys}
 
-	// Configure model parameters
 	config := &genai.GenerateContentConfig{
 		Temperature:       genai.Ptr[float32](0.7),
 		TopP:              genai.Ptr[float32](0.8),
@@ -45,7 +56,6 @@ func main() {
 		SystemInstruction: &instructions,
 	}
 
-	// Create a new Chat.
 	chat, err := client.Chats.Create(context.Background(), *model, config, nil)
 	if err != nil {
 		log.Fatal("Failed to create chat session after retries:", err)
@@ -56,9 +66,10 @@ func main() {
 			host: os.Getenv("HOST_URL"),
 			port: os.Getenv("PORT"),
 		},
-		game:   Game{},
-		gemini: client,
-		chat:   chat,
+		game:        Game{},
+		gemini:      client,
+		chat:        chat,
+		dynamodbSvc: svc,
 	}
 
 	// Set up routes
@@ -91,9 +102,10 @@ type apiSettings struct {
 
 // Main configuration struct
 type apiConfig struct {
-	api      apiSettings
-	game     Game
-	worldGen *WorldGenerator
-	gemini   *genai.Client
-	chat     *genai.Chat
+	api         apiSettings
+	game        Game
+	worldGen    *WorldGenerator
+	gemini      *genai.Client
+	chat        *genai.Chat
+	dynamodbSvc *dynamodb.Client
 }

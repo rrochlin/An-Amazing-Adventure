@@ -3,10 +3,10 @@ import { RoomInfo } from "../models";
 // Force-directed graph layout algorithm
 export const calculateRoomPositions = (rooms: { [key: string]: RoomInfo }) => {
 	const positions: { [key: string]: { x: number; y: number } } = {};
-	const width = 600;
-	const height = 500;
-	const centerX = width / 2;
-	const centerY = height / 2;
+	const width = 1000;
+	const height = 1000;
+	const centerX = 200;
+	const centerY = 200;
 	const maxRadius = Math.min(width, height) * 0.35; // Slightly reduced from 0.4
 
 	// Initialize positions in a circle

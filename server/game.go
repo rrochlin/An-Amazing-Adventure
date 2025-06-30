@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"slices"
+
+	"github.com/google/uuid"
 )
 
 const SAVE_FILE = "game_state.json"
@@ -18,6 +20,7 @@ func NewGame() Game {
 }
 
 type Game struct {
+	Game_id   uuid.UUID
 	Player    Character
 	Map       map[string]Area
 	ItemList  map[string]Item

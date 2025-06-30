@@ -5,7 +5,7 @@ import { Stage, Layer, Circle, Line, Text, Rect } from 'react-konva';
 
 // RoomMap Component
 export const RoomMap = ({ gameState }: { gameState: GameState }) => {
-  const stageWidth = 600;
+  const stageWidth = 300;
   const stageHeight = 500;
   const roomRadius = 20;
   const playerIconRadius = 8;
@@ -38,7 +38,7 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
   };
 
   return (
-    <Stage width={stageWidth} height={stageHeight}>
+    <Stage width={stageWidth} height={stageHeight} draggable>
       <Layer>
         {/* Draw connections */}
         {Object.entries(gameState.rooms).map(([roomId, room]) =>
