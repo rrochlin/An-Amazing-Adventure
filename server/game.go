@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"slices"
 
 	"github.com/google/uuid"
@@ -11,8 +9,10 @@ import (
 
 const SAVE_FILE = "game_state.json"
 
-func NewGame() Game {
+func newGame(userID uuid.UUID) Game {
 	return Game{
+		GameId:   uuid.New(),
+		UserId:   userID,
 		Map:      make(map[string]Area),
 		ItemList: make(map[string]Item),
 		NPCs:     make(map[string]Character),
@@ -20,12 +20,24 @@ func NewGame() Game {
 }
 
 type Game struct {
-	Game_id   uuid.UUID
+	GameId    uuid.UUID
+	UserId    uuid.UUID
 	Player    Character
 	Map       map[string]Area
 	ItemList  map[string]Item
 	NPCs      map[string]Character
 	Narrative string
+}
+
+// Create a struct that contains all the necessary game state
+type SaveState struct {
+	SessionID  string               `json:"session_id" dynamodbav:"session_id"`
+	UserID     string               `json:"user_id,omitempty" dynamodbav:"user_id,omitempty"`
+	Player     Character            `json:"player"`
+	Areas      []Area               `json:"areas"`
+	Items      []Item               `json:"items"`
+	Characters map[string]Character `json:"characters"`
+	Narrative  string               `json:"narrative"`
 }
 
 // AddItem adds an item to the game's ItemList
@@ -205,17 +217,8 @@ func (g *Game) GetAllAreas() []Area {
 	return areas
 }
 
-// SaveGameState saves the current game state to a JSON file
-func (g *Game) SaveGameState() error {
-	// Create a struct that contains all the necessary game state
-	type SaveState struct {
-		Player     Character            `json:"player"`
-		Areas      []Area               `json:"areas"`
-		Items      []Item               `json:"items"`
-		Characters map[string]Character `json:"characters"`
-		Narrative  string               `json:"narrative"`
-	}
-
+// SaveGameState writes the current game state to an object for external saving
+func (g *Game) SaveGameState() SaveState {
 	// Collect all areas
 	areas := g.GetAllAreas()
 
@@ -239,6 +242,8 @@ func (g *Game) SaveGameState() error {
 
 	// Create save state
 	saveState := SaveState{
+		SessionID:  g.GameId.String(),
+		UserID:     g.UserId.String(),
 		Player:     g.Player,
 		Areas:      areas,
 		Items:      items,
@@ -246,44 +251,11 @@ func (g *Game) SaveGameState() error {
 		Narrative:  g.Narrative,
 	}
 
-	// Marshal to JSON
-	data, err := json.MarshalIndent(saveState, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal game state: %v", err)
-	}
-
-	// Write to file
-	err = os.WriteFile(SAVE_FILE, data, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write game state: %v", err)
-	}
-
-	return nil
+	return saveState
 }
 
 // LoadGameState loads the game state from a JSON file
-func (g *Game) LoadGameState() error {
-	// Read file
-	data, err := os.ReadFile(SAVE_FILE)
-	if err != nil {
-		return fmt.Errorf("failed to read game state: %v", err)
-	}
-
-	// Create a struct that matches the save state
-	type SaveState struct {
-		Player     Character            `json:"player"`
-		Areas      []Area               `json:"areas"`
-		Items      []Item               `json:"items"`
-		Characters map[string]Character `json:"characters"`
-	}
-
-	// Unmarshal JSON
-	var saveState SaveState
-	err = json.Unmarshal(data, &saveState)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal game state: %v", err)
-	}
-
+func (g *Game) LoadGameState(saveState SaveState) error {
 	// Restore game state
 	g.Player = saveState.Player
 	g.Map = make(map[string]Area)

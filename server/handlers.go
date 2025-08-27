@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"google.golang.org/genai"
@@ -24,8 +25,10 @@ func (cfg *apiConfig) gameStateMiddleware(next http.HandlerFunc) http.HandlerFun
 
 		// Only save game state if the request was successful
 		if rw.statusCode >= 200 && rw.statusCode < 300 {
-			if err := cfg.game.SaveGameState(); err != nil {
-				fmt.Printf("Failed to save game state: %v\n", err)
+			saveState := cfg.game.SaveGameState()
+			err := cfg.PutGame(req.Context(), saveState)
+			if err != nil {
+				ErrorServer("failed to write to dynamoDB", w, err)
 			}
 		}
 	}
@@ -43,6 +46,16 @@ func (rw *responseWriter) WriteHeader(code int) {
 }
 
 func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Authorization string `json:"chat"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		ErrorBadRequest("failed to parse request body", w, nil)
+		return
+	}
 	// Try to load existing game
 	if cfg.game.LoadGameState() == nil {
 		// Game loaded successfully
