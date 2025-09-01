@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 )
 
 type Area struct {
@@ -57,7 +58,6 @@ func (a *Area) GetConnections() []Area {
 
 // AddItem adds an item to the area
 func (a *Area) AddItem(item Item) error {
-	// Check if item already exists
 	for _, existingItem := range a.Items {
 		if existingItem.Name == item.Name {
 			return fmt.Errorf("item already exists in area")
@@ -86,10 +86,8 @@ func (a *Area) GetItems() []Item {
 // AddOccupant adds an occupant to the area
 func (a *Area) AddOccupant(name string) error {
 	// Check if occupant already exists
-	for _, occupant := range a.Occupants {
-		if occupant == name {
-			return fmt.Errorf("occupant already in area")
-		}
+	if slices.Contains(a.Occupants, name) {
+		return fmt.Errorf("occupant already in area")
 	}
 	a.Occupants = append(a.Occupants, name)
 	return nil
@@ -113,32 +111,23 @@ func (a *Area) GetOccupants() []string {
 
 // HasItem checks if an item exists in the area
 func (a *Area) HasItem(itemName string) bool {
-	for _, item := range a.Items {
-		if item.Name == itemName {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(
+		a.Items,
+		func(o Item) bool { return o.Name == itemName },
+	)
 }
 
 // HasOccupant checks if an occupant is in the area
 func (a *Area) HasOccupant(name string) bool {
-	for _, occupant := range a.Occupants {
-		if occupant == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a.Occupants, name)
 }
 
 // IsConnected checks if an area is connected
 func (a *Area) IsConnected(area Area) bool {
-	for _, conn := range a.Connections {
-		if conn.ID == area.ID {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(
+		a.Connections,
+		func(c Area) bool { return c.ID == area.ID },
+	)
 }
 
 // String returns a string representation of the area

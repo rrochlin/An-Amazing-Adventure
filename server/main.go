@@ -56,27 +56,33 @@ func main() {
 		SystemInstruction: &instructions,
 	}
 
-	chat, err := client.Chats.Create(context.Background(), *model, config, nil)
-	if err != nil {
-		log.Fatal("Failed to create chat session after retries:", err)
-	}
-
 	cfg := apiConfig{
 		api: apiSettings{
-			host: os.Getenv("HOST_URL"),
-			port: os.Getenv("PORT"),
+			host:         os.Getenv("HOST_URL"),
+			port:         os.Getenv("PORT"),
+			secret:       os.Getenv("SECRET"),
+			model:        "gemini-2.5-flash",
+			usersTable:   os.Getenv("AWS_USERS_TABLE"),
+			sessionTable: os.Getenv("AWS_SESSION_TABLE"),
+			rTokensTable: os.Getenv("AWS_R_TOKENS_TALBE"),
 		},
-		game:        Game{},
 		gemini:      client,
-		chat:        chat,
+		chatConfig:  config,
 		dynamodbSvc: svc,
 	}
 
-	// Set up routes
-	mux.HandleFunc("GET /api/describe", cfg.HandlerDescribe)
-	mux.HandleFunc("POST /api/startgame", cfg.gameStateMiddleware(cfg.HandlerStartGame))
-	mux.HandleFunc("POST /api/chat", cfg.gameStateMiddleware(cfg.HandlerChat))
-	mux.HandleFunc("GET /api/worldready", cfg.HandlerWorldReady)
+	// game routes
+	mux.HandleFunc("GET /api/describe/{uuid}", cfg.HandlerDescribe)
+	mux.HandleFunc("POST /api/startgame/{uuid}", cfg.HandlerStartGame)
+	mux.HandleFunc("POST /api/chat/{uuid}", cfg.HandlerChat)
+	mux.HandleFunc("GET /api/worldready/{uuid}", cfg.HandlerWorldReady)
+
+	// user routes
+	mux.HandleFunc("POST /api/login", cfg.HandlerLogin)
+	mux.HandleFunc("POST /api/refresh", cfg.HandlerRefresh)
+	mux.HandleFunc("POST /api/revoke", cfg.HandlerRevoke)
+	mux.HandleFunc("PUT /api/users", cfg.HandlerUpdateUser)
+	mux.HandleFunc("POST /api/users", cfg.HandlerUsers)
 
 	wrappedMux := cors.Default().Handler(NewLogger(mux))
 
@@ -96,16 +102,19 @@ func main() {
 
 // API related configuration
 type apiSettings struct {
-	host string
-	port string
+	host         string
+	port         string
+	secret       string
+	model        string
+	usersTable   string
+	sessionTable string
+	rTokensTable string
 }
 
 // Main configuration struct
 type apiConfig struct {
 	api         apiSettings
-	game        Game
-	worldGen    *WorldGenerator
 	gemini      *genai.Client
-	chat        *genai.Chat
+	chatConfig  *genai.GenerateContentConfig
 	dynamodbSvc *dynamodb.Client
 }

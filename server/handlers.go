@@ -5,34 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
+	"strings"
 	"time"
 
-	"google.golang.org/genai"
+	"github.com/google/uuid"
+	"github.com/rrochlin/an-amazing-adventure/internal/auth"
 )
-
-// gameStateMiddleware wraps an http.HandlerFunc and saves the game state after execution
-func (cfg *apiConfig) gameStateMiddleware(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		// Create a response writer that captures the status code
-		rw := &responseWriter{
-			ResponseWriter: w,
-			statusCode:     http.StatusOK,
-		}
-
-		// Execute the handler
-		next(rw, req)
-
-		// Only save game state if the request was successful
-		if rw.statusCode >= 200 && rw.statusCode < 300 {
-			saveState := cfg.game.SaveGameState()
-			err := cfg.PutGame(req.Context(), saveState)
-			if err != nil {
-				ErrorServer("failed to write to dynamoDB", w, err)
-			}
-		}
-	}
-}
 
 // responseWriter is a custom ResponseWriter that captures the status code
 type responseWriter struct {
@@ -46,24 +24,39 @@ func (rw *responseWriter) WriteHeader(code int) {
 }
 
 func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request) {
-	type parameters struct {
-		Authorization string `json:"chat"`
-	}
-	decoder := json.NewDecoder(req.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
+	token, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		ErrorBadRequest("failed to parse request body", w, nil)
+		ErrorBadRequest("unable to parse auth header", w, err)
 		return
 	}
-	// Try to load existing game
-	if cfg.game.LoadGameState() == nil {
+
+	userUUID, err := auth.ValidateJWT(token, cfg.api.secret)
+	if err != nil {
+		ErrorBadRequest("invalid token provided by client", w, err)
+		return
+	}
+
+	sessionUUID, err := uuid.Parse(req.PathValue("uuid"))
+	if err != nil {
+		ErrorBadRequest("valid uuid not provided in path params", w, err)
+		return
+	}
+
+	game, err := cfg.GetGame(req.Context(), sessionUUID)
+	if err != nil && !strings.HasPrefix(err.Error(), "no game found") {
+		ErrorServer("Failed to fetch game from server", w, err)
+		return
+	}
+
+	type retVal struct {
+		Ready bool `json:"ready"`
+	}
+
+	// there was a game found
+	if err == nil {
 		// Game loaded successfully
-		type retVal struct {
-			Status string `json:"status"`
-		}
 		RetVal := retVal{
-			Status: "Game loaded",
+			Ready: true,
 		}
 		dat, err := json.Marshal(RetVal)
 		if err != nil {
@@ -73,36 +66,25 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(200)
 		w.Write(dat)
-
-		gameState := cfg.getGameState()
-
-		cfg.chat.SendMessage(req.Context(), genai.Part{Text: fmt.Sprintf(`You have been loaded from a save state,
-		you are in the room %s,
-		you have the following items: %s,
-		you have the following occupants: %s,
-		you have the following connections: %s,
-		you previously defined your narrative as: %s,
-		You will receive further instructions in the next message respond with "ok"`,
-			gameState.CurrentRoom.ID,
-			gameState.CurrentRoom.GetItems(),
-			gameState.CurrentRoom.GetOccupants(),
-			cfg.game.Narrative,
-			gameState.CurrentRoom.GetConnections())})
-
-		cfg.worldGen = NewWorldGenerator(&cfg.game)
-		cfg.worldGen.mu.Lock()
-		cfg.worldGen.isReady = true
-		cfg.worldGen.mu.Unlock()
 		return
 	}
 
 	// Create a new game if loading failed
-	cfg.game = NewGame()
+	game = NewGame(sessionUUID, userUUID)
 
 	// Initialize world generator
-	cfg.worldGen = NewWorldGenerator(&cfg.game)
-	cfg.worldGen.SetChat(cfg.chat)
-	cfg.worldGen.SetConfig(cfg)
+	worldGen := NewWorldGenerator(&game)
+	chat, err := cfg.CreateChat(
+		req.Context(),
+		sessionUUID,
+		nil,
+	)
+	if err != nil {
+		ErrorServer("Failed to create chat session for game creation", w, err)
+		return
+	}
+
+	worldGen.SetChat(chat)
 
 	// Create a new background context for world generation
 	bgCtx := context.Background()
@@ -111,22 +93,20 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 	// Start world generation in background
 	go func() {
 		defer cancel() // Ensure context is canceled when done
-		err := cfg.worldGen.GenerateWorld(ctx)
+		err := worldGen.GenerateWorld(ctx)
 		if err != nil {
 			fmt.Printf("World generation error: %v\n", err)
 		}
 		// Save game state after world generation
-		if err := cfg.game.SaveGameState(); err != nil {
+		saveState := game.SaveGameState()
+		if err = cfg.PutGame(req.Context(), saveState); err != nil {
 			fmt.Printf("Failed to save game state: %v\n", err)
 		}
+
 	}()
 
-	type retVal struct {
-		Status string `json:"status"`
-	}
-
 	RetVal := retVal{
-		Status: "Game started",
+		Ready: false,
 	}
 	dat, err := json.Marshal(RetVal)
 	if err != nil {
@@ -140,8 +120,31 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 }
 
 func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) {
-	// Get current room
-	room := cfg.game.Player.GetLocation()
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		ErrorBadRequest("unable to parse auth header", w, err)
+		return
+	}
+
+	_, err = auth.ValidateJWT(token, cfg.api.secret)
+	if err != nil {
+		ErrorBadRequest("invalid token provided by client", w, err)
+		return
+	}
+
+	sessionUUID, err := uuid.Parse(req.PathValue("uuid"))
+	if err != nil {
+		ErrorBadRequest("valid uuid not provided in path params", w, err)
+		return
+	}
+
+	game, err := cfg.GetGame(req.Context(), sessionUUID)
+	if err != nil && !strings.HasPrefix(err.Error(), "no game found") {
+		ErrorServer("Failed to fetch game from server", w, err)
+		return
+	}
+
+	room := game.Player.GetLocation()
 
 	// Create room description
 	description := fmt.Sprintf("Room %s:\n", room.ID)
@@ -166,7 +169,7 @@ func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) 
 
 	// Get all rooms and their connections for the map
 	rooms := make(map[string]RoomInfo)
-	for _, area := range cfg.game.GetAllAreas() {
+	for _, area := range game.GetAllAreas() {
 		rooms[area.ID] = RoomInfo{
 			ID:          area.ID,
 			Description: area.GetDescription(),
@@ -208,18 +211,35 @@ type RoomInfo struct {
 
 // HandlerWorldReady checks if the world is ready
 func (cfg *apiConfig) HandlerWorldReady(w http.ResponseWriter, req *http.Request) {
-	type retVal struct {
-		Ready bool `json:"ready"`
-	}
-	RetVal := retVal{
-		Ready: cfg.worldGen != nil && cfg.worldGen.IsReady(),
-	}
-	dat, err := json.Marshal(RetVal)
+	// Get current room
+	token, err := auth.GetBearerToken(req.Header)
 	if err != nil {
-		ErrorServer("failed to marshal response", w, err)
+		ErrorBadRequest("unable to parse auth header", w, err)
 		return
 	}
+
+	_, err = auth.ValidateJWT(token, cfg.api.secret)
+	if err != nil {
+		ErrorBadRequest("invalid token provided by client", w, err)
+		return
+	}
+	sessionUUID, err := uuid.Parse(req.PathValue("uuid"))
+	if err != nil {
+		ErrorBadRequest("valid uuid not provided in path params", w, err)
+		return
+	}
+
+	_, err = cfg.GetGame(req.Context(), sessionUUID)
+	if err != nil && !strings.HasPrefix(err.Error(), "no game found") {
+		ErrorServer("Failed to fetch game from server", w, err)
+		return
+	}
+
+	if err == nil {
+		w.WriteHeader(200)
+	} else {
+		w.WriteHeader(204)
+	}
+
 	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(200)
-	w.Write(dat)
 }

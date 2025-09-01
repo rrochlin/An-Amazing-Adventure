@@ -14,8 +14,8 @@ import (
 
 // WorldGenAction represents a single action to be performed during world generation
 type WorldGenAction struct {
-	Tool      string                 `json:"tool"`
-	Arguments map[string]interface{} `json:"arguments"`
+	Tool      string         `json:"tool"`
+	Arguments map[string]any `json:"arguments"`
 }
 
 type WorldGenActions struct {
@@ -29,7 +29,6 @@ type WorldGenerator struct {
 	mu      sync.Mutex
 	isReady bool
 	chat    *genai.Chat
-	cfg     *apiConfig
 }
 
 // NewWorldGenerator creates a new world generator
@@ -45,13 +44,6 @@ func (wg *WorldGenerator) SetChat(chat *genai.Chat) {
 	wg.mu.Lock()
 	defer wg.mu.Unlock()
 	wg.chat = chat
-}
-
-// SetConfig sets the API configuration
-func (wg *WorldGenerator) SetConfig(cfg *apiConfig) {
-	wg.mu.Lock()
-	defer wg.mu.Unlock()
-	wg.cfg = cfg
 }
 
 // GenerateWorld communicates with the AI to generate the game world
@@ -79,8 +71,6 @@ After describing your plan, you will receive a blank chat where you can start im
 	if err != nil {
 		return fmt.Errorf("failed to get initial plan: %w", err)
 	}
-
-	wg.game.Narrative = result.Text()
 
 	// Print the AI's plan
 	fmt.Println("\nAI's World Generation Plan:")
@@ -167,7 +157,7 @@ Tool calls should be in JSON format:
 			}
 
 			// Execute the action
-			result := wg.cfg.ExecuteTool(action.Tool, action.Arguments)
+			result := wg.game.ExecuteTool(action.Tool, action.Arguments)
 			fmt.Printf("[World Gen] Action: %s - Result: %s\n", action.Tool, result)
 		}
 
@@ -200,6 +190,8 @@ Tool calls should be in JSON format:
 		}
 	}
 	fmt.Println("=========================")
+
+	wg.game.Narrative = wg.chat.History(true)
 
 	wg.mu.Lock()
 	wg.isReady = true

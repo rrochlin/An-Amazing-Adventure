@@ -22,7 +22,8 @@
     "react-konva": "^19.0.3",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "styled-components": "^6.1.17"
+    "styled-components": "^6.1.17",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",

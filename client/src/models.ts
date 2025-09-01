@@ -1,4 +1,3 @@
-
 export interface RoomInfo {
   id: string;
   description: string;
@@ -17,6 +16,12 @@ export interface GameState {
 }
 
 export interface ChatMessageType {
-  type: 'player' | 'narrative';
+  type: "player" | "narrative";
   content: string;
+}
+
+export interface stored_tokens {
+  jwt: string;
+  rtoken: string;
+  expiresAt: Date;
 }

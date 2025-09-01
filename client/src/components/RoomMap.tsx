@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { GameState } from "../models";
 import { calculateRoomPositions } from "./calcPosition";
-import { Stage, Layer, Circle, Line, Text, Rect } from 'react-konva';
+import { Stage, Layer, Circle, Line, Text, Rect } from "react-konva";
 
 // RoomMap Component
 export const RoomMap = ({ gameState }: { gameState: GameState }) => {
@@ -10,14 +10,19 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
   const roomRadius = 20;
   const playerIconRadius = 8;
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    text: string;
+  } | null>(null);
 
   // Calculate room positions using force-directed layout
   const roomPositions = calculateRoomPositions(gameState.rooms);
 
   const handleRoomHover = (roomId: string, pos: { x: number; y: number }) => {
     setHoveredRoom(roomId);
-    const isAdjacent = gameState.rooms[gameState.current_room].connections.includes(roomId);
+    const isAdjacent =
+      gameState.rooms[gameState.current_room].connections.includes(roomId);
     const isCurrent = roomId === gameState.current_room;
 
     let tooltipText = roomId;
@@ -42,7 +47,7 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
       <Layer>
         {/* Draw connections */}
         {Object.entries(gameState.rooms).map(([roomId, room]) =>
-          room.connections.map(connId => {
+          room.connections.map((connId) => {
             const start = roomPositions[roomId];
             const end = roomPositions[connId];
             if (!start || !end) return null;
@@ -57,7 +62,8 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
             const endY = end.y - Math.sin(angle) * roomRadius;
 
             const isCurrentRoomConnection =
-              (roomId === gameState.current_room || connId === gameState.current_room);
+              roomId === gameState.current_room ||
+              connId === gameState.current_room;
 
             return (
               <Line
@@ -69,7 +75,7 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                 opacity={isCurrentRoomConnection ? 1 : 0.8}
               />
             );
-          })
+          }),
         )}
 
         {/* Draw rooms */}
@@ -77,7 +83,9 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
           const pos = roomPositions[roomId];
           if (!pos) return null;
           const isCurrentRoom = roomId === gameState.current_room;
-          const isConnectedToCurrent = room.connections.includes(gameState.current_room);
+          const isConnectedToCurrent = room.connections.includes(
+            gameState.current_room,
+          );
           const isAdjacent = isConnectedToCurrent || isCurrentRoom;
 
           return (
@@ -86,12 +94,26 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                 x={pos.x}
                 y={pos.y}
                 radius={roomRadius}
-                fill={isCurrentRoom ? "#4CAF50" : isConnectedToCurrent ? "#81C784" : "#2196F3"}
-                stroke={isCurrentRoom ? "#81C784" : isConnectedToCurrent ? "#4CAF50" : "#64B5F6"}
+                fill={
+                  isCurrentRoom
+                    ? "#4CAF50"
+                    : isConnectedToCurrent
+                      ? "#81C784"
+                      : "#2196F3"
+                }
+                stroke={
+                  isCurrentRoom
+                    ? "#81C784"
+                    : isConnectedToCurrent
+                      ? "#4CAF50"
+                      : "#64B5F6"
+                }
                 strokeWidth={isCurrentRoom ? 5 : isConnectedToCurrent ? 4 : 3}
                 shadowColor="black"
                 shadowBlur={isCurrentRoom ? 15 : isConnectedToCurrent ? 12 : 10}
-                shadowOpacity={isCurrentRoom ? 0.5 : isConnectedToCurrent ? 0.4 : 0.3}
+                shadowOpacity={
+                  isCurrentRoom ? 0.5 : isConnectedToCurrent ? 0.4 : 0.3
+                }
                 onMouseEnter={() => handleRoomHover(roomId, pos)}
                 onMouseLeave={handleRoomLeave}
                 opacity={isAdjacent ? 1 : 0.5}
@@ -119,14 +141,18 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
           const pos = roomPositions[roomId];
           if (!pos) return null;
           const isHovered = hoveredRoom === roomId;
-          const isAdjacent = room.connections.includes(gameState.current_room) ||
+          const isAdjacent =
+            room.connections.includes(gameState.current_room) ||
             roomId === gameState.current_room;
 
           // Format room name: replace underscores with spaces and title case
           const formattedName = roomId
-            .split('_')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-            .join(' ');
+            .split("_")
+            .map(
+              (word) =>
+                word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+            )
+            .join(" ");
 
           return (
             <Fragment key={`label-${roomId}`}>

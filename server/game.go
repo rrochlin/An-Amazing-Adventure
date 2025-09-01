@@ -5,13 +5,12 @@ import (
 	"slices"
 
 	"github.com/google/uuid"
+	"google.golang.org/genai"
 )
 
-const SAVE_FILE = "game_state.json"
-
-func newGame(userID uuid.UUID) Game {
+func NewGame(gameId uuid.UUID, userID uuid.UUID) Game {
 	return Game{
-		GameId:   uuid.New(),
+		GameId:   gameId,
 		UserId:   userID,
 		Map:      make(map[string]Area),
 		ItemList: make(map[string]Item),
@@ -26,7 +25,7 @@ type Game struct {
 	Map       map[string]Area
 	ItemList  map[string]Item
 	NPCs      map[string]Character
-	Narrative string
+	Narrative []*genai.Content
 }
 
 // Create a struct that contains all the necessary game state
@@ -37,7 +36,7 @@ type SaveState struct {
 	Areas      []Area               `json:"areas"`
 	Items      []Item               `json:"items"`
 	Characters map[string]Character `json:"characters"`
-	Narrative  string               `json:"narrative"`
+	Narrative  []*genai.Content     `json:"narrative"`
 }
 
 // AddItem adds an item to the game's ItemList

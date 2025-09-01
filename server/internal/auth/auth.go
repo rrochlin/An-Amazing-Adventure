@@ -2,7 +2,6 @@ package auth
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -15,12 +14,12 @@ import (
 )
 
 type RefreshToken struct {
-	Token     string       `json:"token"`
-	CreatedAt time.Time    `json:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at"`
-	UserID    uuid.UUID    `json:"user_id"`
-	ExpiresAt time.Time    `json:"expires_at"`
-	RevokedAt sql.NullTime `json:"revoked_at"`
+	Token     string     `json:"token"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	UserID    uuid.UUID  `json:"user_id"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 }
 
 type User struct {

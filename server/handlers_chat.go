@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/uuid"
 	"google.golang.org/genai"
 )
 
@@ -21,18 +22,18 @@ type GameState struct {
 	VisibleItems   []Item
 	VisibleNPCs    []Character
 	ConnectedRooms []Area
-	Narrative      string
+	Narrative      []*genai.Content
 }
 
 // getGameState returns the current state of the game for the AI
-func (cfg *apiConfig) getGameState() GameState {
-	player := cfg.game.Player
+func (game *Game) getGameState() GameState {
+	player := game.Player
 	currentRoom := player.GetLocation()
 
 	// Get NPCs in current room
 	var visibleNPCs []Character
 	for _, occupant := range currentRoom.GetOccupants() {
-		if npc, err := cfg.game.GetNPC(occupant); err == nil {
+		if npc, err := game.GetNPC(occupant); err == nil {
 			visibleNPCs = append(visibleNPCs, npc)
 		}
 	}
@@ -43,7 +44,7 @@ func (cfg *apiConfig) getGameState() GameState {
 		VisibleItems:   currentRoom.GetItems(),
 		VisibleNPCs:    visibleNPCs,
 		ConnectedRooms: currentRoom.GetConnections(),
-		Narrative:      cfg.game.Narrative,
+		Narrative:      game.Narrative,
 	}
 }
 
@@ -84,19 +85,31 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 		ErrorBadRequest("failed to parse request body", w, nil)
 		return
 	}
+	sessionUUID, err := uuid.Parse(req.PathValue("uuid"))
+	if err != nil {
+		ErrorBadRequest("valid uuid not provided in path params", w, err)
+		return
+	}
+	game, err := cfg.GetGame(req.Context(), sessionUUID)
+	if err != nil {
+		ErrorNotFound(fmt.Sprintf("failed to find game %s", sessionUUID), w, err)
+		return
+	}
 
-	// Get current game state
-	gameState := cfg.getGameState()
+	chat, err := cfg.CreateChat(req.Context(), sessionUUID, game.Narrative)
+	if err != nil {
+		ErrorServer("chat creation failed", w, err)
+		return
+	}
 
 	// Send message to AI for processing
 	part := genai.Part{Text: fmt.Sprintf(`
 	Player Says: %s
 	respond ONLY with a plan for your next actions and how these will help build 
-	and reinforce the narrative you are building for the player.`,
-		params.Chat,
-		gameState.Player.GetInventoryNames())}
+	and reinforce the narrative you are building for the player.`, params.Chat),
+	}
 
-	result, err := cfg.chat.SendMessage(req.Context(), part)
+	result, err := chat.SendMessage(req.Context(), part)
 	if err != nil {
 		ErrorServer("failed to get response", w, err)
 		return
@@ -105,7 +118,7 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 
 	part = genai.Part{Text: "Execute the plan you've outlined and provide engaging narrative to the player"}
 
-	result, err = cfg.chat.SendMessage(req.Context(), part)
+	result, err = chat.SendMessage(req.Context(), part)
 	if err != nil {
 		ErrorServer("failed to get response", w, err)
 		return
@@ -141,7 +154,7 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	var toolResults []string
 	if len(aiResponse.ToolCalls) > 0 {
 		for _, toolCall := range aiResponse.ToolCalls {
-			toolResult := cfg.ExecuteTool(toolCall.Tool, toolCall.Arguments)
+			toolResult := game.ExecuteTool(toolCall.Tool, toolCall.Arguments)
 			toolResults = append(toolResults, fmt.Sprintf("Tool %s: %s", toolCall.Tool, toolResult))
 		}
 	}
@@ -150,7 +163,8 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 
 	// Collect any new areas that were created
 	newAreas := make(map[string]RoomInfo)
-	for _, area := range cfg.game.GetAllAreas() {
+	gameState := game.getGameState()
+	for _, area := range game.GetAllAreas() {
 		if !gameState.CurrentRoom.IsConnected(area) {
 			newAreas[area.ID] = RoomInfo{
 				ID:          area.ID,
@@ -179,10 +193,10 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Add game state updates
-	RetVal.GameState.CurrentRoom = cfg.game.Player.GetLocation().ID
-	RetVal.GameState.Inventory = cfg.game.Player.GetInventoryNames()
+	RetVal.GameState.CurrentRoom = game.Player.GetLocation().ID
+	RetVal.GameState.Inventory = game.Player.GetInventoryNames()
 	RetVal.GameState.Rooms = make(map[string]RoomInfo)
-	for _, area := range cfg.game.GetAllAreas() {
+	for _, area := range game.GetAllAreas() {
 		RetVal.GameState.Rooms[area.ID] = RoomInfo{
 			ID:          area.ID,
 			Description: area.GetDescription(),
@@ -191,6 +205,9 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 			Occupants:   area.GetOccupantNames(),
 		}
 	}
+
+	game.Narrative = chat.History(true)
+	cfg.PutGame(req.Context(), game.SaveGameState())
 
 	dat, err := json.Marshal(RetVal)
 	if err != nil {

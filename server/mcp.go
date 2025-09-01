@@ -117,7 +117,7 @@ func GetTools() []Tool {
 }
 
 // ExecuteCreateRoom creates a new room in the game
-func (cfg *apiConfig) ExecuteCreateRoom(args map[string]any) string {
+func (game *Game) ExecuteCreateRoom(args map[string]any) string {
 	id, ok := args["id"].(string)
 	if !ok {
 		return "Invalid room ID"
@@ -130,7 +130,7 @@ func (cfg *apiConfig) ExecuteCreateRoom(args map[string]any) string {
 		// Add description to room metadata if needed
 	}
 
-	err := cfg.game.AddArea(id, room)
+	err := game.AddArea(id, room)
 	if err != nil {
 		return fmt.Sprintf("Failed to create room: %v", err)
 	}
@@ -139,7 +139,7 @@ func (cfg *apiConfig) ExecuteCreateRoom(args map[string]any) string {
 }
 
 // ExecuteCreateItem creates a new item in the game
-func (cfg *apiConfig) ExecuteCreateItem(args map[string]any) string {
+func (game *Game) ExecuteCreateItem(args map[string]any) string {
 	name, ok := args["name"].(string)
 	if !ok {
 		return "Invalid item name"
@@ -156,7 +156,7 @@ func (cfg *apiConfig) ExecuteCreateItem(args map[string]any) string {
 		}
 	}
 
-	err := cfg.game.AddItem(item)
+	err := game.AddItem(item)
 	if err != nil {
 		return fmt.Sprintf("Failed to create item: %v", err)
 	}
@@ -165,7 +165,7 @@ func (cfg *apiConfig) ExecuteCreateItem(args map[string]any) string {
 }
 
 // ExecuteCreateCharacter creates a new character in the game
-func (cfg *apiConfig) ExecuteCreateCharacter(args map[string]any) string {
+func (game *Game) ExecuteCreateCharacter(args map[string]any) string {
 	name, ok := args["name"].(string)
 	if !ok {
 		return "Invalid character name"
@@ -180,7 +180,7 @@ func (cfg *apiConfig) ExecuteCreateCharacter(args map[string]any) string {
 		character.SetFriendly(isFriendly)
 	}
 
-	err := cfg.game.AddNPC(character)
+	err := game.AddNPC(character)
 	if err != nil {
 		return fmt.Sprintf("Failed to create character: %v", err)
 	}
@@ -189,7 +189,7 @@ func (cfg *apiConfig) ExecuteCreateCharacter(args map[string]any) string {
 }
 
 // ExecuteSetItemLocation sets the location of an item
-func (cfg *apiConfig) ExecuteSetItemLocation(args map[string]any) string {
+func (game *Game) ExecuteSetItemLocation(args map[string]any) string {
 	itemName, ok := args["item_name"].(string)
 	if !ok {
 		return "Invalid item name"
@@ -205,7 +205,7 @@ func (cfg *apiConfig) ExecuteSetItemLocation(args map[string]any) string {
 		return "Invalid location ID"
 	}
 
-	item, err := cfg.game.GetItem(itemName)
+	item, err := game.GetItem(itemName)
 	if err != nil {
 		return fmt.Sprintf("Item not found: %v", err)
 	}
@@ -226,7 +226,7 @@ func (cfg *apiConfig) ExecuteSetItemLocation(args map[string]any) string {
 
 	if locationType == "room" {
 		// Move item to room
-		room, err := cfg.game.GetArea(locationID)
+		room, err := game.GetArea(locationID)
 		if err != nil {
 			return fmt.Sprintf("Room not found: %v", err)
 		}
@@ -238,13 +238,13 @@ func (cfg *apiConfig) ExecuteSetItemLocation(args map[string]any) string {
 	} else {
 		// Move item to inventory
 		if locationID == "player" {
-			if err := cfg.game.AddItemToInventory(item); err != nil {
+			if err := game.AddItemToInventory(item); err != nil {
 				return fmt.Sprintf("Failed to add item to player inventory: %v", err)
 			}
-			item.SetLocation(&cfg.game.Player)
+			item.SetLocation(&game.Player)
 			return fmt.Sprintf("Successfully moved item %s to player inventory", itemName)
 		} else {
-			character, err := cfg.game.GetNPC(locationID)
+			character, err := game.GetNPC(locationID)
 			if err != nil {
 				return fmt.Sprintf("Character not found: %v", err)
 			}
@@ -258,7 +258,7 @@ func (cfg *apiConfig) ExecuteSetItemLocation(args map[string]any) string {
 }
 
 // ExecuteSetCharacterLocation sets the location of a character
-func (cfg *apiConfig) ExecuteSetCharacterLocation(args map[string]any) string {
+func (game *Game) ExecuteSetCharacterLocation(args map[string]any) string {
 	characterName, ok := args["character_name"].(string)
 	if !ok {
 		return "Invalid character name"
@@ -269,18 +269,18 @@ func (cfg *apiConfig) ExecuteSetCharacterLocation(args map[string]any) string {
 		return "Invalid room ID"
 	}
 
-	room, err := cfg.game.GetArea(roomID)
+	room, err := game.GetArea(roomID)
 	if err != nil {
 		return fmt.Sprintf("Room not found: %v", err)
 	}
 
 	if characterName == "player" {
-		cfg.game.Player.Location = room
+		game.Player.Location = room
 		return fmt.Sprintf("Successfully moved player to room %s", roomID)
 	}
 
 	// For NPCs, we'll need to update their location in the game state
-	character, err := cfg.game.GetNPC(characterName)
+	character, err := game.GetNPC(characterName)
 	if err != nil {
 		return fmt.Sprintf("Character not found: %v", err)
 	}
@@ -303,7 +303,7 @@ func (cfg *apiConfig) ExecuteSetCharacterLocation(args map[string]any) string {
 }
 
 // ExecuteConnectRooms creates a connection between two rooms
-func (cfg *apiConfig) ExecuteConnectRooms(args map[string]any) string {
+func (game *Game) ExecuteConnectRooms(args map[string]any) string {
 	roomID1, ok := args["room_id_1"].(string)
 	if !ok {
 		return "Invalid first room ID"
@@ -314,12 +314,12 @@ func (cfg *apiConfig) ExecuteConnectRooms(args map[string]any) string {
 		return "Invalid second room ID"
 	}
 
-	room1, err := cfg.game.GetArea(roomID1)
+	room1, err := game.GetArea(roomID1)
 	if err != nil {
 		return fmt.Sprintf("First room not found: %v", err)
 	}
 
-	room2, err := cfg.game.GetArea(roomID2)
+	room2, err := game.GetArea(roomID2)
 	if err != nil {
 		return fmt.Sprintf("Second room not found: %v", err)
 	}
@@ -335,8 +335,8 @@ func (cfg *apiConfig) ExecuteConnectRooms(args map[string]any) string {
 	}
 
 	// Update the rooms in the game map
-	cfg.game.Map[roomID1] = room1
-	cfg.game.Map[roomID2] = room2
+	game.Map[roomID1] = room1
+	game.Map[roomID2] = room2
 
 	return fmt.Sprintf("Successfully connected rooms %s and %s", roomID1, roomID2)
 }
@@ -410,29 +410,29 @@ Always maintain consistency in the game world and provide clear, engaging descri
 }
 
 // ExecuteTool executes a tool based on its name and arguments
-func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
+func (game *Game) ExecuteTool(toolName string, args map[string]any) string {
 	fmt.Printf("Executing tool: %s\n", toolName)
 	fmt.Printf("With arguments: %+v\n", args)
 
 	switch toolName {
 	case "create_room":
-		return cfg.ExecuteCreateRoom(args)
+		return game.ExecuteCreateRoom(args)
 	case "create_item":
-		return cfg.ExecuteCreateItem(args)
+		return game.ExecuteCreateItem(args)
 	case "create_character":
-		return cfg.ExecuteCreateCharacter(args)
+		return game.ExecuteCreateCharacter(args)
 	case "set_item_location":
-		return cfg.ExecuteSetItemLocation(args)
+		return game.ExecuteSetItemLocation(args)
 	case "set_character_location":
-		return cfg.ExecuteSetCharacterLocation(args)
+		return game.ExecuteSetCharacterLocation(args)
 	case "connect_rooms":
-		return cfg.ExecuteConnectRooms(args)
+		return game.ExecuteConnectRooms(args)
 	case "get_room_info":
 		roomID, ok := args["room_id"].(string)
 		if !ok {
 			return "Invalid room ID"
 		}
-		room, err := cfg.game.GetArea(roomID)
+		room, err := game.GetArea(roomID)
 		if err != nil {
 			return fmt.Sprintf("Room not found: %v", err)
 		}
@@ -467,7 +467,7 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		if !ok {
 			return "Invalid item name"
 		}
-		item, err := cfg.game.GetItem(itemName)
+		item, err := game.GetItem(itemName)
 		if err != nil {
 			return fmt.Sprintf("Item not found: %v", err)
 		}
@@ -477,7 +477,7 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		if !ok {
 			return "Invalid character name"
 		}
-		character, err := cfg.game.GetNPC(characterName)
+		character, err := game.GetNPC(characterName)
 		if err != nil {
 			return fmt.Sprintf("Character not found: %v", err)
 		}
@@ -487,7 +487,7 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		if !ok {
 			return "Invalid room ID"
 		}
-		room, err := cfg.game.GetArea(roomID)
+		room, err := game.GetArea(roomID)
 		if err != nil {
 			return fmt.Sprintf("Room not found: %v", err)
 		}
@@ -502,7 +502,7 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		if !ok {
 			return "Invalid room ID"
 		}
-		room, err := cfg.game.GetArea(roomID)
+		room, err := game.GetArea(roomID)
 		if err != nil {
 			return fmt.Sprintf("Room not found: %v", err)
 		}
@@ -517,7 +517,7 @@ func (cfg *apiConfig) ExecuteTool(toolName string, args map[string]any) string {
 		if !ok {
 			return "Invalid room ID"
 		}
-		room, err := cfg.game.GetArea(roomID)
+		room, err := game.GetArea(roomID)
 		if err != nil {
 			return fmt.Sprintf("Room not found: %v", err)
 		}

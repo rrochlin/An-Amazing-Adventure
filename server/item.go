@@ -8,7 +8,7 @@ type Item struct {
 	Name        string
 	Description string
 	Weight      float64
-	Location    interface{} // Can be Area or Character
+	Location    any // Can be Area or Character
 }
 
 // NewItem creates a new item with the given name and description
@@ -59,12 +59,12 @@ func (i *Item) GetWeight() float64 {
 }
 
 // SetLocation sets the item's location
-func (i *Item) SetLocation(location interface{}) {
+func (i *Item) SetLocation(location any) {
 	i.Location = location
 }
 
 // GetLocation returns the item's current location
-func (i *Item) GetLocation() interface{} {
+func (i *Item) GetLocation() any {
 	return i.Location
 }
 

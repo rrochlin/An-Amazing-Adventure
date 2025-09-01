@@ -30,30 +30,30 @@ func (cfg *apiConfig) HandlerLogin(w http.ResponseWriter, req *http.Request) {
 	}
 	err = auth.CheckPasswordHash(user.HashedPassword, params.Password)
 	if err != nil {
-		ErrorUnauthorized("Incorrect Password", w)
+		ErrorUnauthorized("Incorrect Password", w, err)
 		return
 	}
 
 	token, err := auth.MakeJWT(user.ID, cfg.api.secret)
 	if err != nil {
-		ErrorServer(fmt.Sprintf("failed to construct JWT %v", err), w)
+		ErrorServer(fmt.Sprintf("failed to construct JWT %v", err), w, err)
 		return
 	}
 	refToken, _ := auth.MakeRefreshToken()
-	_, err = cfg.db.query.CreateRToken(
+	_, err = cfg.CreateRToken(
 		req.Context(),
-		database.CreateRTokenParams{
+		CreateRTokenParams{
 			Token:  refToken,
 			UserID: user.ID,
 		})
 	if err != nil {
-		ErrorServer(fmt.Sprintf("Could not create refresh token: %v", err), w)
+		ErrorServer(fmt.Sprintf("Could not create refresh token: %v", err), w, err)
 		return
 	}
 
 	dat, err := json.Marshal(toPublicUser(user, token, refToken))
 	if err != nil {
-		ErrorServer(fmt.Sprintf("failed to encode user for response %v", err), w)
+		ErrorServer(fmt.Sprintf("failed to encode user for response %v", err), w, err)
 		return
 	}
 
