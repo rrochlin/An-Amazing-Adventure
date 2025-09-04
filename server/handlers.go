@@ -183,11 +183,13 @@ func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) 
 		Description string              `json:"description"`
 		CurrentRoom string              `json:"current_room"`
 		Rooms       map[string]RoomInfo `json:"rooms"`
+		State       GameState           `json:"game_state"`
 	}
 	RetVal := retVal{
 		Description: description,
 		CurrentRoom: room.ID,
 		Rooms:       rooms,
+		State:       game.getGameState(),
 	}
 	dat, err := json.Marshal(RetVal)
 	if err != nil {

@@ -64,7 +64,7 @@ func main() {
 			model:        "gemini-2.5-flash",
 			usersTable:   os.Getenv("AWS_USERS_TABLE"),
 			sessionTable: os.Getenv("AWS_SESSION_TABLE"),
-			rTokensTable: os.Getenv("AWS_R_TOKENS_TALBE"),
+			rTokensTable: os.Getenv("AWS_R_TOKENS_TABLE"),
 		},
 		gemini:      client,
 		chatConfig:  config,

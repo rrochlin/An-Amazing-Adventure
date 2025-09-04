@@ -1,4 +1,4 @@
-import { RoomInfo } from "../models";
+import { RoomInfo } from "../types/types";
 
 // Force-directed graph layout algorithm
 export const calculateRoomPositions = (rooms: { [key: string]: RoomInfo }) => {
