@@ -3,8 +3,8 @@
 	POST /api/users
  */
 
-import { AxiosRequestConfig } from "axios";
-import {
+import type { AxiosRequestConfig } from "axios";
+import type {
 	ApiCreateUserRequest,
 	ApiCreateUserResponse,
 	ApiLoginRequest,
@@ -17,7 +17,7 @@ import {
 } from "../types/api.types";
 import { getAuthHeaders } from "./auth.service";
 import { POST } from "./api.service";
-import { stored_tokens } from "../types/types";
+import type { stored_tokens } from "../types/types";
 
 export async function Login(data: ApiLoginRequest): Promise<LoginResponse> {
 	// Login will handle saving tokens to local storage

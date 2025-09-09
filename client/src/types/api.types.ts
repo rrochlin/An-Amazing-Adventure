@@ -1,4 +1,4 @@
-import { GameState } from "./types";
+import type { GameState } from "./types";
 
 // POST startgame
 export interface ApiStartGameRequest {

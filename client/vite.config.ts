@@ -1,19 +1,18 @@
-import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import { defineConfig } from 'vite'
-import tsConfigPaths from 'vite-tsconfig-paths'
-import react from '@vitejs/plugin-react'
+import viteReact from '@vitejs/plugin-react'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+import { resolve } from 'node:path'
 
+// https://vitejs.dev/config/
 export default defineConfig({
-	server: {
-		port: 5173,
-	},
-	ssr: {
-		noExternal: ['@mui/*'],
-	},
-	plugins: [
-		tsConfigPaths({
-			projects: ['./tsconfig.json'],
-		}),
-		tanstackStart(),
-	],
+  plugins: [TanStackRouterVite({ autoCodeSplitting: true }), viteReact()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
+    },
+  },
 })

@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
+import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 import { getAuthHeaders } from "./auth.service";
 
 const APP_URI = import.meta.env.VITE_APP_URI || "http://localhost:8080";

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { TextField, Button, Box, Paper, Typography, Alert } from '@mui/material';
 import { useState } from 'react';
-import { CreateNewUser } from '~/services/api.users';
+import { CreateNewUser } from '../services/api.users';
 
 export const Route = createFileRoute('/signup')({
 	component: RouteComponent,

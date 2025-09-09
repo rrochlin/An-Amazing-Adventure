@@ -1,17 +1,17 @@
-import {
-	AxiosHeaders,
+import type {
 	AxiosRequestConfig,
 	AxiosRequestHeaders,
 	AxiosResponse,
 } from "axios";
-import {
+import { AxiosHeaders } from "axios";
+import type {
 	ApiRefreshResponse,
 	ApiRevokeResponse,
 	RefreshResponse,
 	RevokeResponse,
 } from "../types/api.types";
 import { POST } from "./api.service";
-import { stored_tokens } from "../types/types";
+import type { stored_tokens } from "../types/types";
 
 export async function getAuthHeaders(
 	rtoken?: boolean,

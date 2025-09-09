@@ -1,4 +1,4 @@
-import {
+import type {
 	StartGameResponse,
 	ApiStartGameResponse,
 	DescribeResponse,

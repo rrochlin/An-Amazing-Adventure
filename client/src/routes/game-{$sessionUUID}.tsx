@@ -1,12 +1,12 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 import { useState } from "react";
-import { ChatMessageType, GameState } from '../types/types'
-import { Chat as SendChat, DescribeGame, StartGame, WorldReady } from "~/services/api.game";
+import type { ChatMessageType, GameState } from '../types/types'
+import { Chat as SendChat, DescribeGame, StartGame, WorldReady } from "../services/api.game";
 import { Alert, Box, Button, CircularProgress, Paper, Typography } from "@mui/material";
-import { RoomMap } from "~/components/RoomMap";
-import { GameInfo } from "~/components/GameInfo";
-import { Chat } from "~/components/Chat";
-import { isAuthenticated } from "~/services/auth.service";
+import { RoomMap } from "../components/RoomMap";
+import { GameInfo } from "../components/GameInfo";
+import { Chat } from "../components/Chat";
+import { isAuthenticated } from "../services/auth.service";
 
 export const Route = createFileRoute('/game-{$sessionUUID}')({
 	component: PostComponent,

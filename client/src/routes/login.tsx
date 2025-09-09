@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { AuthProvider, AuthResponse, SignInPage } from '@toolpad/core/SignInPage'
-import { resolve } from 'path/posix';
-import { Login } from '~/services/api.users';
+import { type AuthProvider, type AuthResponse, SignInPage } from '@toolpad/core/SignInPage'
+import { Login } from '../services/api.users';
 import { TextField, Button, Box, Paper, Typography } from '@mui/material';
 import { useState } from 'react';
 
