@@ -1,38 +1,42 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { type AuthProvider, type AuthResponse, SignInPage } from '@toolpad/core/SignInPage'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { type AuthProvider } from '@toolpad/core/SignInPage'
 import { Login } from '../services/api.users';
 import { TextField, Button, Box, Paper, Typography } from '@mui/material';
 import { useState } from 'react';
+import { success } from 'zod';
 
 
 export const Route = createFileRoute('/login')({
 	component: RouteComponent,
 })
 
-const signIn: (provider: AuthProvider, formData: FormData) => void = async (
+const signIn: (provider: AuthProvider, formData: FormData) => Promise<boolean> = async (
 	provider,
 	formData,
 ) => {
 	const login = await Login({
-		username: formData.get('email')?.toString() || "",
+		email: formData.get('email')?.toString() || "",
 		password: formData.get('password')?.toString() || "",
 	})
 	if (!login.success) {
 		alert("incorrect credentials")
-		return { type: 'CredentialsSignin', error: 'Invalid Crendentials.' } as AuthResponse
+		return false
 	}
+	return true
 };
 
 function RouteComponent() {
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const navigate = useNavigate()
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		const formData = new FormData();
 		formData.set('email', email);
 		formData.set('password', password);
-		await signIn({ id: 'credentials', name: 'Email and Password' } as AuthProvider, formData);
+		if (!(await signIn({ id: 'credentials', name: 'Email and Password' } as AuthProvider, formData))) return;
+		navigate({ to: '/' })
 	};
 
 	return (

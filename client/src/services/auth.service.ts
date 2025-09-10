@@ -12,18 +12,16 @@ import type {
 } from "../types/api.types";
 import { POST } from "./api.service";
 import type { stored_tokens } from "../types/types";
+import { redirect } from "@tanstack/react-router";
 
 export async function getAuthHeaders(
 	rtoken?: boolean,
 ): Promise<AxiosRequestHeaders> {
 	const headers = new AxiosHeaders();
 	const localJWT: stored_tokens = getJWT()
-	if (localJWT.expiresAt > new Date()) {
+	if (localJWT.expiresAt < Date.now()) {
 		console.log("refresh token has expired user will need to reauth");
-		const refreshRes = await refreshToken();
-		if (refreshRes.status != 200)
-			throw Error("user must re-authenticate fully");
-		localStorage.setItem("AAA_JWT", JSON.stringify(localJWT));
+		throw redirect({ to: "/login", search: { redirect: location.href } })
 	}
 	if (rtoken) {
 		headers.setAuthorization(`Bearer ${localJWT.rtoken}`);
@@ -60,5 +58,5 @@ export async function revokeToken(): Promise<RevokeResponse> {
 export function isAuthenticated(): boolean {
 	const tokens = getJWT()
 	if (!tokens) return false
-	return tokens.expiresAt.valueOf() > Date.now()
+	return tokens.expiresAt > Date.now()
 }

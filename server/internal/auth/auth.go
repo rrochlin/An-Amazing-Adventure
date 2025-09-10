@@ -14,20 +14,20 @@ import (
 )
 
 type RefreshToken struct {
-	Token     string     `json:"token"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
-	UserID    uuid.UUID  `json:"user_id"`
-	ExpiresAt time.Time  `json:"expires_at"`
-	RevokedAt *time.Time `json:"revoked_at,omitempty"`
+	Token     string     `dynamodbav:"token" json:"token"`
+	CreatedAt time.Time  `dynamodbav:"created_at" json:"created_at"`
+	UpdatedAt time.Time  `dynamodbav:"updated_at" json:"updated_at"`
+	UserID    uuid.UUID  `dynamodbav:"user_id" json:"user_id"`
+	ExpiresAt time.Time  `dynamodbav:"expires_at" json:"expires_at"`
+	RevokedAt *time.Time `dynamodbav:"revoked_at,omitempty" json:"revoked_at,omitempty"`
 }
 
 type User struct {
-	ID             uuid.UUID `json:"id"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	Email          string    `json:"email"`
-	HashedPassword string    `json:"hashed_password"`
+	ID             uuid.UUID `dynamodbav:"user_id" json:"user_id"`
+	CreatedAt      time.Time `dynamodbav:"created_at" json:"created_at"`
+	UpdatedAt      time.Time `dynamodbav:"updated_at" json:"updated_at"`
+	Email          string    `dynamodbav:"email" json:"email"`
+	HashedPassword string    `dynamodbav:"hashed_password" json:"hashed_password"`
 }
 
 func HashPassword(password string) (string, error) {

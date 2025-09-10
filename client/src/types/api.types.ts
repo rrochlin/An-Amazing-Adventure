@@ -2,7 +2,7 @@ import type { GameState } from "./types";
 
 // POST startgame
 export interface ApiStartGameRequest {
-	uuid: string;
+	playerName: string;
 }
 export interface ApiStartGameResponse {
 	error?: string;
@@ -14,6 +14,13 @@ export interface StartGameResponse {
 	error?: string;
 	ready: boolean;
 }
+
+// GET games
+export interface ListGamesResponse {
+	sessionId: string;
+	playerName: string;
+}
+export interface ApiListGamesResponse extends ListGamesResponse { }
 
 // GET describe
 export interface RoomInfo {
@@ -56,16 +63,16 @@ export interface WorldReadyResponse {
 
 // POST login
 export interface ApiLoginRequest {
-	username: string;
+	email: string;
 	password: string;
 }
 
 export interface ApiLoginResponse {
 	id: string;
-	created_at: Date;
-	updated_at: Date;
+	created_at: string; // this is the user account creation
+	updated_at: string; // this is the user account update
 	email: string;
-	token?: string;
+	token?: string; // tokens have a life of 1 hour
 	refresh_token?: string;
 }
 export interface LoginResponse {

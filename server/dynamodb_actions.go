@@ -34,6 +34,35 @@ func (cfg *apiConfig) PutGame(ctx context.Context, saveState SaveState) error {
 	return nil
 }
 
+func (cfg *apiConfig) GetUsersGames(ctx context.Context, userId uuid.UUID) ([]Game, error) {
+	keyEx := expression.Key("user_id").Equal(expression.Value(userId))
+	expr, err := expression.NewBuilder().WithKeyCondition(keyEx).Build()
+	if err != nil {
+		return nil, err
+	}
+	out, err := cfg.dynamodbSvc.Query(
+		ctx,
+		&dynamodb.QueryInput{
+			TableName:                 aws.String(cfg.api.sessionTable),
+			IndexName:                 aws.String("user-sessions-index"),
+			ExpressionAttributeNames:  expr.Names(),
+			ExpressionAttributeValues: expr.Values(),
+			KeyConditionExpression:    expr.KeyCondition(),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var games []Game
+	if err := attributevalue.UnmarshalListOfMaps(out.Items, &games); err != nil {
+		return nil, err
+	}
+
+	return games, nil
+
+}
+
 func (cfg *apiConfig) GetGame(ctx context.Context, sessionId uuid.UUID) (Game, error) {
 	key := map[string]types.AttributeValue{
 		"session_id": &types.AttributeValueMemberS{Value: sessionId.String()},
@@ -86,16 +115,19 @@ func (cfg *apiConfig) UpdateUser(ctx context.Context, user auth.User) error {
 }
 
 func (cfg *apiConfig) GetUserByEmail(ctx context.Context, email string) (auth.User, error) {
-	key := map[string]types.AttributeValue{
-		"email": &types.AttributeValueMemberS{Value: email},
+	keyEx := expression.Key("email").Equal(expression.Value(email))
+	expr, err := expression.NewBuilder().WithKeyCondition(keyEx).Build()
+	if err != nil {
+		return auth.User{}, err
 	}
 	out, err := cfg.dynamodbSvc.Query(
 		ctx,
 		&dynamodb.QueryInput{
 			TableName:                 aws.String(cfg.api.usersTable),
 			IndexName:                 aws.String("email-index"),
-			KeyConditionExpression:    aws.String("email = :email"),
-			ExpressionAttributeValues: key,
+			ExpressionAttributeNames:  expr.Names(),
+			ExpressionAttributeValues: expr.Values(),
+			KeyConditionExpression:    expr.KeyCondition(),
 		},
 	)
 	if err != nil {

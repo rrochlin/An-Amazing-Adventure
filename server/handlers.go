@@ -36,6 +36,17 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	type parameters struct {
+		PlayerName string `json:"playerName"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	err = decoder.Decode(&params)
+	if err != nil {
+		ErrorBadRequest("failed to parse request body", w, nil)
+		return
+	}
+
 	sessionUUID, err := uuid.Parse(req.PathValue("uuid"))
 	if err != nil {
 		ErrorBadRequest("valid uuid not provided in path params", w, err)
@@ -93,7 +104,7 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 	// Start world generation in background
 	go func() {
 		defer cancel() // Ensure context is canceled when done
-		err := worldGen.GenerateWorld(ctx)
+		err := worldGen.GenerateWorld(ctx, params.PlayerName)
 		if err != nil {
 			fmt.Printf("World generation error: %v\n", err)
 		}
@@ -117,6 +128,47 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(200)
 	w.Write(dat)
+}
+
+func (cfg *apiConfig) HandlerListGames(w http.ResponseWriter, req *http.Request) {
+	type GameInfo struct {
+		SessionId  uuid.UUID `json:"sessionId"`
+		PlayerName string    `json:"playerName"`
+	}
+
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		ErrorBadRequest("unable to parse auth header", w, err)
+		return
+	}
+
+	uuid, err := auth.ValidateJWT(token, cfg.api.secret)
+	if err != nil {
+		ErrorBadRequest("invalid token provided by client", w, err)
+		return
+	}
+
+	games, err := cfg.GetUsersGames(req.Context(), uuid)
+	if err != nil {
+		ErrorServer("unable to query games", w, err)
+		return
+	}
+
+	retVal := make([]GameInfo, len(games))
+	for _, game := range games {
+		retVal = append(retVal, GameInfo{SessionId: game.GameId, PlayerName: game.Player.Name})
+	}
+
+	dat, err := json.Marshal(retVal)
+	if err != nil {
+		ErrorServer("failed to marshal response", w, err)
+		return
+	}
+
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(200)
+	w.Write(dat)
+
 }
 
 func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) {

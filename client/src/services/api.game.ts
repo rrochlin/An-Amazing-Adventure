@@ -8,16 +8,19 @@ import type {
 	ApiChatResponse,
 	WorldReadyResponse,
 	ApiWorldReadyResponse,
+	ListGamesResponse,
+	ApiListGamesResponse,
+	ApiStartGameRequest,
 } from "../types/api.types";
 import { v4 as uuidv4 } from "uuid";
 import { GET, POST } from "./api.service";
 
 export async function StartGame(
+	body: ApiStartGameRequest,
 	sessionId?: string,
 ): Promise<StartGameResponse> {
-	const sessionUUID = sessionId ?? uuidv4();
-
-	const response = await POST<ApiStartGameResponse>(`startgame/${sessionId}`);
+	const sessionUUID = sessionId || uuidv4();
+	const response = await POST<ApiStartGameResponse>(`games/${sessionUUID}`, body);
 	return {
 		success: response.status == 200,
 		error: response.data.error,
@@ -26,6 +29,10 @@ export async function StartGame(
 	};
 }
 
+export async function ListGames(): Promise<ListGamesResponse[]> {
+	const response = await GET<ApiListGamesResponse[]>("games");
+	return response.data;
+}
 export async function DescribeGame(
 	sessionUUID: string,
 ): Promise<DescribeResponse> {

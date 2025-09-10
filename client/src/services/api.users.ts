@@ -15,18 +15,17 @@ import type {
 	LoginResponse,
 	UpdateUserResponse,
 } from "../types/api.types";
-import { getAuthHeaders } from "./auth.service";
-import { POST } from "./api.service";
+import { PUT } from "./api.service";
 import type { stored_tokens } from "../types/types";
+import axios from "axios";
 
-export async function Login(data: ApiLoginRequest): Promise<LoginResponse> {
+
+const BackendURI = import.meta.env.VITE_APP_URI;
+
+export async function Login(body: ApiLoginRequest): Promise<LoginResponse> {
 	// Login will handle saving tokens to local storage
 	console.log("trying to log in with credentials")
-	const config: AxiosRequestConfig = {
-		headers: await getAuthHeaders(),
-		data: data,
-	};
-	const response = await POST<ApiLoginResponse>("login", config);
+	const response = await axios.post<ApiLoginResponse>(`${BackendURI}/login`, body);
 	console.log("received response", response)
 	if (response.status > 299) {
 		console.error(`login failed ${response.data}`);
@@ -35,20 +34,16 @@ export async function Login(data: ApiLoginRequest): Promise<LoginResponse> {
 	const localCreds: stored_tokens = {
 		jwt: response.data.token!,
 		rtoken: response.data.refresh_token!,
-		expiresAt: new Date(response.data.updated_at.valueOf() + 60 * 1000),
+		expiresAt: Date.now() + 60 * 100_000,
 	};
 	localStorage.setItem("AAA_JWT", JSON.stringify(localCreds));
 	return { success: true };
 }
 
 export async function CreateNewUser(
-	data: ApiCreateUserRequest,
+	body: ApiCreateUserRequest,
 ): Promise<CreateUserResponse> {
-	const config: AxiosRequestConfig = {
-		headers: await getAuthHeaders(),
-		data: data,
-	};
-	const response = await POST<ApiCreateUserResponse>("users", config);
+	const response = await axios.post<ApiCreateUserResponse>(`${BackendURI}/users`, body);
 	if (response.status != 201) {
 		console.error(`user creation failed ${response.data}`);
 		return { success: false };
@@ -56,20 +51,16 @@ export async function CreateNewUser(
 	const localCreds: stored_tokens = {
 		jwt: response.data.token!,
 		rtoken: response.data.refresh_token!,
-		expiresAt: new Date(response.data.updated_at.valueOf() + 60 * 1000),
+		expiresAt: Date.now() + 60 * 100_000,
 	};
 	localStorage.setItem("AAA_JWT", JSON.stringify(localCreds));
 	return { success: true };
 }
 
 export async function UpdateUser(
-	data: ApiUpdateUserRequest,
+	body: ApiUpdateUserRequest,
 ): Promise<UpdateUserResponse> {
-	const config: AxiosRequestConfig = {
-		headers: await getAuthHeaders(),
-		data: data,
-	};
-	const response = await POST<ApiUpdateUserResponse>("users", config);
+	const response = await PUT<ApiUpdateUserResponse>("users", body);
 	if (response.status != 201) {
 		console.error(`user creation failed ${response.data}`);
 		return { success: false };
@@ -77,7 +68,7 @@ export async function UpdateUser(
 	const localCreds: stored_tokens = {
 		jwt: response.data.token!,
 		rtoken: response.data.refresh_token!,
-		expiresAt: new Date(response.data.updated_at.valueOf() + 60 * 1000),
+		expiresAt: Date.now() + 60 * 100_000,
 	};
 	localStorage.setItem("AAA_JWT", JSON.stringify(localCreds));
 	return { success: true };

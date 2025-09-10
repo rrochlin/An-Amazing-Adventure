@@ -22,6 +22,7 @@ func (cfg *apiConfig) HandlerUsers(w http.ResponseWriter, req *http.Request) {
 		ErrorBadRequest("failed to parse request body", w, err)
 		return
 	}
+	fmt.Printf("received params: %v\n", params)
 	hashedPass, err := auth.HashPassword(params.Password)
 	if err != nil {
 		ErrorServer(fmt.Sprintf("Passowrd hash failed: %v", err), w, err)

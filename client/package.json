@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 3000",
-    "start": "vite --port 3000",
+    "dev": "vite --port 5173",
+    "start": "vite --port 5173",
     "build": "vite build && tsc",
     "serve": "vite preview",
     "test": "vitest run"
@@ -13,6 +13,7 @@
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.2",
     "@mui/material": "^7.3.2",
     "@tanstack/react-devtools": "^0.2.2",
     "@tanstack/react-router": "^1.130.2",

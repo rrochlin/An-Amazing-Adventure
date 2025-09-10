@@ -73,9 +73,10 @@ func main() {
 
 	// game routes
 	mux.HandleFunc("GET /api/describe/{uuid}", cfg.HandlerDescribe)
-	mux.HandleFunc("POST /api/startgame/{uuid}", cfg.HandlerStartGame)
+	mux.HandleFunc("POST /api/games/{uuid}", cfg.HandlerStartGame)
 	mux.HandleFunc("POST /api/chat/{uuid}", cfg.HandlerChat)
 	mux.HandleFunc("GET /api/worldready/{uuid}", cfg.HandlerWorldReady)
+	mux.HandleFunc("GET /api/games", cfg.HandlerListGames)
 
 	// user routes
 	mux.HandleFunc("POST /api/login", cfg.HandlerLogin)
@@ -84,7 +85,7 @@ func main() {
 	mux.HandleFunc("PUT /api/users", cfg.HandlerUpdateUser)
 	mux.HandleFunc("POST /api/users", cfg.HandlerUsers)
 
-	wrappedMux := cors.Default().Handler(NewLogger(mux))
+	wrappedMux := cors.AllowAll().Handler(NewLogger(mux))
 
 	server := &http.Server{
 		Addr:         fmt.Sprintf("%v:%v", cfg.api.host, cfg.api.port),

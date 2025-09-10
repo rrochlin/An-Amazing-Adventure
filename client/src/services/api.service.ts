@@ -23,10 +23,10 @@ export async function POST<T>(
 ): Promise<AxiosResponse<T>> {
 	const config: AxiosRequestConfig = {
 		headers: await getAuthHeaders(),
-		data: body,
 	};
 	const response: AxiosResponse<T> = await axios.post(
 		`${APP_URI}/${uri}`,
+		body,
 		config,
 	);
 	if (response.status > 299) {
@@ -41,10 +41,10 @@ export async function PUT<T>(
 ): Promise<AxiosResponse<T>> {
 	const config: AxiosRequestConfig = {
 		headers: await getAuthHeaders(),
-		data: body,
 	};
 	const response: AxiosResponse<T> = await axios.put(
 		`${APP_URI}/${uri}`,
+		body,
 		config,
 	);
 	if (response.status > 299) {

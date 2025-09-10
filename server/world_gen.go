@@ -47,7 +47,7 @@ func (wg *WorldGenerator) SetChat(chat *genai.Chat) {
 }
 
 // GenerateWorld communicates with the AI to generate the game world
-func (wg *WorldGenerator) GenerateWorld(ctx context.Context) error {
+func (wg *WorldGenerator) GenerateWorld(ctx context.Context, playerName string) error {
 	if wg.chat == nil {
 		return fmt.Errorf("chat session not initialized")
 	}
@@ -83,7 +83,8 @@ After describing your plan, you will receive a blank chat where you can start im
 	fmt.Printf("\n[World Gen] AI Response:\n%s\n", result.Text())
 
 	// Create the player character
-	player := NewCharacter("Player", "The main character of the adventure")
+
+	player := NewCharacter(playerName, "The main character of the adventure")
 	wg.game.Player = player
 
 	// Start the iterative world building process
