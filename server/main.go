@@ -10,16 +10,12 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
-	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 	"google.golang.org/genai"
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Printf("warning: assuming default configuration. .env unreadable: %v", err)
-	}
+	// secrets are injected into environment at runtim by doppler
 	log.Printf("%v", os.Getenv("AWS_SECRET_ACCESS_KEY"))
 
 	mux := http.NewServeMux()
