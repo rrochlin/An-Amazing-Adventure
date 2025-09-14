@@ -5,10 +5,10 @@ import (
 )
 
 type Item struct {
-	Name        string
-	Description string
-	Weight      float64
-	Location    any // Can be Area or Character
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Weight      float64 `json:"weight"`
+	Location    any     `json:"location"`
 }
 
 // NewItem creates a new item with the given name and description

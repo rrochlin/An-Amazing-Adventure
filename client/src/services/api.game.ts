@@ -1,58 +1,63 @@
 import type {
-	StartGameResponse,
-	ApiStartGameResponse,
-	DescribeResponse,
-	ApiDescribeResponse,
-	ChatResponse,
-	ApiChatRequest,
-	ApiChatResponse,
-	WorldReadyResponse,
-	ApiWorldReadyResponse,
-	ListGamesResponse,
-	ApiListGamesResponse,
-	ApiStartGameRequest,
+  StartGameResponse,
+  ApiStartGameResponse,
+  DescribeResponse,
+  ApiDescribeResponse,
+  ChatResponse,
+  ApiChatRequest,
+  ApiChatResponse,
+  WorldReadyResponse,
+  ApiWorldReadyResponse,
+  ListGamesResponse,
+  ApiListGamesResponse,
+  ApiStartGameRequest,
 } from "../types/api.types";
 import { v4 as uuidv4 } from "uuid";
 import { GET, POST } from "./api.service";
 
 export async function StartGame(
-	body: ApiStartGameRequest,
-	sessionId?: string,
+  body: ApiStartGameRequest,
+  sessionId?: string,
 ): Promise<StartGameResponse> {
-	const sessionUUID = sessionId || uuidv4();
-	const response = await POST<ApiStartGameResponse>(`games/${sessionUUID}`, body);
-	return {
-		success: response.status == 200,
-		error: response.data.error,
-		ready: response.data.ready || false,
-		sessionUUID: sessionUUID,
-	};
+  const sessionUUID = sessionId || uuidv4();
+  const response = await POST<ApiStartGameResponse>(
+    `games/${sessionUUID}`,
+    body,
+  );
+  return {
+    success: response.status == 200,
+    error: response.data.error,
+    ready: response.data.ready || false,
+    sessionUUID: sessionUUID,
+  };
 }
 
 export async function ListGames(): Promise<ListGamesResponse[]> {
-	const response = await GET<ApiListGamesResponse[]>("games");
-	return response.data;
+  const response = await GET<ApiListGamesResponse[]>("games");
+  return response.data;
 }
 export async function DescribeGame(
-	sessionUUID: string,
+  sessionUUID: string,
 ): Promise<DescribeResponse> {
-	const response = await GET<ApiDescribeResponse>(`describe/${sessionUUID}`);
-	return response.data;
+  const response = await GET<ApiDescribeResponse>(`describe/${sessionUUID}`);
+  return response.data;
 }
 
 export async function Chat(
-	sessionUUID: string,
-	reqBody: ApiChatRequest,
+  sessionUUID: string,
+  reqBody: ApiChatRequest,
 ): Promise<ChatResponse> {
-	const response = await POST<ApiChatResponse>(`chat/${sessionUUID}`, reqBody);
-	return response.data;
+  const response = await POST<ApiChatResponse>(`chat/${sessionUUID}`, reqBody);
+  return response.data;
 }
 
 export async function WorldReady(
-	sessionUUID: string,
+  sessionUUID: string,
 ): Promise<WorldReadyResponse> {
-	const response = await GET<ApiWorldReadyResponse>(`chat/${sessionUUID}`);
-	return {
-		ready: response.status == 200,
-	};
+  const response = await GET<ApiWorldReadyResponse>(
+    `worldready/${sessionUUID}`,
+  );
+  return {
+    ready: response.status == 200,
+  };
 }

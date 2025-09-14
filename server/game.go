@@ -15,6 +15,7 @@ func NewGame(gameId uuid.UUID, userID uuid.UUID) Game {
 		Map:      make(map[string]Area),
 		ItemList: make(map[string]Item),
 		NPCs:     make(map[string]Character),
+		Ready:    false,
 	}
 }
 
@@ -26,17 +27,19 @@ type Game struct {
 	ItemList  map[string]Item
 	NPCs      map[string]Character
 	Narrative []*genai.Content
+	Ready     bool
 }
 
 // Create a struct that contains all the necessary game state
 type SaveState struct {
-	SessionID  string               `json:"session_id" dynamodbav:"session_id"`
-	UserID     string               `json:"user_id,omitempty" dynamodbav:"user_id,omitempty"`
+	SessionID  uuid.UUID            `json:"session_id" dynamodbav:"session_id"`
+	UserID     uuid.UUID            `json:"user_id,omitempty" dynamodbav:"user_id,omitempty"`
 	Player     Character            `json:"player"`
 	Areas      []Area               `json:"areas"`
 	Items      []Item               `json:"items"`
 	Characters map[string]Character `json:"characters"`
 	Narrative  []*genai.Content     `json:"narrative"`
+	Ready      bool
 }
 
 // AddItem adds an item to the game's ItemList
@@ -241,8 +244,8 @@ func (g *Game) SaveGameState() SaveState {
 
 	// Create save state
 	saveState := SaveState{
-		SessionID:  g.GameId.String(),
-		UserID:     g.UserId.String(),
+		SessionID:  g.GameId,
+		UserID:     g.UserId,
 		Player:     g.Player,
 		Areas:      areas,
 		Items:      items,
@@ -253,9 +256,10 @@ func (g *Game) SaveGameState() SaveState {
 	return saveState
 }
 
-// LoadGameState loads the game state from a JSON file
-func (g *Game) LoadGameState(saveState SaveState) error {
+// LoadGame loads the game state from a JSON file
+func (saveState *SaveState) LoadGame() Game {
 	// Restore game state
+	g := NewGame(saveState.SessionID, saveState.UserID)
 	g.Player = saveState.Player
 	g.Map = make(map[string]Area)
 	for _, area := range saveState.Areas {
@@ -269,5 +273,5 @@ func (g *Game) LoadGameState(saveState SaveState) error {
 
 	fmt.Printf("game state loaded: %v\n", g)
 
-	return nil
+	return g
 }

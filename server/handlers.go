@@ -32,7 +32,7 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 
 	userUUID, err := auth.ValidateJWT(token, cfg.api.secret)
 	if err != nil {
-		ErrorBadRequest("invalid token provided by client", w, err)
+		ErrorUnauthorized("invalid token provided by client", w, err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 	if err == nil {
 		// Game loaded successfully
 		RetVal := retVal{
-			Ready: true,
+			Ready: game.Ready,
 		}
 		dat, err := json.Marshal(RetVal)
 		if err != nil {
@@ -108,9 +108,10 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 		if err != nil {
 			fmt.Printf("World generation error: %v\n", err)
 		}
+		game.Ready = true
 		// Save game state after world generation
 		saveState := game.SaveGameState()
-		if err = cfg.PutGame(req.Context(), saveState); err != nil {
+		if err = cfg.PutGame(ctx, saveState); err != nil {
 			fmt.Printf("Failed to save game state: %v\n", err)
 		}
 
@@ -144,19 +145,19 @@ func (cfg *apiConfig) HandlerListGames(w http.ResponseWriter, req *http.Request)
 
 	uuid, err := auth.ValidateJWT(token, cfg.api.secret)
 	if err != nil {
-		ErrorBadRequest("invalid token provided by client", w, err)
+		ErrorUnauthorized("invalid token provided by client", w, err)
 		return
 	}
 
-	games, err := cfg.GetUsersGames(req.Context(), uuid)
+	saves, err := cfg.GetUsersSaves(req.Context(), uuid)
 	if err != nil {
 		ErrorServer("unable to query games", w, err)
 		return
 	}
 
-	retVal := make([]GameInfo, len(games))
-	for _, game := range games {
-		retVal = append(retVal, GameInfo{SessionId: game.GameId, PlayerName: game.Player.Name})
+	retVal := make([]GameInfo, 0)
+	for _, save := range saves {
+		retVal = append(retVal, GameInfo{SessionId: save.SessionID, PlayerName: save.Player.Name})
 	}
 
 	dat, err := json.Marshal(retVal)
@@ -180,7 +181,7 @@ func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) 
 
 	_, err = auth.ValidateJWT(token, cfg.api.secret)
 	if err != nil {
-		ErrorBadRequest("invalid token provided by client", w, err)
+		ErrorUnauthorized("invalid token provided by client", w, err)
 		return
 	}
 
@@ -243,6 +244,7 @@ func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) 
 		Rooms:       rooms,
 		State:       game.getGameState(),
 	}
+	fmt.Printf("%v", RetVal)
 	dat, err := json.Marshal(RetVal)
 	if err != nil {
 		ErrorServer("failed to marshal response", w, err)
@@ -274,7 +276,7 @@ func (cfg *apiConfig) HandlerWorldReady(w http.ResponseWriter, req *http.Request
 
 	_, err = auth.ValidateJWT(token, cfg.api.secret)
 	if err != nil {
-		ErrorBadRequest("invalid token provided by client", w, err)
+		ErrorUnauthorized("invalid token provided by client", w, err)
 		return
 	}
 	sessionUUID, err := uuid.Parse(req.PathValue("uuid"))
@@ -283,13 +285,13 @@ func (cfg *apiConfig) HandlerWorldReady(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	_, err = cfg.GetGame(req.Context(), sessionUUID)
+	game, err := cfg.GetGame(req.Context(), sessionUUID)
 	if err != nil && !strings.HasPrefix(err.Error(), "no game found") {
 		ErrorServer("Failed to fetch game from server", w, err)
 		return
 	}
 
-	if err == nil {
+	if err == nil && game.Ready {
 		w.WriteHeader(200)
 	} else {
 		w.WriteHeader(204)

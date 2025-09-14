@@ -6,11 +6,11 @@ import (
 )
 
 type Area struct {
-	ID          string
-	Connections []Area
-	Items       []Item
-	Occupants   []string
-	Description string
+	ID          string   `json:"id"`
+	Connections []Area   `json:"connections"`
+	Items       []Item   `json:"items"`
+	Occupants   []string `json:"occupants"`
+	Description string   `json:"description"`
 }
 
 // NewArea creates a new empty area with a unique ID

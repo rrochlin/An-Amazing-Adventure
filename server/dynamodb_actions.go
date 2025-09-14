@@ -34,7 +34,7 @@ func (cfg *apiConfig) PutGame(ctx context.Context, saveState SaveState) error {
 	return nil
 }
 
-func (cfg *apiConfig) GetUsersGames(ctx context.Context, userId uuid.UUID) ([]Game, error) {
+func (cfg *apiConfig) GetUsersSaves(ctx context.Context, userId uuid.UUID) ([]SaveState, error) {
 	keyEx := expression.Key("user_id").Equal(expression.Value(userId))
 	expr, err := expression.NewBuilder().WithKeyCondition(keyEx).Build()
 	if err != nil {
@@ -54,18 +54,23 @@ func (cfg *apiConfig) GetUsersGames(ctx context.Context, userId uuid.UUID) ([]Ga
 		return nil, err
 	}
 
-	var games []Game
-	if err := attributevalue.UnmarshalListOfMaps(out.Items, &games); err != nil {
+	var saves []SaveState
+	if err := attributevalue.UnmarshalListOfMaps(out.Items, &saves); err != nil {
 		return nil, err
 	}
 
-	return games, nil
+	return saves, nil
 
 }
 
 func (cfg *apiConfig) GetGame(ctx context.Context, sessionId uuid.UUID) (Game, error) {
+	rawUuid, err := sessionId.MarshalBinary()
+	if err != nil {
+		return Game{}, err
+	}
+
 	key := map[string]types.AttributeValue{
-		"session_id": &types.AttributeValueMemberS{Value: sessionId.String()},
+		"session_id": &types.AttributeValueMemberB{Value: rawUuid},
 	}
 	out, err := cfg.dynamodbSvc.GetItem(
 		ctx,
@@ -87,10 +92,7 @@ func (cfg *apiConfig) GetGame(ctx context.Context, sessionId uuid.UUID) (Game, e
 		return Game{}, err
 	}
 
-	var game Game
-	game.LoadGameState(save)
-
-	return game, nil
+	return save.LoadGame(), nil
 }
 
 func (cfg *apiConfig) CreateUser(ctx context.Context, user auth.User) error {
@@ -147,8 +149,13 @@ func (cfg *apiConfig) GetUserByEmail(ctx context.Context, email string) (auth.Us
 }
 
 func (cfg *apiConfig) GetUserByUUID(ctx context.Context, userUUID uuid.UUID) (auth.User, error) {
+	rawUuid, err := userUUID.MarshalBinary()
+	if err != nil {
+		return auth.User{}, err
+	}
+
 	key := map[string]types.AttributeValue{
-		"user_id": &types.AttributeValueMemberS{Value: userUUID.String()},
+		"user_id": &types.AttributeValueMemberB{Value: rawUuid},
 	}
 	out, err := cfg.dynamodbSvc.GetItem(
 		ctx,

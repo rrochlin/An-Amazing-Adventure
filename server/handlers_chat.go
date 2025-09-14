@@ -17,12 +17,12 @@ var model = flag.String("model", "gemini-2.0-flash", "gemini-2.0-flash")
 
 // GameState represents the current state of the game for the AI
 type GameState struct {
-	CurrentRoom    Area
-	Player         Character
-	VisibleItems   []Item
-	VisibleNPCs    []Character
-	ConnectedRooms []Area
-	Narrative      []*genai.Content
+	CurrentRoom    Area             `json:"current_room"`
+	Player         Character        `json:"player"`
+	VisibleItems   []Item           `json:"visible_items"`
+	VisibleNPCs    []Character      `json:"visible_npcs"`
+	ConnectedRooms []Area           `json:"connected_rooms"`
+	Narrative      []*genai.Content `json:"narrative"`
 }
 
 // getGameState returns the current state of the game for the AI
@@ -177,33 +177,16 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	}
 
 	type retVal struct {
-		Response  string              `json:"Response"`
-		NewAreas  map[string]RoomInfo `json:"NewAreas,omitempty"`
-		GameState struct {
-			CurrentRoom string              `json:"current_room"`
-			Inventory   []string            `json:"inventory"`
-			Rooms       map[string]RoomInfo `json:"rooms"`
-		} `json:"game_state"`
+		Response string              `json:"Response"`
+		NewAreas map[string]RoomInfo `json:"NewAreas,omitempty"`
+		State    GameState           `json:"game_state"`
 	}
 	RetVal := retVal{
 		Response: narrativeResponse,
+		State:    game.getGameState(),
 	}
 	if len(newAreas) > 0 {
 		RetVal.NewAreas = newAreas
-	}
-
-	// Add game state updates
-	RetVal.GameState.CurrentRoom = game.Player.GetLocation().ID
-	RetVal.GameState.Inventory = game.Player.GetInventoryNames()
-	RetVal.GameState.Rooms = make(map[string]RoomInfo)
-	for _, area := range game.GetAllAreas() {
-		RetVal.GameState.Rooms[area.ID] = RoomInfo{
-			ID:          area.ID,
-			Description: area.GetDescription(),
-			Connections: area.GetConnectionIDs(),
-			Items:       area.GetItemNames(),
-			Occupants:   area.GetOccupantNames(),
-		}
 	}
 
 	game.Narrative = chat.History(true)

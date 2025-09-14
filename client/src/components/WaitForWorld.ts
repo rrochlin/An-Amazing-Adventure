@@ -1,27 +1,12 @@
-import axios from "axios";
 import { WorldReady } from "../services/api.game";
 
-const APP_URI = import.meta.env.VITE_APP_URI || "http://localhost:8080/";
 const MAX_WAIT_TIME = 60000; // 1 minute in milliseconds
 const INITIAL_BACKOFF = 1000; // Start with 1 second
 const MAX_BACKOFF = 8000; // Maximum backoff of 8 seconds
 
-const checkWorldReady = async () => {
-  try {
-    const response = await axios.get(`${APP_URI}worldready`);
-    if (response.data.ready) {
-      return true;
-    }
-    return false;
-  } catch (err) {
-    console.error("Error checking world status:", err);
-    return false;
-  }
-};
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export const pollWorldStatus = async () => {
+export const pollWorldStatus = async (uuid: string) => {
   const startTime = Date.now();
   let backoff = INITIAL_BACKOFF;
   let attempts = 0;
@@ -29,7 +14,7 @@ export const pollWorldStatus = async () => {
   while (Date.now() - startTime < MAX_WAIT_TIME) {
     attempts++;
 
-    const isReady = await checkWorldReady();
+    const isReady = await WorldReady(uuid);
     if (isReady) {
       return true;
     }

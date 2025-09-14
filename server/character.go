@@ -2,16 +2,19 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 type Character struct {
-	Location    Area
-	Name        string
-	Description string
-	Alive       bool
-	Health      int
-	Inventory   []Item
-	Friendly    bool
+	Location    Area      `json:"location"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Alive       bool      `json:"alive"`
+	Health      int       `json:"health"`
+	Inventory   []Item    `json:"inventory"`
+	Friendly    bool      `json:"friendly"`
+	ID          uuid.UUID `json:"id"`
 }
 
 // NewCharacter creates a new character with the given name and description
@@ -22,6 +25,7 @@ func NewCharacter(name, description string) Character {
 		Alive:       true,
 		Health:      100,
 		Friendly:    true, // Default to friendly
+		ID:          uuid.New(),
 	}
 }
 
