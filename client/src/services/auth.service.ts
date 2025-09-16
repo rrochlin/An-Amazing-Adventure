@@ -21,6 +21,7 @@ export async function getAuthHeaders(
   const localJWT = getJWT()!;
   if (localJWT.expiresAt < Date.now()) {
     console.log("refresh token has expired user will need to reauth");
+    ClearUserAuth();
     throw redirect({ to: "/login", search: { redirect: location.href } });
   }
   if (rtoken) {

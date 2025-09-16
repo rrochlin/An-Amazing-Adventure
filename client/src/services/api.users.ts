@@ -30,7 +30,7 @@ export async function Login(body: ApiLoginRequest): Promise<LoginResponse> {
   const localCreds: stored_tokens = {
     jwt: response.data.token!,
     rtoken: response.data.refresh_token!,
-    expiresAt: Date.now() + 60 * 100_000,
+    expiresAt: Date.now() + 60 * 60 * 1_000,
   };
   localStorage.setItem("AAA_JWT", JSON.stringify(localCreds));
   return { success: true };

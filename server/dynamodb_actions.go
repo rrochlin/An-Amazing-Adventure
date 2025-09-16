@@ -92,7 +92,43 @@ func (cfg *apiConfig) GetGame(ctx context.Context, sessionId uuid.UUID) (Game, e
 		return Game{}, err
 	}
 
+	fmt.Printf("CURRENT SAVE STATE\n%v", save)
 	return save.LoadGame(), nil
+}
+
+func (cfg *apiConfig) GetGamePartial(ctx context.Context, sessionId uuid.UUID, projectionExpression string) (Game, error) {
+	rawUuid, err := sessionId.MarshalBinary()
+	if err != nil {
+		return Game{}, err
+	}
+
+	key := map[string]types.AttributeValue{
+		"session_id": &types.AttributeValueMemberB{Value: rawUuid},
+	}
+	out, err := cfg.dynamodbSvc.GetItem(
+		ctx,
+		&dynamodb.GetItemInput{
+			Key:                  key,
+			TableName:            aws.String(cfg.api.sessionTable),
+			ProjectionExpression: &projectionExpression,
+		},
+	)
+	if err != nil {
+		return Game{}, err
+	}
+
+	if out.Item == nil {
+		return Game{}, fmt.Errorf("no game found for session_id %s", sessionId)
+	}
+
+	var save SaveState
+	if err := attributevalue.UnmarshalMap(out.Item, &save); err != nil {
+		return Game{}, err
+	}
+
+	fmt.Printf("CURRENT SAVE STATE\n%v", save)
+	return save.LoadGame(), nil
+
 }
 
 func (cfg *apiConfig) CreateUser(ctx context.Context, user auth.User) error {

@@ -192,7 +192,7 @@ Tool calls should be in JSON format:
 	}
 	fmt.Println("=========================")
 
-	wg.game.Narrative = wg.chat.History(true)
+	wg.game.Narrative = wg.chat.History(false)
 
 	wg.mu.Lock()
 	wg.isReady = true

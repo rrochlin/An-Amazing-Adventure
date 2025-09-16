@@ -38,7 +38,7 @@ type SaveState struct {
 	Areas      []Area               `json:"areas"`
 	Items      []Item               `json:"items"`
 	Characters map[string]Character `json:"characters"`
-	Narrative  []*genai.Content     `json:"narrative"`
+	Narrative  []genai.Content      `json:"narrative"`
 	Ready      bool
 }
 
@@ -242,6 +242,11 @@ func (g *Game) SaveGameState() SaveState {
 		}
 	}
 
+	savedNarrative := make([]genai.Content, 0)
+	for _, nar := range g.Narrative {
+		savedNarrative = append(savedNarrative, *nar)
+	}
+
 	// Create save state
 	saveState := SaveState{
 		SessionID:  g.GameId,
@@ -250,7 +255,8 @@ func (g *Game) SaveGameState() SaveState {
 		Areas:      areas,
 		Items:      items,
 		Characters: g.NPCs,
-		Narrative:  g.Narrative,
+		Narrative:  savedNarrative,
+		Ready:      g.Ready,
 	}
 
 	return saveState
@@ -269,7 +275,13 @@ func (saveState *SaveState) LoadGame() Game {
 	for _, item := range saveState.Items {
 		g.ItemList[item.Name] = item
 	}
+	narrativePtrArr := make([]*genai.Content, 0)
+	for _, nar := range saveState.Narrative {
+		narrativePtrArr = append(narrativePtrArr, &nar)
+	}
 	g.NPCs = saveState.Characters
+	g.Narrative = narrativePtrArr
+	g.Ready = saveState.Ready
 
 	fmt.Printf("game state loaded: %v\n", g)
 

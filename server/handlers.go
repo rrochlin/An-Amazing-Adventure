@@ -285,7 +285,7 @@ func (cfg *apiConfig) HandlerWorldReady(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	game, err := cfg.GetGame(req.Context(), sessionUUID)
+	game, err := cfg.GetGamePartial(req.Context(), sessionUUID, "Ready")
 	if err != nil && !strings.HasPrefix(err.Error(), "no game found") {
 		ErrorServer("Failed to fetch game from server", w, err)
 		return

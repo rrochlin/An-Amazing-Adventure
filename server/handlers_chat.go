@@ -96,6 +96,8 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	fmt.Printf("CURRENT GAME NARRATIVE\n%v", game.Narrative)
+
 	chat, err := cfg.CreateChat(req.Context(), sessionUUID, game.Narrative)
 	if err != nil {
 		ErrorServer("chat creation failed", w, err)
@@ -189,7 +191,8 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 		RetVal.NewAreas = newAreas
 	}
 
-	game.Narrative = chat.History(true)
+	fmt.Printf("CHAT HISTORY IS\n%v", chat.History(false))
+	game.Narrative = chat.History(false)
 	cfg.PutGame(req.Context(), game.SaveGameState())
 
 	dat, err := json.Marshal(RetVal)

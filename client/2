@@ -1,18 +1,23 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ChatMessageType, GameState } from "../types/types";
 import {
   Chat as SendChat,
   DescribeGame,
   WorldReady,
 } from "../services/api.game";
-import { Alert, Box, CircularProgress, Paper, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Paper,
+  Typography,
+} from "@mui/material";
 import { RoomMap } from "../components/RoomMap";
 import { GameInfo } from "../components/GameInfo";
 import { Chat } from "../components/Chat";
 import { isAuthenticated } from "../services/auth.service";
-import { AppTheme } from "@/theme/theme";
-import { pollWorldStatus } from "@/components/WaitForWorld";
 
 export const Route = createFileRoute("/game-{$sessionUUID}")({
   component: PostComponent,
@@ -31,10 +36,11 @@ function PostComponent() {
   const { sessionUUID } = Route.useParams();
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [command, setCommand] = useState("");
+  const [gameStarted, setGameStarted] = useState(Route.useLoaderData().ready);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [pollingStatus, setPollingStatus] = useState<string>("");
   const [chatHistory, setChatHistory] = useState<ChatMessageType[]>([]);
-  const { ready: initialReady } = Route.useLoaderData();
 
   // loads chat from localStorage. Should default to pull from API if not available
   const handleSetChatHistory = (message: ChatMessageType) => {
@@ -48,56 +54,36 @@ function PostComponent() {
     });
   };
 
-  useEffect(() => {
-    if (!gameState) return;
-    localStorage.setItem(`gameState-${sessionUUID}`, JSON.stringify(gameState));
-  }, [gameState]);
-
-  useEffect(() => {
-    const getGame = async () => {
-      const result = await pollWorldStatus(sessionUUID);
-      if (result) {
-        fetchGame();
-      } else {
-        setError(
-          "World generation is taking a long time please refresh\nif the issue persists create a new game",
-        );
-        return;
-      }
-    };
-    getGame();
-  }, []);
-
   // This will load gameState into the client. We can write this to localStorage
   // and also verify that it's in sync with the backend
   const fetchGame = async () => {
     setIsLoading(true);
     setError(null);
+    setPollingStatus("Starting game...");
 
     try {
-      if (!initialReady) {
+      // check if game is in localstorage
+      // check if game is available
+      // load game from api with a chat narrative if no chat history
+      // Poll for world generation completion
+      if (!gameStarted) {
         // will be true initially if onload worldready call succeeded
         const worldGenerated = await WorldReady(sessionUUID);
-        if (!worldGenerated.ready) {
+        if (!worldGenerated) {
           setError(
             "World generation is taking longer than expected. You can still try to play, but some features might not be available yet.",
           );
           console.log("returned early");
           return;
         }
+        setGameStarted(true);
       }
 
       // Get initial game state
-      let state: GameState;
-      const localState = localStorage.getItem(`gameState-${sessionUUID}`);
-      if (localState != null && localState != "null") {
-        state = JSON.parse(localState);
-      } else {
-        const gameResponse = await DescribeGame(sessionUUID);
-        state = gameResponse.game_state;
-      }
-      setGameState(state);
-      console.log(state);
+      setPollingStatus("Loading initial game state...");
+      const gameResponse = await DescribeGame(sessionUUID);
+      setGameState(gameResponse.game_state);
+      console.log(gameResponse.game_state);
 
       // Get initial narrative
       const previousChat = localStorage.getItem(`chatHistory-${sessionUUID}`);
@@ -108,7 +94,6 @@ function PostComponent() {
 
       //TODO probably should only do this now if it's actually needed
       if (!previousChat) {
-        console.log("narrative not found, generating new narrative");
         const narrativeResponse = await SendChat(sessionUUID, {
           chat: "Please provide an introductory narrative for the player.",
         });
@@ -123,8 +108,10 @@ function PostComponent() {
         "Failed to start game. Please check if the server is running and try again.",
       );
       console.error("Error starting game:", err);
+    } finally {
+      setIsLoading(false);
+      setPollingStatus("");
     }
-    setIsLoading(false);
   };
 
   // Sends a chat and updates the game
@@ -165,7 +152,28 @@ function PostComponent() {
     return;
   };
 
-  if (!gameState || isLoading) {
+  if (!gameStarted) {
+    return (
+      <Box sx={{ p: 4, textAlign: "center" }}>
+        <Typography variant="h4" sx={{ mb: 4 }}>
+          Text Adventure Game
+        </Typography>
+        <Button variant="contained" onClick={fetchGame} disabled={isLoading}>
+          {isLoading ? <CircularProgress size={24} /> : "Start Game"}
+        </Button>
+        {pollingStatus && (
+          <Typography sx={{ mt: 2 }}>{pollingStatus}</Typography>
+        )}
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
+      </Box>
+    );
+  }
+
+  if (!gameState) {
     return (
       <Box sx={{ p: 4, textAlign: "center" }}>
         <CircularProgress />
@@ -177,7 +185,7 @@ function PostComponent() {
   return (
     <Box
       sx={{
-        height: `calc(100vh - ${AppTheme.mixins.toolbar.minHeight}px - 8px)`,
+        height: "100vh",
         display: "flex",
         flexDirection: "row",
         overflow: "hidden",

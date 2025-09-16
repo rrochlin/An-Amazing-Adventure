@@ -10,6 +10,7 @@ export const Route = createRootRoute({
     <ThemeProvider theme={AppTheme}>
       <Header />
       <Outlet />
+
       <TanstackDevtools
         config={{
           position: "bottom-left",
