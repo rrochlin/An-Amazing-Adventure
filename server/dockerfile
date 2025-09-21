@@ -1,0 +1,32 @@
+# Multi-stage Dockerfile for Cloud Run
+
+# --- Stage 1: Build the Go application
+FROM golang:1.24 as builder
+WORKDIR /src
+
+# Leverage build cache for dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source
+COPY . .
+
+# Build a static binary for Linux
+ENV CGO_ENABLED=0
+RUN go build -trimpath -ldflags="-s -w" -o /out/server .
+
+# --- Stage 2: Minimal runtime image (non-root)
+FROM gcr.io/distroless/static-debian12:nonroot
+
+# Cloud Run sets PORT. Default to 8080 for local runs.
+ENV HOST_URL=0.0.0.0
+ENV PORT=8080
+
+# Copy binary
+COPY --from=builder /out/server /server
+
+# Document the port
+EXPOSE 8080
+
+# Run as non-root by default in this image
+ENTRYPOINT ["/server"]

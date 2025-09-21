@@ -6,23 +6,35 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
-	"github.com/joho/godotenv"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/rs/cors"
 	"google.golang.org/genai"
 )
 
 func main() {
-	godotenv.Load()
-
 	mux := http.NewServeMux()
+	awsCfg, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithRegion("us-west-2"),
+	)
+	if err != nil {
+		log.Fatalf("unable to load SDK config, %v", err)
+	}
 
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{
+	svc := dynamodb.NewFromConfig(awsCfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
 		APIKey:  os.Getenv("GCP_KEY"),
 		Backend: genai.BackendGeminiAPI,
 	})
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to create Gemini client:", err)
 	}
 
 	partsys := genai.Part{Text: GetSystemInstructions()}
@@ -30,59 +42,74 @@ func main() {
 	psys[0] = &partsys
 	instructions := genai.Content{Role: "system", Parts: psys}
 
-	var config *genai.GenerateContentConfig = &genai.GenerateContentConfig{
-		Temperature:       genai.Ptr[float32](0.5),
+	config := &genai.GenerateContentConfig{
+		Temperature:       genai.Ptr[float32](0.7),
+		TopP:              genai.Ptr[float32](0.8),
+		MaxOutputTokens:   20000,
 		SystemInstruction: &instructions,
-	}
-
-	// Create a new Chat.
-	chat, err := client.Chats.Create(context.Background(), *model, config, nil)
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	cfg := apiConfig{
 		api: apiSettings{
-			host: os.Getenv("HOST_URL"),
-			port: os.Getenv("PORT"),
+			host:         os.Getenv("HOST_URL"),
+			port:         os.Getenv("PORT"),
+			secret:       os.Getenv("SECRET"),
+			model:        "gemini-2.5-flash",
+			usersTable:   os.Getenv("AWS_USERS_TABLE"),
+			sessionTable: os.Getenv("AWS_SESSION_TABLE"),
+			rTokensTable: os.Getenv("AWS_R_TOKENS_TABLE"),
 		},
-		game:   Game{},
-		gemini: client,
-		chat:   chat,
+		gemini:      client,
+		chatConfig:  config,
+		dynamodbSvc: svc,
 	}
 
-	mux.HandleFunc("POST /api/move", cfg.HandlerMove)
-	mux.HandleFunc("GET /api/describe", cfg.HandlerDescribe)
-	mux.HandleFunc("POST /api/startgame", cfg.HandlerStartGame)
-	mux.HandleFunc("POST /api/chat", cfg.HandlerChat)
+	// game routes
+	mux.HandleFunc("GET /api/describe/{uuid}", cfg.HandlerDescribe)
+	mux.HandleFunc("POST /api/games/{uuid}", cfg.HandlerStartGame)
+	mux.HandleFunc("DELETE /api/games/{uuid}", cfg.HandlerDeleteGame)
+	mux.HandleFunc("POST /api/chat/{uuid}", cfg.HandlerChat)
+	mux.HandleFunc("GET /api/worldready/{uuid}", cfg.HandlerWorldReady)
+	mux.HandleFunc("GET /api/games", cfg.HandlerListGames)
 
-	wrappedMux := cors.Default().Handler(NewLogger(mux))
+	// user routes
+	mux.HandleFunc("POST /api/login", cfg.HandlerLogin)
+	mux.HandleFunc("POST /api/refresh", cfg.HandlerRefresh)
+	mux.HandleFunc("POST /api/revoke", cfg.HandlerRevoke)
+	mux.HandleFunc("PUT /api/users", cfg.HandlerUpdateUser)
+	mux.HandleFunc("POST /api/users", cfg.HandlerUsers)
 
-	var server = http.Server{
-		Addr:    fmt.Sprintf("%v:%v", cfg.api.host, cfg.api.port),
-		Handler: wrappedMux,
+	wrappedMux := cors.AllowAll().Handler(NewLogger(mux))
+
+	server := &http.Server{
+		Addr:         fmt.Sprintf("%v:%v", cfg.api.host, cfg.api.port),
+		Handler:      wrappedMux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
-	fmt.Println(server.Addr)
-	err = server.ListenAndServe()
-	if err != nil {
-		fmt.Printf("error encountered closing %v\n", err)
-		return
-	}
 
+	log.Printf("Server starting on %s", server.Addr)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("Server error: %v", err)
+	}
 }
 
 // API related configuration
 type apiSettings struct {
-	host string
-	port string
+	host         string
+	port         string
+	secret       string
+	model        string
+	usersTable   string
+	sessionTable string
+	rTokensTable string
 }
-
-// Database related configuration
 
 // Main configuration struct
 type apiConfig struct {
-	api    apiSettings
-	game   Game
-	gemini *genai.Client
-	chat   *genai.Chat
+	api         apiSettings
+	gemini      *genai.Client
+	chatConfig  *genai.GenerateContentConfig
+	dynamodbSvc *dynamodb.Client
 }
