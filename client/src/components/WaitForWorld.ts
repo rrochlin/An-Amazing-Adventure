@@ -1,8 +1,8 @@
 import { WorldReady } from "../services/api.game";
 
-const MAX_WAIT_TIME = 60000; // 1 minute in milliseconds
-const INITIAL_BACKOFF = 1000; // Start with 1 second
-const MAX_BACKOFF = 8000; // Maximum backoff of 8 seconds
+const MAX_WAIT_TIME = 60_000; // 1 minute in milliseconds
+const INITIAL_BACKOFF = 1_000; // Start with 1 second
+const MAX_BACKOFF = 8_000; // Maximum backoff of 8 seconds
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -14,8 +14,8 @@ export const pollWorldStatus = async (uuid: string) => {
   while (Date.now() - startTime < MAX_WAIT_TIME) {
     attempts++;
 
-    const isReady = await WorldReady(uuid);
-    if (isReady) {
+    const response = await WorldReady(uuid);
+    if (response.ready) {
       return true;
     }
 

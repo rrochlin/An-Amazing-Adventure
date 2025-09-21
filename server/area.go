@@ -7,7 +7,7 @@ import (
 
 type Area struct {
 	ID          string   `json:"id"`
-	Connections []Area   `json:"connections"`
+	Connections []string `json:"connections"`
 	Items       []Item   `json:"items"`
 	Occupants   []string `json:"occupants"`
 	Description string   `json:"description"`
@@ -21,7 +21,7 @@ func NewArea(id string, description ...string) Area {
 	}
 	return Area{
 		ID:          id,
-		Connections: make([]Area, 0),
+		Connections: make([]string, 0),
 		Items:       make([]Item, 0),
 		Occupants:   make([]string, 0),
 		Description: desc,
@@ -31,19 +31,17 @@ func NewArea(id string, description ...string) Area {
 // AddConnection adds a new area connection
 func (a *Area) AddConnection(area Area) error {
 	// Check if connection already exists
-	for _, conn := range a.Connections {
-		if conn.ID == area.ID {
-			return fmt.Errorf("area already connected")
-		}
+	if slices.Contains(a.Connections, area.ID) {
+		return fmt.Errorf("area already connected")
 	}
-	a.Connections = append(a.Connections, area)
+	a.Connections = append(a.Connections, area.ID)
 	return nil
 }
 
 // RemoveConnection removes an area connection
 func (a *Area) RemoveConnection(area Area) error {
 	for i, conn := range a.Connections {
-		if conn.ID == area.ID {
+		if conn == area.ID {
 			a.Connections = append(a.Connections[:i], a.Connections[i+1:]...)
 			return nil
 		}
@@ -52,7 +50,7 @@ func (a *Area) RemoveConnection(area Area) error {
 }
 
 // GetConnections returns all connected areas
-func (a *Area) GetConnections() []Area {
+func (a *Area) GetConnections() []string {
 	return a.Connections
 }
 
@@ -79,8 +77,12 @@ func (a *Area) RemoveItem(itemName string) error {
 }
 
 // GetItems returns all items in the area
-func (a *Area) GetItems() []Item {
-	return a.Items
+func (a *Area) GetItems() map[string]Item {
+	res := map[string]Item{}
+	for _, item := range a.Items {
+		res[item.Name] = item
+	}
+	return res
 }
 
 // AddOccupant adds an occupant to the area
@@ -126,7 +128,7 @@ func (a *Area) HasOccupant(name string) bool {
 func (a *Area) IsConnected(area Area) bool {
 	return slices.ContainsFunc(
 		a.Connections,
-		func(c Area) bool { return c.ID == area.ID },
+		func(c string) bool { return c == area.ID },
 	)
 }
 
@@ -143,11 +145,7 @@ func (a *Area) GetDescription() string {
 
 // GetConnectionIDs returns a slice of connected area IDs
 func (a *Area) GetConnectionIDs() []string {
-	ids := make([]string, len(a.Connections))
-	for i, conn := range a.Connections {
-		ids[i] = conn.ID
-	}
-	return ids
+	return a.Connections
 }
 
 // GetItemNames returns a slice of item names in the area

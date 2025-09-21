@@ -177,7 +177,7 @@ Tool calls should be in JSON format:
 
 		fmt.Println("Connections:")
 		for _, conn := range area.GetConnections() {
-			fmt.Printf("  - %s\n", conn.ID)
+			fmt.Printf("  - %s\n", conn)
 		}
 
 		fmt.Println("Items:")
@@ -223,7 +223,7 @@ func (wg *WorldGenerator) getWorldState() string {
 			sb.WriteString("  - None\n")
 		} else {
 			for _, conn := range connections {
-				sb.WriteString(fmt.Sprintf("  - %s\n", conn.ID))
+				sb.WriteString(fmt.Sprintf("  - %s\n", conn))
 			}
 		}
 

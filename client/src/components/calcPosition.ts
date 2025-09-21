@@ -1,13 +1,14 @@
-import { type Area } from "../types/types";
+import { type GameState } from "../types/types";
 
 // Force-directed graph layout algorithm
-export const calculateRoomPositions = (rooms: { [key: string]: Area }) => {
+export const calculateRoomPositions = (gameState: GameState) => {
   const positions: { [key: string]: { x: number; y: number } } = {};
   const width = 1000;
   const height = 1000;
   const centerX = 200;
   const centerY = 200;
   const maxRadius = Math.min(width, height) * 0.35; // Slightly reduced from 0.4
+  const rooms = gameState.rooms ?? {};
 
   // Initialize positions in a circle
   const roomIds = Object.keys(rooms);
@@ -63,7 +64,7 @@ export const calculateRoomPositions = (rooms: { [key: string]: Area }) => {
       const connections = rooms[roomId].connections;
       connections.forEach((conn) => {
         const pos1 = positions[roomId];
-        const pos2 = positions[conn.id];
+        const pos2 = positions[conn];
         const dx = pos2.x - pos1.x;
         const dy = pos2.y - pos1.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -75,8 +76,8 @@ export const calculateRoomPositions = (rooms: { [key: string]: Area }) => {
 
           forces[roomId].x += fx;
           forces[roomId].y += fy;
-          forces[conn.id].x -= fx;
-          forces[conn.id].y -= fy;
+          forces[conn].x -= fx;
+          forces[conn].y -= fy;
         }
       });
     });

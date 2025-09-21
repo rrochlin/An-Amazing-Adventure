@@ -1,9 +1,10 @@
 export interface GameState {
   current_room: Area;
   player: Character;
-  visible_items?: string[];
-  visible_npcs?: string[];
-  connected_rooms: { [key: string]: Area };
+  visible_items?: { [key: string]: Item };
+  visible_npcs?: { [key: string]: Character };
+  connected_rooms?: string[];
+  rooms?: { [key: string]: Area };
   narrative?: string;
 }
 
@@ -19,7 +20,7 @@ export interface Character {
 
 export interface Area {
   id: string;
-  connections: Area[];
+  connections: string[];
   items: Item[];
   occupants: string[];
   description: string;

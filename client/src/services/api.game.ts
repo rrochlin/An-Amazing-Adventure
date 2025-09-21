@@ -13,7 +13,7 @@ import type {
   ApiStartGameRequest,
 } from "../types/api.types";
 import { v4 as uuidv4 } from "uuid";
-import { GET, POST } from "./api.service";
+import { DELETE, GET, POST } from "./api.service";
 
 export async function StartGame(
   body: ApiStartGameRequest,
@@ -41,6 +41,11 @@ export async function DescribeGame(
 ): Promise<DescribeResponse> {
   const response = await GET<ApiDescribeResponse>(`describe/${sessionUUID}`);
   return response.data;
+}
+
+export async function DeleteGame(sessionUUID: string): Promise<boolean> {
+  const response = await DELETE<void>(`games/${sessionUUID}`);
+  return response.status == 200;
 }
 
 export async function Chat(

@@ -283,7 +283,7 @@ func (saveState *SaveState) LoadGame() Game {
 	g.Narrative = narrativePtrArr
 	g.Ready = saveState.Ready
 
-	fmt.Printf("game state loaded: %v\n", g)
+	fmt.Printf("game state loaded: %+v\n", g)
 
 	return g
 }

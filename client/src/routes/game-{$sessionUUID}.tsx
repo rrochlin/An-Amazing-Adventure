@@ -165,7 +165,7 @@ function PostComponent() {
     return;
   };
 
-  if (!gameState || isLoading) {
+  if (!gameState && gameState != "null") {
     return (
       <Box sx={{ p: 4, textAlign: "center" }}>
         <CircularProgress />
@@ -184,7 +184,7 @@ function PostComponent() {
         backgroundColor: "#1E1E1E",
       }}
     >
-      <Box sx={{ flex: "0", width: "20vw", p: 2 }}>
+      <Box sx={{ flex: "0", minWidth: "20vw", p: 2 }}>
         <Paper sx={{ p: 2, backgroundColor: "#2D2D2D" }}>
           <Box
             sx={{
@@ -194,13 +194,19 @@ function PostComponent() {
               alignItems: "center",
             }}
           >
-            <RoomMap gameState={gameState} />
+            <Paper
+              sx={{
+                width: "18vw",
+              }}
+            >
+              <RoomMap gameState={gameState} />
+            </Paper>
           </Box>
           <GameInfo gameState={gameState} onItemClick={handleItemClick} />
         </Paper>
       </Box>
 
-      <Box sx={{ flex: "1 1 auto", p: 2, minHeight: 0 }}>
+      <Box sx={{ flex: "1", p: 4, minHeight: 0 }}>
         <Paper sx={{ height: "100%", backgroundColor: "#2D2D2D" }}>
           <Chat
             chatHistory={chatHistory}

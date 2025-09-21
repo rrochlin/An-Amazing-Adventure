@@ -17,6 +17,20 @@ export async function GET<T>(uri: string): Promise<AxiosResponse<T>> {
   return response;
 }
 
+export async function DELETE<T>(uri: string): Promise<AxiosResponse<T>> {
+  const config: AxiosRequestConfig = {
+    headers: await getAuthHeaders(),
+  };
+  const response: AxiosResponse<T> = await axios.delete(
+    `${APP_URI}/${uri}`,
+    config,
+  );
+  if (response.status > 299) {
+    console.error("server returned error response", response);
+  }
+  return response;
+}
+
 export async function POST<T>(
   uri: string,
   body?: any,

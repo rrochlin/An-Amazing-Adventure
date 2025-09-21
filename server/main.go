@@ -15,9 +15,6 @@ import (
 )
 
 func main() {
-	// secrets are injected into environment at runtim by doppler
-	log.Printf("%v", os.Getenv("AWS_SECRET_ACCESS_KEY"))
-
 	mux := http.NewServeMux()
 	awsCfg, err := config.LoadDefaultConfig(
 		context.TODO(),
@@ -70,6 +67,7 @@ func main() {
 	// game routes
 	mux.HandleFunc("GET /api/describe/{uuid}", cfg.HandlerDescribe)
 	mux.HandleFunc("POST /api/games/{uuid}", cfg.HandlerStartGame)
+	mux.HandleFunc("DELETE /api/games/{uuid}", cfg.HandlerDeleteGame)
 	mux.HandleFunc("POST /api/chat/{uuid}", cfg.HandlerChat)
 	mux.HandleFunc("GET /api/worldready/{uuid}", cfg.HandlerWorldReady)
 	mux.HandleFunc("GET /api/games", cfg.HandlerListGames)

@@ -92,7 +92,6 @@ func (cfg *apiConfig) GetGame(ctx context.Context, sessionId uuid.UUID) (Game, e
 		return Game{}, err
 	}
 
-	fmt.Printf("CURRENT SAVE STATE\n%v", save)
 	return save.LoadGame(), nil
 }
 
@@ -126,7 +125,6 @@ func (cfg *apiConfig) GetGamePartial(ctx context.Context, sessionId uuid.UUID, p
 		return Game{}, err
 	}
 
-	fmt.Printf("CURRENT SAVE STATE\n%v", save)
 	return save.LoadGame(), nil
 
 }
@@ -330,4 +328,28 @@ func (cfg *apiConfig) RefreshToken(ctx context.Context, token string) error {
 		}
 	}
 	return err
+}
+
+func (cfg *apiConfig) DeleteGame(ctx context.Context, sessionId uuid.UUID) error {
+	rawUuid, err := sessionId.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	key := map[string]types.AttributeValue{
+		"session_id": &types.AttributeValueMemberB{Value: rawUuid},
+	}
+	// TODO add in a check to make sure the person deleting this game owns it
+	_, err = cfg.dynamodbSvc.DeleteItem(
+		ctx,
+		&dynamodb.DeleteItemInput{
+			Key:       key,
+			TableName: aws.String(cfg.api.sessionTable),
+		},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

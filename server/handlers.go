@@ -217,7 +217,7 @@ func (cfg *apiConfig) HandlerDescribe(w http.ResponseWriter, req *http.Request) 
 	// Add connections
 	description += "\nConnections:\n"
 	for _, conn := range room.GetConnections() {
-		description += fmt.Sprintf("- Room %s\n", conn.ID)
+		description += fmt.Sprintf("- Room %s\n", conn)
 	}
 
 	// Get all rooms and their connections for the map
@@ -298,4 +298,30 @@ func (cfg *apiConfig) HandlerWorldReady(w http.ResponseWriter, req *http.Request
 	}
 
 	w.Header().Add("Content-Type", "application/json")
+}
+
+func (cfg *apiConfig) HandlerDeleteGame(w http.ResponseWriter, req *http.Request) {
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		ErrorBadRequest("unable to parse auth header", w, err)
+		return
+	}
+
+	_, err = auth.ValidateJWT(token, cfg.api.secret)
+	if err != nil {
+		ErrorUnauthorized("invalid token provided by client", w, err)
+		return
+	}
+
+	sessionUUID, err := uuid.Parse(req.PathValue("uuid"))
+	if err != nil {
+		ErrorBadRequest("valid uuid not provided in path params", w, err)
+		return
+	}
+
+	cfg.DeleteGame(req.Context(), sessionUUID)
+
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(200)
+
 }

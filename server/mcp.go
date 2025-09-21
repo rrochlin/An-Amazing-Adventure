@@ -457,7 +457,7 @@ func (game *Game) ExecuteTool(toolName string, args map[string]any) string {
 		// Add connections
 		sb.WriteString("\nConnections:\n")
 		for _, conn := range room.GetConnections() {
-			sb.WriteString(fmt.Sprintf("- Room %s\n", conn.ID))
+			sb.WriteString(fmt.Sprintf("- Room %s\n", conn))
 		}
 
 		// Return as JSON with only the narrative key
@@ -494,7 +494,7 @@ func (game *Game) ExecuteTool(toolName string, args map[string]any) string {
 		var sb strings.Builder
 		sb.WriteString(fmt.Sprintf("Rooms connected to %s:\n", room.ID))
 		for _, conn := range room.GetConnections() {
-			sb.WriteString(fmt.Sprintf("- %s\n", conn.ID))
+			sb.WriteString(fmt.Sprintf("- %s\n", conn))
 		}
 		return sb.String()
 	case "list_items_in_room":

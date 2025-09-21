@@ -45,7 +45,6 @@ export interface ApiChatRequest {
 }
 export interface ApiChatResponse {
   Response: string;
-  NewAreas?: Record<string, RoomInfo>;
   game_state: GameState;
 }
 export interface ChatResponse extends ApiChatResponse {}

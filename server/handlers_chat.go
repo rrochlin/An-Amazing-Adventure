@@ -3,7 +3,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -13,16 +12,15 @@ import (
 	"google.golang.org/genai"
 )
 
-var model = flag.String("model", "gemini-2.0-flash", "gemini-2.0-flash")
-
 // GameState represents the current state of the game for the AI
 type GameState struct {
-	CurrentRoom    Area             `json:"current_room"`
-	Player         Character        `json:"player"`
-	VisibleItems   []Item           `json:"visible_items"`
-	VisibleNPCs    []Character      `json:"visible_npcs"`
-	ConnectedRooms []Area           `json:"connected_rooms"`
-	Narrative      []*genai.Content `json:"narrative"`
+	CurrentRoom    Area                 `json:"current_room"`
+	Player         Character            `json:"player"`
+	VisibleItems   map[string]Item      `json:"visible_items"`
+	VisibleNPCs    map[string]Character `json:"visible_npcs"`
+	ConnectedRooms []string             `json:"connected_rooms"`
+	Rooms          map[string]Area      `json:"rooms"`
+	Narrative      []*genai.Content     `json:"narrative"`
 }
 
 // getGameState returns the current state of the game for the AI
@@ -31,11 +29,17 @@ func (game *Game) getGameState() GameState {
 	currentRoom := player.GetLocation()
 
 	// Get NPCs in current room
-	var visibleNPCs []Character
+	visibleNPCs := map[string]Character{}
 	for _, occupant := range currentRoom.GetOccupants() {
 		if npc, err := game.GetNPC(occupant); err == nil {
-			visibleNPCs = append(visibleNPCs, npc)
+			visibleNPCs[npc.Name] = npc
 		}
+	}
+
+	// TODO remove this
+	connectedRooms := []string{}
+	for _, conn := range currentRoom.Connections {
+		connectedRooms = append(connectedRooms, conn)
 	}
 
 	return GameState{
@@ -43,7 +47,8 @@ func (game *Game) getGameState() GameState {
 		Player:         player,
 		VisibleItems:   currentRoom.GetItems(),
 		VisibleNPCs:    visibleNPCs,
-		ConnectedRooms: currentRoom.GetConnections(),
+		ConnectedRooms: connectedRooms,
+		Rooms:          game.Map,
 		Narrative:      game.Narrative,
 	}
 }
@@ -67,7 +72,7 @@ func (state GameState) String() string {
 
 	sb.WriteString("\nConnected rooms:\n")
 	for _, room := range state.ConnectedRooms {
-		sb.WriteString(fmt.Sprintf("- %s\n", room.ID))
+		sb.WriteString(fmt.Sprintf("- %s\n", room))
 	}
 
 	return sb.String()
@@ -163,35 +168,15 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 
 	narrativeResponse := aiResponse.Narrative
 
-	// Collect any new areas that were created
-	newAreas := make(map[string]RoomInfo)
-	gameState := game.getGameState()
-	for _, area := range game.GetAllAreas() {
-		if !gameState.CurrentRoom.IsConnected(area) {
-			newAreas[area.ID] = RoomInfo{
-				ID:          area.ID,
-				Description: area.GetDescription(),
-				Connections: area.GetConnectionIDs(),
-				Items:       area.GetItemNames(),
-				Occupants:   area.GetOccupantNames(),
-			}
-		}
-	}
-
 	type retVal struct {
-		Response string              `json:"Response"`
-		NewAreas map[string]RoomInfo `json:"NewAreas,omitempty"`
-		State    GameState           `json:"game_state"`
+		Response string    `json:"Response"`
+		State    GameState `json:"game_state"`
 	}
 	RetVal := retVal{
 		Response: narrativeResponse,
 		State:    game.getGameState(),
 	}
-	if len(newAreas) > 0 {
-		RetVal.NewAreas = newAreas
-	}
 
-	fmt.Printf("CHAT HISTORY IS\n%v", chat.History(false))
 	game.Narrative = chat.History(false)
 	cfg.PutGame(req.Context(), game.SaveGameState())
 
