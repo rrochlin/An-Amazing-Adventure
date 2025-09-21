@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rrochlin/an-amazing-adventure/internal/auth"
+	"google.golang.org/genai"
 )
 
 // responseWriter is a custom ResponseWriter that captures the status code
@@ -109,6 +110,23 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 			fmt.Printf("World generation error: %v\n", err)
 		}
 		game.Ready = true
+		asyncChat, err := cfg.CreateChat(
+			ctx,
+			sessionUUID,
+			game.Narrative,
+		)
+		if err != nil {
+			fmt.Printf("Failed to make secondary chat: %v\n", err)
+		}
+
+		introduction := genai.Part{Text: "Please provide an introductory narrative to the player introducing them to the world and the adventure"}
+		response, err := asyncChat.SendMessage(ctx, introduction)
+		if err != nil {
+			fmt.Printf("Failed to get chat intro: %v\n", err)
+		}
+
+		game.Narrative = asyncChat.History(false)
+		game.ChatHistory = append(game.ChatHistory, ChatMessage{Type: "narrative", Content: response.Text()})
 		// Save game state after world generation
 		saveState := game.SaveGameState()
 		if err = cfg.PutGame(ctx, saveState); err != nil {

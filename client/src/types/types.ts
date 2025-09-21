@@ -5,7 +5,7 @@ export interface GameState {
   visible_npcs?: { [key: string]: Character };
   connected_rooms?: string[];
   rooms?: { [key: string]: Area };
-  narrative?: string;
+  chat_history?: ChatMessageType[];
 }
 
 export interface Character {

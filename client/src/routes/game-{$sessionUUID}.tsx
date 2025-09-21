@@ -40,10 +40,6 @@ function PostComponent() {
   const handleSetChatHistory = (message: ChatMessageType) => {
     setChatHistory((prevChatHistory) => {
       const newChat = [...prevChatHistory, message];
-      localStorage.setItem(
-        `chatHistory-${sessionUUID}`,
-        JSON.stringify(newChat),
-      );
       return newChat;
     });
   };
@@ -51,6 +47,7 @@ function PostComponent() {
   useEffect(() => {
     if (!gameState) return;
     localStorage.setItem(`gameState-${sessionUUID}`, JSON.stringify(gameState));
+    setChatHistory(gameState?.chat_history ?? []);
   }, [gameState]);
 
   useEffect(() => {
@@ -87,37 +84,17 @@ function PostComponent() {
         }
       }
 
-      // Get initial game state
+      // Get initial game state for quick load
       let state: GameState;
       const localState = localStorage.getItem(`gameState-${sessionUUID}`);
       if (localState != null && localState != "null") {
         state = JSON.parse(localState);
-      } else {
-        const gameResponse = await DescribeGame(sessionUUID);
-        state = gameResponse.game_state;
+        setGameState(state);
       }
+
+      const gameResponse = await DescribeGame(sessionUUID);
+      state = gameResponse.game_state;
       setGameState(state);
-      console.log(state);
-
-      // Get initial narrative
-      const previousChat = localStorage.getItem(`chatHistory-${sessionUUID}`);
-      if (previousChat) {
-        console.log(previousChat);
-        setChatHistory(JSON.parse(previousChat));
-      }
-
-      //TODO probably should only do this now if it's actually needed
-      if (!previousChat) {
-        console.log("narrative not found, generating new narrative");
-        const narrativeResponse = await SendChat(sessionUUID, {
-          chat: "Please provide an introductory narrative for the player.",
-        });
-        handleSetChatHistory({
-          type: "narrative",
-          content: narrativeResponse.Response,
-        });
-        setGameState(narrativeResponse.game_state);
-      }
     } catch (err) {
       setError(
         "Failed to start game. Please check if the server is running and try again.",
@@ -138,19 +115,7 @@ function PostComponent() {
       handleSetChatHistory({ type: "player", content: command });
 
       const chat = await SendChat(sessionUUID, { chat: command });
-
-      if (chat.Response) {
-        handleSetChatHistory({
-          type: "narrative",
-          content: chat.Response,
-        });
-      } else {
-        console.error("Invalid response format:", chat);
-        setError("Received invalid response from server");
-      }
-
       setGameState(chat.game_state);
-
       setCommand("");
     } catch (err) {
       setError("Failed to process command. Please try again.");

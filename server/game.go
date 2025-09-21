@@ -19,27 +19,34 @@ func NewGame(gameId uuid.UUID, userID uuid.UUID) Game {
 	}
 }
 
+type ChatMessage struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
 type Game struct {
-	GameId    uuid.UUID
-	UserId    uuid.UUID
-	Player    Character
-	Map       map[string]Area
-	ItemList  map[string]Item
-	NPCs      map[string]Character
-	Narrative []*genai.Content
-	Ready     bool
+	GameId      uuid.UUID
+	UserId      uuid.UUID
+	Player      Character
+	Map         map[string]Area
+	ItemList    map[string]Item
+	NPCs        map[string]Character
+	Narrative   []*genai.Content
+	ChatHistory []ChatMessage
+	Ready       bool
 }
 
 // Create a struct that contains all the necessary game state
 type SaveState struct {
-	SessionID  uuid.UUID            `json:"session_id" dynamodbav:"session_id"`
-	UserID     uuid.UUID            `json:"user_id,omitempty" dynamodbav:"user_id,omitempty"`
-	Player     Character            `json:"player"`
-	Areas      []Area               `json:"areas"`
-	Items      []Item               `json:"items"`
-	Characters map[string]Character `json:"characters"`
-	Narrative  []genai.Content      `json:"narrative"`
-	Ready      bool
+	SessionID   uuid.UUID            `json:"session_id" dynamodbav:"session_id"`
+	UserID      uuid.UUID            `json:"user_id,omitempty" dynamodbav:"user_id,omitempty"`
+	Player      Character            `json:"player"`
+	Areas       []Area               `json:"areas"`
+	Items       []Item               `json:"items"`
+	Characters  map[string]Character `json:"characters"`
+	Narrative   []genai.Content      `json:"narrative"`
+	ChatHistory []ChatMessage        `json:"chat_history"`
+	Ready       bool                 `json:"ready"`
 }
 
 // AddItem adds an item to the game's ItemList
@@ -249,14 +256,15 @@ func (g *Game) SaveGameState() SaveState {
 
 	// Create save state
 	saveState := SaveState{
-		SessionID:  g.GameId,
-		UserID:     g.UserId,
-		Player:     g.Player,
-		Areas:      areas,
-		Items:      items,
-		Characters: g.NPCs,
-		Narrative:  savedNarrative,
-		Ready:      g.Ready,
+		SessionID:   g.GameId,
+		UserID:      g.UserId,
+		Player:      g.Player,
+		Areas:       areas,
+		Items:       items,
+		Characters:  g.NPCs,
+		Narrative:   savedNarrative,
+		ChatHistory: g.ChatHistory,
+		Ready:       g.Ready,
 	}
 
 	return saveState
@@ -281,6 +289,7 @@ func (saveState *SaveState) LoadGame() Game {
 	}
 	g.NPCs = saveState.Characters
 	g.Narrative = narrativePtrArr
+	g.ChatHistory = saveState.ChatHistory
 	g.Ready = saveState.Ready
 
 	fmt.Printf("game state loaded: %+v\n", g)

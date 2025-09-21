@@ -1,8 +1,8 @@
 import { WorldReady } from "../services/api.game";
 
 const MAX_WAIT_TIME = 60_000; // 1 minute in milliseconds
-const INITIAL_BACKOFF = 1_000; // Start with 1 second
-const MAX_BACKOFF = 8_000; // Maximum backoff of 8 seconds
+const INITIAL_BACKOFF = 5_000; // Start with 5 seconds
+const MAX_BACKOFF = 30_000; // Maximum backoff of 30 seconds
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

@@ -20,7 +20,7 @@ type GameState struct {
 	VisibleNPCs    map[string]Character `json:"visible_npcs"`
 	ConnectedRooms []string             `json:"connected_rooms"`
 	Rooms          map[string]Area      `json:"rooms"`
-	Narrative      []*genai.Content     `json:"narrative"`
+	ChatHistory    []ChatMessage        `json:"chat_history"`
 }
 
 // getGameState returns the current state of the game for the AI
@@ -49,7 +49,7 @@ func (game *Game) getGameState() GameState {
 		VisibleNPCs:    visibleNPCs,
 		ConnectedRooms: connectedRooms,
 		Rooms:          game.Map,
-		Narrative:      game.Narrative,
+		ChatHistory:    game.ChatHistory,
 	}
 }
 
@@ -101,6 +101,8 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	game.ChatHistory = append(game.ChatHistory, ChatMessage{Type: "player", Content: params.Chat})
+
 	fmt.Printf("CURRENT GAME NARRATIVE\n%v", game.Narrative)
 
 	chat, err := cfg.CreateChat(req.Context(), sessionUUID, game.Narrative)
@@ -112,8 +114,9 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	// Send message to AI for processing
 	part := genai.Part{Text: fmt.Sprintf(`
 	Player Says: %s
-	respond ONLY with a plan for your next actions and how these will help build 
-	and reinforce the narrative you are building for the player.`, params.Chat),
+		--PLANNING STAGE--
+		Plan out your next moves in plain text. You will refer to these instructions in the next step.
+		`, params.Chat),
 	}
 
 	result, err := chat.SendMessage(req.Context(), part)
@@ -123,7 +126,7 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	}
 	fmt.Printf("planning result: %v\n", result.Text())
 
-	part = genai.Part{Text: "Execute the plan you've outlined and provide engaging narrative to the player"}
+	part = genai.Part{Text: "Following system instructions to deliver narrative and call tools, execute your plan and deliver narrative to the player"}
 
 	result, err = chat.SendMessage(req.Context(), part)
 	if err != nil {
@@ -166,15 +169,13 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	narrativeResponse := aiResponse.Narrative
+	game.ChatHistory = append(game.ChatHistory, ChatMessage{Type: "narrative", Content: aiResponse.Narrative})
 
 	type retVal struct {
-		Response string    `json:"Response"`
-		State    GameState `json:"game_state"`
+		State GameState `json:"game_state"`
 	}
 	RetVal := retVal{
-		Response: narrativeResponse,
-		State:    game.getGameState(),
+		State: game.getGameState(),
 	}
 
 	game.Narrative = chat.History(false)

@@ -44,7 +44,6 @@ export interface ApiChatRequest {
   chat: string;
 }
 export interface ApiChatResponse {
-  Response: string;
   game_state: GameState;
 }
 export interface ChatResponse extends ApiChatResponse {}
