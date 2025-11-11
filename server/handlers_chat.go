@@ -158,6 +158,7 @@ func (cfg *apiConfig) HandlerChat(w http.ResponseWriter, req *http.Request) {
 	err = json.Unmarshal([]byte(jsonStr), &aiResponse)
 	if err != nil {
 		ErrorServer("failed to parse AI response", w, err)
+		return
 	}
 
 	// Execute any tool calls

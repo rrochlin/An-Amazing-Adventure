@@ -17,11 +17,38 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
       <Paper
         sx={{
           p: 2,
-          maxWidth: "70%",
+          maxWidth: "min(600px, 85%)",
           backgroundColor: isPlayer ? "#2196F3" : "#424242",
           color: isPlayer ? "white" : "#E0E0E0",
           borderRadius: 2,
           boxShadow: 1,
+          wordWrap: "break-word",
+          overflowWrap: "break-word",
+          "& p": {
+            margin: 0,
+            marginBottom: "8px",
+            "&:last-child": {
+              marginBottom: 0,
+            },
+          },
+          "& pre": {
+            backgroundColor: "#1E1E1E",
+            padding: "8px",
+            borderRadius: "4px",
+            overflow: "auto",
+            maxWidth: "100%",
+            "& code": {
+              fontSize: "0.875rem",
+              fontFamily: "monospace",
+            },
+          },
+          "& code": {
+            backgroundColor: "#1E1E1E",
+            padding: "2px 6px",
+            borderRadius: "3px",
+            fontSize: "0.875rem",
+            fontFamily: "monospace",
+          },
         }}
       >
         <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
@@ -67,7 +94,8 @@ export const Chat = ({
         ref={chatContainerRef}
         sx={{
           flex: 1,
-          overflow: "auto",
+          overflowY: "auto",
+          overflowX: "hidden",
           p: 2,
           mb: 2,
           backgroundColor: "#1E1E1E",

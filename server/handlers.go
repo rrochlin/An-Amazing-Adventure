@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -126,7 +127,31 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 		}
 
 		game.Narrative = asyncChat.History(false)
-		game.ChatHistory = append(game.ChatHistory, ChatMessage{Type: "narrative", Content: response.Text()})
+
+		// Parse the JSON response to extract just the narrative
+		text := response.Text()
+		codeBlockPattern := regexp.MustCompile("```(?:json)?\\s*([\\s\\S]*?)\\s*```")
+		codeBlockMatches := codeBlockPattern.FindStringSubmatch(text)
+
+		var narrative string
+		if len(codeBlockMatches) >= 2 {
+			jsonStr := codeBlockMatches[1]
+			type IntroResponse struct {
+				Narrative string `json:"narrative"`
+			}
+			var introResponse IntroResponse
+			if err := json.Unmarshal([]byte(jsonStr), &introResponse); err == nil {
+				narrative = introResponse.Narrative
+			} else {
+				// Fallback to raw text if JSON parsing fails
+				narrative = text
+			}
+		} else {
+			// No code block found, use raw text
+			narrative = text
+		}
+
+		game.ChatHistory = append(game.ChatHistory, ChatMessage{Type: "narrative", Content: narrative})
 		// Save game state after world generation
 		saveState := game.SaveGameState()
 		if err = cfg.PutGame(ctx, saveState); err != nil {

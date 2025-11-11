@@ -147,32 +147,34 @@ function PostComponent() {
         flexDirection: "row",
         overflow: "hidden",
         backgroundColor: "#1E1E1E",
+        gap: 2,
+        p: 2,
       }}
     >
-      <Box sx={{ flex: "0", minWidth: "20vw", p: 2 }}>
-        <Paper sx={{ p: 2, backgroundColor: "#2D2D2D" }}>
-          <Box
-            sx={{
-              height: "500px",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Paper
-              sx={{
-                width: "18vw",
-              }}
-            >
-              <RoomMap gameState={gameState} />
-            </Paper>
+      {/* Left Sidebar - Map (25%) */}
+      <Box sx={{ flex: "0 0 25%", display: "flex", flexDirection: "column", gap: 2 }}>
+        <Paper
+          sx={{
+            flex: 1,
+            backgroundColor: "#2D2D2D",
+            p: 2,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          }}
+        >
+          <Typography variant="h6" sx={{ color: "#E0E0E0", mb: 2 }}>
+            World Map
+          </Typography>
+          <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <RoomMap gameState={gameState} />
           </Box>
-          <GameInfo gameState={gameState} onItemClick={handleItemClick} />
         </Paper>
       </Box>
 
-      <Box sx={{ flex: "1", p: 4, minHeight: 0 }}>
-        <Paper sx={{ height: "100%", backgroundColor: "#2D2D2D" }}>
+      {/* Center - Chat Area (50%) */}
+      <Box sx={{ flex: "0 0 50%", display: "flex", flexDirection: "column" }}>
+        <Paper sx={{ flex: 1, backgroundColor: "#2D2D2D", overflow: "hidden" }}>
           <Chat
             chatHistory={chatHistory}
             command={command}
@@ -181,13 +183,37 @@ function PostComponent() {
             isLoading={isLoading}
           />
         </Paper>
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mt: 2, mx: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {/* Right Sidebar - Game Info (25%) */}
+      <Box sx={{ flex: "0 0 25%", display: "flex" }}>
+        <Paper
+          sx={{
+            flex: 1,
+            backgroundColor: "#2D2D2D",
+            p: 2,
+            overflow: "auto",
+            "&::-webkit-scrollbar": {
+              width: "8px",
+            },
+            "&::-webkit-scrollbar-track": {
+              background: "#1E1E1E",
+              borderRadius: "4px",
+            },
+            "&::-webkit-scrollbar-thumb": {
+              background: "#424242",
+              borderRadius: "4px",
+            },
+          }}
+        >
+          <GameInfo gameState={gameState} onItemClick={handleItemClick} />
+        </Paper>
+      </Box>
     </Box>
   );
 }
