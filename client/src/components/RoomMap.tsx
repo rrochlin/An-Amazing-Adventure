@@ -1,16 +1,24 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { type GameState } from "../types/types";
 import { Stage, Layer, Circle, Line, Text, Rect, Arrow } from "react-konva";
-import { Box, IconButton, Typography, Chip, Stack } from "@mui/material";
+import { Box, IconButton, Typography, Chip, Stack, useColorScheme } from "@mui/material";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import { DungeonColors, ColorTokens } from "../theme/theme";
 
 // RoomMap Component with enhanced features
 export const RoomMap = ({ gameState }: { gameState: GameState }) => {
+  const { mode } = useColorScheme();
+  const isDark = mode === "dark" || mode === "system" || !mode;
+  const colorMode = mode === "system" || !mode ? "dark" : mode;
+  const colors = ColorTokens[colorMode];
+
   const stageWidth = 400;
   const stageHeight = 400;
-  const roomRadius = 15;
+  const roomWidth = 40;
+  const roomHeight = 40;
+  const corridorWidth = 8;
   const playerIconRadius = 6;
 
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null);
@@ -21,6 +29,9 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
   } | null>(null);
   const [selectedLayer, setSelectedLayer] = useState(0); // Z-axis layer
   const [zoom, setZoom] = useState(1.0);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // Get all unique Z-levels in the game
   const zLevels = useMemo(() => {
@@ -49,14 +60,14 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
     Object.keys(gameState.rooms).forEach((roomId) => {
       const room = gameState.rooms![roomId];
       positions[roomId] = {
-        x: centerX + room.coordinates.x * zoom,
-        y: centerY + room.coordinates.y * zoom,
+        x: centerX + room.coordinates.x * zoom + pan.x,
+        y: centerY + room.coordinates.y * zoom + pan.y,
         z: room.coordinates.z,
       };
     });
 
     return positions;
-  }, [gameState.rooms, zoom, stageWidth, stageHeight]);
+  }, [gameState.rooms, zoom, pan, stageWidth, stageHeight]);
 
   // Filter rooms by selected layer
   const roomsOnLayer = useMemo(() => {
@@ -120,10 +131,34 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.2, 3.0));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.2, 0.5));
-  const handleResetZoom = () => setZoom(1.0);
+  const handleResetZoom = () => {
+    setZoom(1.0);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleMouseDown = (e: any) => {
+    const stage = e.target.getStage();
+    const pointerPos = stage.getPointerPosition();
+    setIsDragging(true);
+    setDragStart({ x: pointerPos.x - pan.x, y: pointerPos.y - pan.y });
+  };
+
+  const handleMouseMove = (e: any) => {
+    if (!isDragging) return;
+    const stage = e.target.getStage();
+    const pointerPos = stage.getPointerPosition();
+    setPan({
+      x: pointerPos.x - dragStart.x,
+      y: pointerPos.y - dragStart.y,
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0, maxWidth: "100%" }}>
       {/* Controls */}
       <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
         {/* Layer Selector */}
@@ -153,6 +188,10 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                 sx={{
                   fontSize: "0.75rem",
                   height: "24px",
+                  ...(selectedLayer !== level && {
+                    borderColor: colors.chipOutline,
+                    color: colors.chipText,
+                  }),
                 }}
               />
             );
@@ -161,13 +200,25 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
 
         {/* Zoom Controls */}
         <Stack direction="row" spacing={0}>
-          <IconButton size="small" onClick={handleZoomIn} sx={{ color: "#E0E0E0" }}>
+          <IconButton
+            size="small"
+            onClick={handleZoomIn}
+            sx={{ color: colors.icon }}
+          >
             <ZoomInIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={handleResetZoom} sx={{ color: "#E0E0E0" }}>
+          <IconButton
+            size="small"
+            onClick={handleResetZoom}
+            sx={{ color: colors.icon }}
+          >
             <RestartAltIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={handleZoomOut} sx={{ color: "#E0E0E0" }}>
+          <IconButton
+            size="small"
+            onClick={handleZoomOut}
+            sx={{ color: colors.icon }}
+          >
             <ZoomOutIcon fontSize="small" />
           </IconButton>
         </Stack>
@@ -176,15 +227,33 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
       {/* Map Canvas */}
       <Box
         sx={{
-          border: "1px solid #424242",
+          border:
+            isDark
+              ? `2px solid ${DungeonColors.wall}`
+              : "2px solid #8B6F47",
           borderRadius: "4px",
-          backgroundColor: "#1E1E1E",
+          backgroundColor:
+            isDark
+              ? DungeonColors.fog
+              : "rgba(212, 197, 169, 0.5)",
           overflow: "hidden",
+          boxShadow:
+            isDark
+              ? `inset 0 0 20px ${DungeonColors.fog}`
+              : "inset 0 0 15px rgba(139, 111, 71, 0.2)",
         }}
       >
-        <Stage width={stageWidth} height={stageHeight}>
+        <Stage
+          width={stageWidth}
+          height={stageHeight}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          style={{ cursor: isDragging ? "grabbing" : "grab" }}
+        >
           <Layer>
-            {/* Draw connections on current layer */}
+            {/* Draw corridors as thick passages on current layer */}
             {gameState.rooms &&
               roomsOnLayer.map((roomId) => {
                 const room = gameState.rooms![roomId];
@@ -202,30 +271,59 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                     const end = roomPositions[connectedRoomId];
                     if (!start || !end) return null;
 
-                    // Skip vertical connections for line drawing
+                    // Skip vertical connections for corridor drawing
                     if (direction === "up" || direction === "down") return null;
 
                     const dx = end.x - start.x;
                     const dy = end.y - start.y;
+                    const length = Math.sqrt(dx * dx + dy * dy);
                     const angle = Math.atan2(dy, dx);
 
-                    const startX = start.x + Math.cos(angle) * roomRadius;
-                    const startY = start.y + Math.sin(angle) * roomRadius;
-                    const endX = end.x - Math.cos(angle) * roomRadius;
-                    const endY = end.y - Math.sin(angle) * roomRadius;
+                    // Calculate corridor position (connects room edges)
+                    const corridorLength = length - roomWidth;
+                    const corridorX = start.x + Math.cos(angle) * (roomWidth / 2);
+                    const corridorY = start.y + Math.sin(angle) * (roomHeight / 2);
 
                     const isCurrentRoomConnection =
                       roomId === gameState.current_room.id ||
                       connectedRoomId === gameState.current_room.id;
 
                     return (
-                      <Line
-                        key={`${roomId}-${direction}-${connectedRoomId}`}
-                        points={[startX, startY, endX, endY]}
-                        stroke={isCurrentRoomConnection ? "#4CAF50" : "#666"}
-                        strokeWidth={isCurrentRoomConnection ? 3 : 2}
-                        opacity={isCurrentRoomConnection ? 1 : 0.6}
-                      />
+                      <Fragment key={`${roomId}-${direction}-${connectedRoomId}`}>
+                        {/* Corridor floor */}
+                        <Rect
+                          x={corridorX - corridorWidth / 2}
+                          y={corridorY - corridorWidth / 2}
+                          width={corridorLength}
+                          height={corridorWidth}
+                          fill={isCurrentRoomConnection ? DungeonColors.corridor : DungeonColors.floor}
+                          rotation={(angle * 180) / Math.PI}
+                          offsetX={0}
+                          offsetY={0}
+                        />
+                        {/* Corridor walls - top */}
+                        <Line
+                          points={[
+                            corridorX,
+                            corridorY - corridorWidth / 2,
+                            corridorX + Math.cos(angle) * corridorLength,
+                            corridorY + Math.sin(angle) * corridorLength - corridorWidth / 2,
+                          ]}
+                          stroke={DungeonColors.wall}
+                          strokeWidth={2}
+                        />
+                        {/* Corridor walls - bottom */}
+                        <Line
+                          points={[
+                            corridorX,
+                            corridorY + corridorWidth / 2,
+                            corridorX + Math.cos(angle) * corridorLength,
+                            corridorY + Math.sin(angle) * corridorLength + corridorWidth / 2,
+                          ]}
+                          stroke={DungeonColors.wall}
+                          strokeWidth={2}
+                        />
+                      </Fragment>
                     );
                   }
                 );
@@ -248,18 +346,18 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                   );
                 const isVisited = visitedRooms.has(roomId);
 
-                // Color coding
-                let fillColor = "#555"; // Unvisited
-                let strokeColor = "#777";
+                // Color coding with dungeon theme
+                let fillColor = DungeonColors.unexploredRoom; // Unvisited
+                let strokeColor = DungeonColors.wall;
                 if (isCurrentRoom) {
-                  fillColor = "#4CAF50"; // Current: Green
-                  strokeColor = "#81C784";
+                  fillColor = DungeonColors.currentRoom; // Current: Gold
+                  strokeColor = DungeonColors.doorway;
                 } else if (isConnectedToCurrent) {
-                  fillColor = "#2196F3"; // Connected: Blue
-                  strokeColor = "#64B5F6";
+                  fillColor = DungeonColors.adjacentRoom; // Connected: Purple
+                  strokeColor = DungeonColors.wallHighlight;
                 } else if (isVisited) {
-                  fillColor = "#757575"; // Visited: Gray
-                  strokeColor = "#9E9E9E";
+                  fillColor = DungeonColors.exploredRoom; // Visited: Dark brown
+                  strokeColor = DungeonColors.wall;
                 }
 
                 // Check for vertical connections
@@ -268,43 +366,82 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
 
                 return (
                   <Fragment key={roomId}>
-                    {/* Main room circle */}
-                    <Circle
-                      x={pos.x}
-                      y={pos.y}
-                      radius={roomRadius}
+                    {/* Main room rectangle */}
+                    <Rect
+                      x={pos.x - roomWidth / 2}
+                      y={pos.y - roomHeight / 2}
+                      width={roomWidth}
+                      height={roomHeight}
                       fill={fillColor}
                       stroke={strokeColor}
                       strokeWidth={isCurrentRoom ? 3 : 2}
                       shadowColor="black"
                       shadowBlur={isCurrentRoom ? 10 : 5}
-                      shadowOpacity={0.4}
+                      shadowOpacity={0.6}
+                      cornerRadius={2}
+                      listening={true}
+                      perfectDrawEnabled={false}
                       onMouseEnter={() => handleRoomHover(roomId, pos)}
                       onMouseLeave={handleRoomLeave}
                     />
+                    {/* Inner shadow for depth */}
+                    <Rect
+                      x={pos.x - roomWidth / 2 + 2}
+                      y={pos.y - roomHeight / 2 + 2}
+                      width={roomWidth - 4}
+                      height={roomHeight - 4}
+                      stroke={strokeColor}
+                      strokeWidth={1}
+                      opacity={0.3}
+                      cornerRadius={1}
+                    />
 
-                    {/* Up arrow indicator */}
+                    {/* Up arrow indicator - stairs going up */}
                     {hasUpConnection && (
-                      <Text
-                        x={pos.x - 5}
-                        y={pos.y - roomRadius - 15}
-                        text="↑"
-                        fontSize={14}
-                        fill="#FFD700"
-                        fontStyle="bold"
-                      />
+                      <Fragment>
+                        <Rect
+                          x={pos.x + roomWidth / 4}
+                          y={pos.y - roomHeight / 4}
+                          width={8}
+                          height={8}
+                          fill={DungeonColors.torch}
+                          stroke="#000"
+                          strokeWidth={1}
+                          cornerRadius={1}
+                        />
+                        <Text
+                          x={pos.x + roomWidth / 4}
+                          y={pos.y - roomHeight / 4 - 1}
+                          text="↑"
+                          fontSize={10}
+                          fill="#000"
+                          fontStyle="bold"
+                        />
+                      </Fragment>
                     )}
 
-                    {/* Down arrow indicator */}
+                    {/* Down arrow indicator - stairs going down */}
                     {hasDownConnection && (
-                      <Text
-                        x={pos.x - 5}
-                        y={pos.y + roomRadius + 5}
-                        text="↓"
-                        fontSize={14}
-                        fill="#FFD700"
-                        fontStyle="bold"
-                      />
+                      <Fragment>
+                        <Rect
+                          x={pos.x - roomWidth / 4 - 8}
+                          y={pos.y - roomHeight / 4}
+                          width={8}
+                          height={8}
+                          fill={DungeonColors.torch}
+                          stroke="#000"
+                          strokeWidth={1}
+                          cornerRadius={1}
+                        />
+                        <Text
+                          x={pos.x - roomWidth / 4 - 8}
+                          y={pos.y - roomHeight / 4 - 1}
+                          text="↓"
+                          fontSize={10}
+                          fill="#000"
+                          fontStyle="bold"
+                        />
+                      </Fragment>
                     )}
 
                     {/* Player icon in current room */}
@@ -327,18 +464,20 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                       <Fragment>
                         <Rect
                           x={pos.x - 60}
-                          y={pos.y + roomRadius + 5}
+                          y={pos.y + roomHeight / 2 + 5}
                           width={120}
                           height={18}
-                          fill={hoveredRoom === roomId ? "#424242" : "#2D2D2D"}
+                          fill={hoveredRoom === roomId ? DungeonColors.wallHighlight : DungeonColors.wall}
+                          stroke={DungeonColors.doorway}
+                          strokeWidth={1}
                           cornerRadius={3}
                           shadowColor="black"
                           shadowBlur={3}
-                          shadowOpacity={0.3}
+                          shadowOpacity={0.5}
                         />
                         <Text
                           x={pos.x - 55}
-                          y={pos.y + roomRadius + 8}
+                          y={pos.y + roomHeight / 2 + 8}
                           text={roomId
                             .split("_")
                             .map(
@@ -348,7 +487,8 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                             )
                             .join(" ")}
                           fontSize={10}
-                          fill={hoveredRoom === roomId ? "#FFFFFF" : "#E0E0E0"}
+                          fill="#E8DCC4"
+                          fontFamily="Cinzel, Georgia, serif"
                           width={110}
                           align="center"
                         />
@@ -409,18 +549,21 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                   y={tooltip.y - 20}
                   width={120}
                   height={25}
-                  fill="#2D2D2D"
+                  fill={DungeonColors.wall}
+                  stroke={DungeonColors.doorway}
+                  strokeWidth={1}
                   cornerRadius={4}
                   shadowColor="black"
                   shadowBlur={5}
-                  shadowOpacity={0.5}
+                  shadowOpacity={0.7}
                 />
                 <Text
                   x={tooltip.x - 55}
                   y={tooltip.y - 15}
                   text={tooltip.text}
                   fontSize={11}
-                  fill="#E0E0E0"
+                  fill="#E8DCC4"
+                  fontFamily="Cinzel, Georgia, serif"
                   width={110}
                   align="center"
                 />
@@ -432,57 +575,98 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
 
       {/* Legend */}
       <Box sx={{ mt: 1 }}>
-        <Typography variant="caption" sx={{ color: "#888", display: "block", mb: 0.5 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: colors.text.primary,
+            display: "block",
+            mb: 0.5,
+            fontFamily: "Cinzel, Georgia, serif",
+            fontWeight: 600,
+            letterSpacing: "0.05em",
+          }}
+        >
           Legend:
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Box
               sx={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                backgroundColor: "#4CAF50",
-                border: "2px solid #81C784",
+                width: 14,
+                height: 14,
+                backgroundColor: DungeonColors.currentRoom,
+                border: `2px solid ${DungeonColors.doorway}`,
+                borderRadius: "2px",
               }}
             />
-            <Typography variant="caption" sx={{ color: "#888" }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: colors.text.secondary,
+                fontFamily: "Crimson Text, Georgia, serif",
+              }}
+            >
               Current
             </Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Box
               sx={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                backgroundColor: "#2196F3",
-                border: "2px solid #64B5F6",
+                width: 14,
+                height: 14,
+                backgroundColor: DungeonColors.adjacentRoom,
+                border: `2px solid ${DungeonColors.wallHighlight}`,
+                borderRadius: "2px",
               }}
             />
-            <Typography variant="caption" sx={{ color: "#888" }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: colors.text.secondary,
+                fontFamily: "Crimson Text, Georgia, serif",
+              }}
+            >
               Adjacent
             </Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
             <Box
               sx={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                backgroundColor: "#757575",
-                border: "2px solid #9E9E9E",
+                width: 14,
+                height: 14,
+                backgroundColor: DungeonColors.exploredRoom,
+                border: `2px solid ${DungeonColors.wall}`,
+                borderRadius: "2px",
               }}
             />
-            <Typography variant="caption" sx={{ color: "#888" }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: colors.text.secondary,
+                fontFamily: "Crimson Text, Georgia, serif",
+              }}
+            >
               Explored
             </Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Typography variant="caption" sx={{ color: "#FFD700", fontWeight: "bold" }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: colors.accent,
+                fontWeight: "bold",
+                fontSize: "1rem"
+              }}
+            >
               ↑↓
             </Typography>
-            <Typography variant="caption" sx={{ color: "#888" }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: colors.text.secondary,
+                fontFamily: "Crimson Text, Georgia, serif",
+              }}
+            >
               Stairs
             </Typography>
           </Box>

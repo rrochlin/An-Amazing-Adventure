@@ -142,28 +142,45 @@ function PostComponent() {
   return (
     <Box
       sx={{
-        height: `calc(100vh - ${AppTheme.mixins.toolbar.minHeight}px - 8px)`,
+        height: `calc(100vh - ${AppTheme.mixins.toolbar.minHeight}px)`,
         display: "flex",
         flexDirection: "row",
         overflow: "hidden",
-        backgroundColor: "#1E1E1E",
+        backgroundColor: "background.default",
         gap: 2,
         p: 2,
+        pr: 3,
+        width: "100%",
+        maxWidth: "100vw",
+        boxSizing: "border-box",
       }}
     >
       {/* Left Sidebar - Map (25%) */}
-      <Box sx={{ flex: "0 0 25%", display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ flex: "0 0 25%", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
         <Paper
           sx={{
             flex: 1,
-            backgroundColor: "#2D2D2D",
             p: 2,
             display: "flex",
             flexDirection: "column",
-            overflow: "hidden"
+            overflow: "hidden",
+            transition: "all 0.3s ease-in-out",
+            "&:hover": {
+              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
+            }
           }}
         >
-          <Typography variant="h6" sx={{ color: "#E0E0E0", mb: 2 }}>
+          <Typography
+            variant="h6"
+            sx={{
+              mb: 2,
+              textAlign: "center",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              borderBottom: `2px solid ${AppTheme.palette.primary.main}`,
+              pb: 1,
+            }}
+          >
             World Map
           </Typography>
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
@@ -173,8 +190,17 @@ function PostComponent() {
       </Box>
 
       {/* Center - Chat Area (50%) */}
-      <Box sx={{ flex: "0 0 50%", display: "flex", flexDirection: "column" }}>
-        <Paper sx={{ flex: 1, backgroundColor: "#2D2D2D", overflow: "hidden" }}>
+      <Box sx={{ flex: "0 0 50%", minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <Paper
+          sx={{
+            flex: 1,
+            overflow: "hidden",
+            transition: "all 0.3s ease-in-out",
+            "&:hover": {
+              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
+            }
+          }}
+        >
           <Chat
             chatHistory={chatHistory}
             command={command}
@@ -191,28 +217,29 @@ function PostComponent() {
       </Box>
 
       {/* Right Sidebar - Game Info (25%) */}
-      <Box sx={{ flex: "0 0 25%", display: "flex" }}>
+      <Box sx={{ flex: "0 0 25%", minWidth: 0, display: "flex", gap: 2 }}>
         <Paper
           sx={{
             flex: 1,
-            backgroundColor: "#2D2D2D",
-            p: 2,
-            overflow: "auto",
-            "&::-webkit-scrollbar": {
-              width: "8px",
-            },
-            "&::-webkit-scrollbar-track": {
-              background: "#1E1E1E",
-              borderRadius: "4px",
-            },
-            "&::-webkit-scrollbar-thumb": {
-              background: "#424242",
-              borderRadius: "4px",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            transition: "all 0.3s ease-in-out",
+            "&:hover": {
+              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
             },
           }}
         >
           <GameInfo gameState={gameState} onItemClick={handleItemClick} />
         </Paper>
+        <Box
+          sx={{
+            width: "4px",
+            backgroundColor: "#000",
+            opacity: 0.5,
+            borderRadius: "2px",
+          }}
+        />
       </Box>
     </Box>
   );
