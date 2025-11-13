@@ -120,7 +120,16 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 			fmt.Printf("Failed to make secondary chat: %v\n", err)
 		}
 
-		introduction := genai.Part{Text: "Please provide an introductory narrative to the player introducing them to the world and the adventure"}
+		introduction := genai.Part{Text: `Please provide an introductory narrative to the player introducing them to the world and the adventure.
+
+You must structure your response as a valid JSON object with the following format:
+{
+    "narrative": "Your narrative response describing what happens, what the player sees, etc.",
+    "tool_calls": []
+}
+
+The narrative field should contain your descriptive text about the world and adventure.
+The tool_calls field should be an empty array for this introduction.`}
 		response, err := asyncChat.SendMessage(ctx, introduction)
 		if err != nil {
 			fmt.Printf("Failed to get chat intro: %v\n", err)
@@ -143,11 +152,11 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 			if err := json.Unmarshal([]byte(jsonStr), &introResponse); err == nil {
 				narrative = introResponse.Narrative
 			} else {
-				// Fallback to raw text if JSON parsing fails
+				fmt.Printf("Failed to parse intro JSON: %v\n", err)
 				narrative = text
 			}
 		} else {
-			// No code block found, use raw text
+			fmt.Printf("No JSON code block found in intro response\n")
 			narrative = text
 		}
 
