@@ -1,0 +1,60 @@
+name: PR Checks - Verify Docker Builds
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'client/**'
+      - 'server/**'
+      - '.github/workflows/**'
+
+env:
+  CLIENT_IMAGE: test-client
+  SERVER_IMAGE: test-server
+
+jobs:
+  verify_server_build:
+    name: Verify Server Docker Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build server (test only, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          file: ./server/dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: ${{ env.SERVER_IMAGE }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  verify_client_build:
+    name: Verify Client Docker Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build client (test only, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./client
+          file: ./client/dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: ${{ env.CLIENT_IMAGE }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
