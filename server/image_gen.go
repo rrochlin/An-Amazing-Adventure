@@ -96,8 +96,8 @@ This zone map should give players detailed navigation information for this speci
 func (ig *ImageGenerator) generateImage(ctx context.Context, prompt string, imageType string) ([]byte, error) {
 	fmt.Printf("[Image Gen] Generating %s with prompt length: %d chars\n", imageType, len(prompt))
 
-	// Use Imagen 3 model for image generation
-	modelName := "imagen-3.0-generate-001"
+	// Use Imagen 4 model for image generation
+	modelName := "imagen-4.0-generate-001"
 
 	// Generate the image
 	result, err := ig.client.Models.GenerateImages(
