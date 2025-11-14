@@ -4,6 +4,91 @@ import { type ChatMessageType } from "../types/types";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+const LoadingMessage = () => {
+  const { mode } = useColorScheme();
+  const isDark = mode === "dark" || mode === "system" || !mode;
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "flex-start",
+        mb: 2,
+        animation: "fadeIn 0.3s ease-in",
+        "@keyframes fadeIn": {
+          "0%": {
+            opacity: 0,
+            transform: "translateY(10px)",
+          },
+          "100%": {
+            opacity: 1,
+            transform: "translateY(0)",
+          },
+        },
+      }}
+    >
+      <Paper
+        sx={{
+          p: 2,
+          maxWidth: "200px",
+          backgroundColor: isDark
+            ? "rgba(201, 169, 98, 0.1)"
+            : "rgba(160, 130, 109, 0.2)",
+          border: isDark
+            ? "1px solid rgba(201, 169, 98, 0.3)"
+            : "2px solid #A0826D",
+          borderRadius: 2,
+          boxShadow: isDark
+            ? "0 2px 8px rgba(0, 0, 0, 0.5)"
+            : "0 2px 4px rgba(107, 86, 56, 0.3)",
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              gap: 0.5,
+              "& .dot": {
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                backgroundColor: isDark ? "#C9A962" : "#8B6F47",
+                animation: "bounce 1.4s infinite ease-in-out both",
+                "&:nth-of-type(1)": {
+                  animationDelay: "-0.32s",
+                },
+                "&:nth-of-type(2)": {
+                  animationDelay: "-0.16s",
+                },
+              },
+              "@keyframes bounce": {
+                "0%, 80%, 100%": {
+                  transform: "scale(0)",
+                  opacity: 0.5,
+                },
+                "40%": {
+                  transform: "scale(1)",
+                  opacity: 1,
+                },
+              },
+            }}
+          >
+            <Box className="dot" />
+            <Box className="dot" />
+            <Box className="dot" />
+          </Box>
+        </Box>
+      </Paper>
+    </Box>
+  );
+};
+
 const ChatMessage = ({ message }: { message: ChatMessageType }) => {
   const isPlayer = message.type === "player";
   const { mode } = useColorScheme();
@@ -168,6 +253,7 @@ export const Chat = ({
         {chatHistory.map((msg, index) => (
           <ChatMessage key={index} message={msg} />
         ))}
+        {isLoading && <LoadingMessage />}
       </Box>
 
       <Box
@@ -225,9 +311,15 @@ export const Chat = ({
           variant="contained"
           onClick={handleSubmit}
           disabled={isLoading || !command.trim()}
-          sx={{ minWidth: "100px" }}
+          sx={{
+            minWidth: "100px",
+            height: "40px", // Match TextField small size height
+            fontFamily: "Cinzel, Georgia, serif",
+            fontSize: "1rem",
+            fontWeight: 600,
+          }}
         >
-          {isLoading ? <CircularProgress size={24} /> : "Send"}
+          {isLoading ? <CircularProgress size={20} sx={{ color: "primary.contrastText" }} /> : "Send"}
         </Button>
       </Box>
     </Box>
