@@ -12,12 +12,14 @@ import {
   TextField,
   useColorScheme,
   Divider,
+  IconButton,
 } from "@mui/material";
 import z from "zod";
 import { isAuthenticated } from "@/services/auth.service";
-import { ListGames, StartGame } from "@/services/api.game";
+import { ListGames, StartGame, DeleteGame } from "@/services/api.game";
 import AddIcon from "@mui/icons-material/Add";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useState } from "react";
 import type { ListGamesResponse } from "@/types/api.types";
 
@@ -45,6 +47,8 @@ function RouteComponent() {
     Route.useLoaderData(),
   );
   const [open, setOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [gameToDelete, setGameToDelete] = useState<string | null>(null);
   const navigate = useNavigate();
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
@@ -73,6 +77,30 @@ function RouteComponent() {
       ...prev,
       { playerName: name, sessionId: response.sessionUUID },
     ]);
+  };
+
+  const handleDeleteClick = (sessionId: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent navigation when clicking delete
+    setGameToDelete(sessionId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (gameToDelete) {
+      const success = await DeleteGame(gameToDelete);
+      if (success) {
+        setGames((prev) => prev.filter((g) => g.sessionId !== gameToDelete));
+      } else {
+        alert("Failed to delete game. Please try again.");
+      }
+    }
+    setDeleteDialogOpen(false);
+    setGameToDelete(null);
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setGameToDelete(null);
   };
 
   return (
@@ -135,6 +163,46 @@ function RouteComponent() {
           </Button>
           <Button type="submit" form="game-form" variant="contained" sx={{ fontSize: "1rem" }}>
             Create World
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        PaperProps={{
+          sx: {
+            backgroundImage: 'linear-gradient(rgba(139, 0, 0, 0.05), rgba(178, 34, 34, 0.05))',
+            border: '1px solid rgba(178, 34, 34, 0.3)',
+          }
+        }}
+      >
+        <DialogTitle sx={{
+          fontFamily: '"Cinzel", "Georgia", serif',
+          fontSize: "1.75rem",
+          textAlign: "center",
+          borderBottom: "2px solid",
+          borderColor: "error.main",
+          color: "error.main",
+        }}>
+          Delete Adventure?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{
+            mt: 2,
+            fontSize: "1.1rem",
+            fontFamily: '"Crimson Text", "Georgia", serif',
+          }}>
+            Are you sure you want to delete this adventure? This action cannot be undone and will permanently remove all game data and generated maps.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={handleDeleteCancel} variant="outlined" sx={{ fontSize: "1rem" }}>
+            Cancel
+          </Button>
+          <Button onClick={handleDeleteConfirm} variant="contained" color="error" sx={{ fontSize: "1rem" }}>
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
@@ -215,17 +283,31 @@ function RouteComponent() {
                   })
                 }
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                  <PlayArrowIcon sx={{ color: "primary.main", fontSize: "2rem" }} />
-                  <Typography
-                    variant="h6"
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, justifyContent: "space-between" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <PlayArrowIcon sx={{ color: "primary.main", fontSize: "2rem" }} />
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        fontSize: "1.5rem",
+                        fontFamily: '"Crimson Text", "Georgia", serif',
+                      }}
+                    >
+                      {game.playerName}
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    onClick={(e) => handleDeleteClick(game.sessionId, e)}
                     sx={{
-                      fontSize: "1.5rem",
-                      fontFamily: '"Crimson Text", "Georgia", serif',
+                      color: "error.main",
+                      "&:hover": {
+                        backgroundColor: "rgba(178, 34, 34, 0.1)",
+                      },
                     }}
+                    aria-label="delete game"
                   >
-                    {game.playerName}
-                  </Typography>
+                    <DeleteIcon />
+                  </IconButton>
                 </Box>
               </Paper>
             ))}
