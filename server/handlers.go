@@ -371,6 +371,12 @@ func (cfg *apiConfig) HandlerDeleteGame(w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	// Delete S3 images before deleting from DynamoDB
+	if err := cfg.s3Client.DeleteMapImages(req.Context(), sessionUUID); err != nil {
+		fmt.Printf("Warning: Failed to delete S3 images for session %s: %v\n", sessionUUID, err)
+		// Continue with deletion even if S3 cleanup fails
+	}
+
 	cfg.DeleteGame(req.Context(), sessionUUID)
 
 	w.Header().Add("Content-Type", "application/json")
