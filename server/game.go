@@ -10,12 +10,13 @@ import (
 
 func NewGame(gameId uuid.UUID, userID uuid.UUID) Game {
 	return Game{
-		GameId:   gameId,
-		UserId:   userID,
-		Map:      make(map[string]Area),
-		ItemList: make(map[string]Item),
-		NPCs:     make(map[string]Character),
-		Ready:    false,
+		GameId:    gameId,
+		UserId:    userID,
+		Map:       make(map[string]Area),
+		ItemList:  make(map[string]Item),
+		NPCs:      make(map[string]Character),
+		MapImages: make(map[string]string),
+		Ready:     false,
 	}
 }
 
@@ -33,6 +34,7 @@ type Game struct {
 	NPCs        map[string]Character
 	Narrative   []*genai.Content
 	ChatHistory []ChatMessage
+	MapImages   map[string]string // map of image type -> S3 URL
 	Ready       bool
 }
 
@@ -46,6 +48,7 @@ type SaveState struct {
 	Characters  map[string]Character `json:"characters"`
 	Narrative   []genai.Content      `json:"narrative"`
 	ChatHistory []ChatMessage        `json:"chat_history"`
+	MapImages   map[string]string    `json:"map_images,omitempty" dynamodbav:"map_images,omitempty"`
 	Ready       bool                 `json:"ready"`
 }
 
@@ -264,6 +267,7 @@ func (g *Game) SaveGameState() SaveState {
 		Characters:  g.NPCs,
 		Narrative:   savedNarrative,
 		ChatHistory: g.ChatHistory,
+		MapImages:   g.MapImages,
 		Ready:       g.Ready,
 	}
 
@@ -290,6 +294,10 @@ func (saveState *SaveState) LoadGame() Game {
 	g.NPCs = saveState.Characters
 	g.Narrative = narrativePtrArr
 	g.ChatHistory = saveState.ChatHistory
+	g.MapImages = saveState.MapImages
+	if g.MapImages == nil {
+		g.MapImages = make(map[string]string)
+	}
 	g.Ready = saveState.Ready
 
 	fmt.Printf("game state loaded: %+v\n", g)
