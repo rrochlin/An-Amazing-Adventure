@@ -115,6 +115,8 @@ function PostComponent() {
       handleSetChatHistory({ type: "player", content: command });
 
       const chat = await SendChat(sessionUUID, { chat: command });
+      console.log("Received game state from server:", chat.game_state);
+      console.log("Rooms in response:", chat.game_state?.rooms);
       setGameState(chat.game_state);
       setCommand("");
     } catch (err) {

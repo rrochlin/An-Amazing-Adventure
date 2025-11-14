@@ -363,7 +363,8 @@ func (g *Game) CalculateRoomCoordinates(startRoomID string) error {
 // ConnectRooms connects two rooms bidirectionally with opposite directions
 func (g *Game) ConnectRooms(fromRoomID, toRoomID, direction string) error {
 	// Validate direction
-	if _, ok := directionVectors[direction]; !ok {
+	dirVector, ok := directionVectors[direction]
+	if !ok {
 		return fmt.Errorf("invalid direction: %s", direction)
 	}
 
@@ -376,6 +377,15 @@ func (g *Game) ConnectRooms(fromRoomID, toRoomID, direction string) error {
 	toRoom, err := g.GetArea(toRoomID)
 	if err != nil {
 		return fmt.Errorf("to room not found: %w", err)
+	}
+
+	// Calculate coordinates for toRoom based on fromRoom's position + direction vector
+	// Use a spacing multiplier to spread rooms out on the map
+	const spacingMultiplier = 100.0
+	toRoom.Coordinates = Coordinates{
+		X: fromRoom.Coordinates.X + (dirVector.X * spacingMultiplier),
+		Y: fromRoom.Coordinates.Y + (dirVector.Y * spacingMultiplier),
+		Z: fromRoom.Coordinates.Z + (dirVector.Z * spacingMultiplier),
 	}
 
 	// Add connection from first room to second

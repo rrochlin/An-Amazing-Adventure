@@ -8,6 +8,24 @@ const LoadingMessage = () => {
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
 
+  const flavorTexts = [
+    "The Dungeon Master ponders...",
+    "Rolling the dice of fate...",
+    "Consulting ancient tomes...",
+    "Weaving threads of destiny...",
+    "The story unfolds...",
+    "Channeling arcane energies...",
+    "Shadows whisper secrets...",
+    "The fates are deciding...",
+    "Scrying into the unknown...",
+    "Invoking the spirits...",
+  ];
+
+  // Pick a random flavor text
+  const flavorText = useRef(
+    flavorTexts[Math.floor(Math.random() * flavorTexts.length)]
+  ).current;
+
   return (
     <Box
       sx={{
@@ -30,7 +48,7 @@ const LoadingMessage = () => {
       <Paper
         sx={{
           p: 2,
-          maxWidth: "200px",
+          maxWidth: "300px",
           backgroundColor: isDark
             ? "rgba(201, 169, 98, 0.1)"
             : "rgba(160, 130, 109, 0.2)",
@@ -45,44 +63,46 @@ const LoadingMessage = () => {
       >
         <Box
           sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
+            fontFamily: "Crimson Text, Georgia, serif",
+            fontSize: "1.1rem",
+            fontStyle: "italic",
+            position: "relative",
+            background: isDark
+              ? "linear-gradient(90deg, #B8A588 0%, #FFD700 50%, #B8A588 100%)"
+              : "linear-gradient(90deg, #5D4037 0%, #8B6F47 50%, #5D4037 100%)",
+            backgroundSize: "200% 100%",
+            backgroundClip: "text",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            animation: "shimmer 2s linear infinite",
+            textShadow: "none",
+            "@keyframes shimmer": {
+              "0%": {
+                backgroundPosition: "100% 0",
+              },
+              "100%": {
+                backgroundPosition: "-100% 0",
+              },
+            },
+            // Add glowing effect that follows the shimmer
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: isDark
+                ? "linear-gradient(90deg, transparent 0%, rgba(255, 215, 0, 0.15) 50%, transparent 100%)"
+                : "linear-gradient(90deg, transparent 0%, rgba(139, 111, 71, 0.2) 50%, transparent 100%)",
+              backgroundSize: "200% 100%",
+              animation: "shimmer 2s linear infinite",
+              pointerEvents: "none",
+              filter: "blur(3px)",
+            },
           }}
         >
-          <Box
-            sx={{
-              display: "flex",
-              gap: 0.5,
-              "& .dot": {
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                backgroundColor: isDark ? "#C9A962" : "#8B6F47",
-                animation: "bounce 1.4s infinite ease-in-out both",
-                "&:nth-of-type(1)": {
-                  animationDelay: "-0.32s",
-                },
-                "&:nth-of-type(2)": {
-                  animationDelay: "-0.16s",
-                },
-              },
-              "@keyframes bounce": {
-                "0%, 80%, 100%": {
-                  transform: "scale(0)",
-                  opacity: 0.5,
-                },
-                "40%": {
-                  transform: "scale(1)",
-                  opacity: 1,
-                },
-              },
-            }}
-          >
-            <Box className="dot" />
-            <Box className="dot" />
-            <Box className="dot" />
-          </Box>
+          {flavorText}
         </Box>
       </Paper>
     </Box>
@@ -272,9 +292,16 @@ export const Chat = ({
         <TextField
           inputRef={inputRef}
           fullWidth
+          multiline
+          maxRows={4}
           value={command}
           onChange={(e) => setCommand(e.target.value)}
-          onKeyPress={(e) => e.key === "Enter" && handleSubmit()}
+          onKeyPress={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmit();
+            }
+          }}
           placeholder="Speak thy command..."
           disabled={isLoading}
           size="small"
