@@ -3,31 +3,37 @@ import type {
   AxiosRequestHeaders,
   AxiosResponse,
 } from "axios";
-import { AxiosHeaders } from "axios";
+import axios, { AxiosHeaders } from "axios";
 import type {
   ApiRefreshResponse,
   ApiRevokeResponse,
   RefreshResponse,
   RevokeResponse,
 } from "../types/api.types";
-import { POST } from "./api.service";
 import type { stored_tokens } from "../types/types";
 import { redirect } from "@tanstack/react-router";
+
+const APP_URI = import.meta.env.VITE_APP_URI || "http://localhost:8080";
 
 export async function getAuthHeaders(
   rtoken?: boolean,
 ): Promise<AxiosRequestHeaders> {
   const headers = new AxiosHeaders();
-  const localJWT = getJWT()!;
+  const localJWT = getJWT();
+
+  if (!localJWT) {
+    console.error("No JWT found, redirecting to login");
+    throw redirect({ to: "/login", search: { redirect: location.href } });
+  }
+
+  // Check if refresh token itself has expired
   if (localJWT.expiresAt < Date.now()) {
-    console.log("refresh token has expired user will need to reauth");
+    console.log("Refresh token has expired, user will need to reauth");
     ClearUserAuth();
     throw redirect({ to: "/login", search: { redirect: location.href } });
   }
-  if (localJWT.expiresAt.valueOf() + 30 * 60 * 1_000 < Date.now().valueOf()) {
-    const rHeaders = new AxiosHeaders(`Bearer ${localJWT.rtoken}`);
-    refreshToken(rHeaders);
-  }
+
+  // Set the appropriate token in headers
   if (rtoken) {
     headers.setAuthorization(`Bearer ${localJWT.rtoken}`);
   } else {
@@ -37,7 +43,7 @@ export async function getAuthHeaders(
   return headers;
 }
 
-function getJWT(): stored_tokens | undefined {
+export function getJWT(): stored_tokens | undefined {
   let raw_localJWT = localStorage.getItem("AAA_JWT");
 
   if (!raw_localJWT) {
@@ -51,9 +57,14 @@ function getJWT(): stored_tokens | undefined {
 export async function refreshToken(
   headers: AxiosRequestHeaders,
 ): Promise<AxiosResponse<RefreshResponse>> {
-  // just for this
+  // Use axios directly to avoid circular dependency and interceptor triggering
   const config: AxiosRequestConfig = { headers: headers };
-  const response = await POST<ApiRefreshResponse>("refresh", config);
+  const response = await axios.post<ApiRefreshResponse>(
+    `${APP_URI}/api/refresh`,
+    {},
+    config
+  );
+
   let raw_localJWT = localStorage.getItem("AAA_JWT");
   const localJWT: stored_tokens = JSON.parse(raw_localJWT ?? "");
   localJWT.expiresAt = Date.now();
@@ -64,7 +75,11 @@ export async function refreshToken(
 
 export async function revokeToken(): Promise<RevokeResponse> {
   const config: AxiosRequestConfig = { headers: await getAuthHeaders(true) };
-  const response = await POST<ApiRevokeResponse>("revoke", config);
+  const response = await axios.post<ApiRevokeResponse>(
+    `${APP_URI}/api/revoke`,
+    {},
+    config
+  );
   return { success: response.status == 204 };
 }
 
