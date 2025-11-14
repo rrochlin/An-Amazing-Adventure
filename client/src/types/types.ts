@@ -6,6 +6,7 @@ export interface GameState {
   connected_rooms?: string[];
   rooms?: { [key: string]: Area };
   chat_history?: ChatMessageType[];
+  map_images?: { [key: string]: string }; // map of image type -> S3 URL
 }
 
 export interface Character {

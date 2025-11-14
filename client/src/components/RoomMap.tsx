@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { type GameState } from "../types/types";
 import { Stage, Layer, Rect, Text, Circle, Group, Line } from "react-konva";
 import { Box, IconButton, Typography, Chip, Stack, useColorScheme } from "@mui/material";
@@ -12,6 +12,10 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
   const isDark = mode === "dark" || mode === "system" || !mode;
   const colorMode = mode === "system" || !mode ? "dark" : mode;
   const colors = ColorTokens[colorMode];
+
+  // Check if we have an AI-generated map image
+  const hasMapImage = gameState.map_images && gameState.map_images["world-map"];
+  const mapImageUrl = hasMapImage ? gameState.map_images!["world-map"] : null;
 
   // Room rendering constants
   const baseRoomSize = 50;
@@ -222,8 +226,26 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
           position: "relative",
           width: "100%",
           height: "400px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
+        {/* Display AI-generated map image if available */}
+        {mapImageUrl ? (
+          <Box
+            component="img"
+            src={mapImageUrl}
+            alt="World Map"
+            sx={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+              borderRadius: "4px",
+            }}
+          />
+        ) : (
+        <>
         <Stage
           width={canvasSize.width}
           height={canvasSize.height}
@@ -671,9 +693,12 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
             </text>
           </svg>
         </Box>
+        </>
+        )}
       </Box>
 
-      {/* Legend */}
+      {/* Legend - only show on canvas mode */}
+      {!mapImageUrl && (
       <Box sx={{ mt: 1 }}>
         <Typography
           variant="caption"
@@ -749,6 +774,7 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
           </Box>
         </Stack>
       </Box>
+      )}
     </Box>
   );
 };
