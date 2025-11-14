@@ -23,9 +23,9 @@ type S3Client struct {
 
 // NewS3Client creates a new S3 client configured with IAM user credentials
 func NewS3Client(ctx context.Context) (*S3Client, error) {
-	bucketName := os.Getenv("S3_BUCKET_NAME")
+	bucketName := os.Getenv("S3_IMAGE_BUCKET")
 	if bucketName == "" {
-		return nil, fmt.Errorf("S3_BUCKET_NAME environment variable not set")
+		return nil, fmt.Errorf("S3_IMAGE_BUCKET environment variable not set")
 	}
 
 	region := os.Getenv("AWS_REGION")
