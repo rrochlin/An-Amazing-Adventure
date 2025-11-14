@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { type GameState } from "../types/types";
 import { Stage, Layer, Rect, Text, Circle, Group, Line } from "react-konva";
 import { Box, IconButton, Typography, Chip, Stack, useColorScheme } from "@mui/material";
