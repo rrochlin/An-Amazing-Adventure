@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Cloud Run
 
 # --- Stage 1: Build the Go application
-FROM golang:1.24 as builder
+FROM golang:1.23 as builder
 WORKDIR /src
 
 # Leverage build cache for dependencies
