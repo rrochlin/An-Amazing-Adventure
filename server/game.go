@@ -296,3 +296,116 @@ func (saveState *SaveState) LoadGame() Game {
 
 	return g
 }
+
+// CalculateRoomCoordinates calculates coordinates for all rooms based on directional connections
+// Starting from the specified root room (typically the player's starting room)
+func (g *Game) CalculateRoomCoordinates(startRoomID string) error {
+	// Check if start room exists
+	startRoom, err := g.GetArea(startRoomID)
+	if err != nil {
+		return fmt.Errorf("start room %s not found: %w", startRoomID, err)
+	}
+
+	// Set starting room at origin
+	startRoom.Coordinates = Coordinates{X: 0, Y: 0, Z: 0}
+	g.Map[startRoomID] = startRoom
+
+	// Use BFS to calculate coordinates for all connected rooms
+	visited := make(map[string]bool)
+	queue := []string{startRoomID}
+	visited[startRoomID] = true
+
+	// Spacing multiplier for better visualization
+	const spacing = 100.0
+
+	for len(queue) > 0 {
+		currentRoomID := queue[0]
+		queue = queue[1:]
+
+		currentRoom, err := g.GetArea(currentRoomID)
+		if err != nil {
+			continue
+		}
+
+		// Process all connections
+		for direction, connectedRoomID := range currentRoom.Connections {
+			if visited[connectedRoomID] {
+				continue
+			}
+
+			connectedRoom, err := g.GetArea(connectedRoomID)
+			if err != nil {
+				continue
+			}
+
+			// Get direction vector
+			dirVector, ok := directionVectors[direction]
+			if !ok {
+				continue
+			}
+
+			// Calculate new coordinates based on current room and direction
+			connectedRoom.Coordinates = Coordinates{
+				X: currentRoom.Coordinates.X + (dirVector.X * spacing),
+				Y: currentRoom.Coordinates.Y + (dirVector.Y * spacing),
+				Z: currentRoom.Coordinates.Z + (dirVector.Z * spacing),
+			}
+
+			g.Map[connectedRoomID] = connectedRoom
+			visited[connectedRoomID] = true
+			queue = append(queue, connectedRoomID)
+		}
+	}
+
+	return nil
+}
+
+// ConnectRooms connects two rooms bidirectionally with opposite directions
+func (g *Game) ConnectRooms(fromRoomID, toRoomID, direction string) error {
+	// Validate direction
+	dirVector, ok := directionVectors[direction]
+	if !ok {
+		return fmt.Errorf("invalid direction: %s", direction)
+	}
+
+	// Get both rooms
+	fromRoom, err := g.GetArea(fromRoomID)
+	if err != nil {
+		return fmt.Errorf("from room not found: %w", err)
+	}
+
+	toRoom, err := g.GetArea(toRoomID)
+	if err != nil {
+		return fmt.Errorf("to room not found: %w", err)
+	}
+
+	// Calculate coordinates for toRoom based on fromRoom's position + direction vector
+	// Use a spacing multiplier to spread rooms out on the map
+	const spacingMultiplier = 100.0
+	toRoom.Coordinates = Coordinates{
+		X: fromRoom.Coordinates.X + (dirVector.X * spacingMultiplier),
+		Y: fromRoom.Coordinates.Y + (dirVector.Y * spacingMultiplier),
+		Z: fromRoom.Coordinates.Z + (dirVector.Z * spacingMultiplier),
+	}
+
+	// Add connection from first room to second
+	if err := fromRoom.AddConnection(direction, toRoomID); err != nil {
+		return fmt.Errorf("failed to add connection: %w", err)
+	}
+
+	// Add opposite connection from second room to first
+	oppositeDir, ok := oppositeDirection[direction]
+	if !ok {
+		return fmt.Errorf("no opposite direction for %s", direction)
+	}
+
+	if err := toRoom.AddConnection(oppositeDir, fromRoomID); err != nil {
+		return fmt.Errorf("failed to add opposite connection: %w", err)
+	}
+
+	// Update rooms in map
+	g.Map[fromRoomID] = fromRoom
+	g.Map[toRoomID] = toRoom
+
+	return nil
+}

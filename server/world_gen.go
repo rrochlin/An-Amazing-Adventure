@@ -168,16 +168,28 @@ Tool calls should be in JSON format:
 		}
 	}
 
+	// Calculate coordinates for all rooms based on directional connections
+	startRoomID := wg.game.Player.GetLocation().ID
+	if startRoomID != "" {
+		fmt.Printf("\nCalculating room coordinates starting from %s...\n", startRoomID)
+		if err := wg.game.CalculateRoomCoordinates(startRoomID); err != nil {
+			fmt.Printf("Warning: Failed to calculate room coordinates: %v\n", err)
+		} else {
+			fmt.Println("Room coordinates calculated successfully!")
+		}
+	}
+
 	// Print final world state
 	fmt.Println("\nWorld Generation Complete!")
 	fmt.Println("=========================")
 	for _, area := range wg.game.GetAllAreas() {
 		fmt.Printf("\nRoom: %s\n", area.ID)
 		fmt.Printf("Description: %s\n", area.GetDescription())
+		fmt.Printf("Coordinates: (%.2f, %.2f, %.2f)\n", area.Coordinates.X, area.Coordinates.Y, area.Coordinates.Z)
 
 		fmt.Println("Connections:")
-		for _, conn := range area.GetConnections() {
-			fmt.Printf("  - %s\n", conn)
+		for direction, roomID := range area.GetConnectionsMap() {
+			fmt.Printf("  - %s: %s\n", direction, roomID)
 		}
 
 		fmt.Println("Items:")

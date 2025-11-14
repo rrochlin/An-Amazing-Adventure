@@ -60,10 +60,11 @@ func GetTools() []Tool {
 		},
 		{
 			Name:        "connect_rooms",
-			Description: "Creates a connection between two rooms",
+			Description: "Creates a bidirectional connection between two rooms with a specified direction. Valid directions: north, south, east, west, northeast, northwest, southeast, southwest, up, down",
 			Arguments: map[string]string{
-				"room_id_1": "ID of the first room",
-				"room_id_2": "ID of the second room",
+				"from_room":  "ID of the room to connect from",
+				"to_room":    "ID of the room to connect to",
+				"direction":  "Direction from from_room to to_room (north/south/east/west/northeast/northwest/southeast/southwest/up/down)",
 			},
 		},
 		{
@@ -302,43 +303,30 @@ func (game *Game) ExecuteSetCharacterLocation(args map[string]any) string {
 	return fmt.Sprintf("Successfully moved character %s to room %s", characterName, roomID)
 }
 
-// ExecuteConnectRooms creates a connection between two rooms
+// ExecuteConnectRooms creates a bidirectional connection between two rooms with a direction
 func (game *Game) ExecuteConnectRooms(args map[string]any) string {
-	roomID1, ok := args["room_id_1"].(string)
+	fromRoom, ok := args["from_room"].(string)
 	if !ok {
-		return "Invalid first room ID"
+		return "Invalid from_room ID"
 	}
 
-	roomID2, ok := args["room_id_2"].(string)
+	toRoom, ok := args["to_room"].(string)
 	if !ok {
-		return "Invalid second room ID"
+		return "Invalid to_room ID"
 	}
 
-	room1, err := game.GetArea(roomID1)
-	if err != nil {
-		return fmt.Sprintf("First room not found: %v", err)
+	direction, ok := args["direction"].(string)
+	if !ok {
+		return "Invalid direction"
 	}
 
-	room2, err := game.GetArea(roomID2)
-	if err != nil {
-		return fmt.Sprintf("Second room not found: %v", err)
-	}
-
-	err = room1.AddConnection(room2)
+	// Use the new ConnectRooms method which handles bidirectional connections
+	err := game.ConnectRooms(fromRoom, toRoom, direction)
 	if err != nil {
 		return fmt.Sprintf("Failed to connect rooms: %v", err)
 	}
 
-	err = room2.AddConnection(room1)
-	if err != nil {
-		return fmt.Sprintf("Failed to connect rooms: %v", err)
-	}
-
-	// Update the rooms in the game map
-	game.Map[roomID1] = room1
-	game.Map[roomID2] = room2
-
-	return fmt.Sprintf("Successfully connected rooms %s and %s", roomID1, roomID2)
+	return fmt.Sprintf("Successfully connected %s to %s via %s direction", fromRoom, toRoom, direction)
 }
 
 // GetSystemInstructions returns the complete system instructions for the AI

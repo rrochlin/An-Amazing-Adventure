@@ -5,12 +5,19 @@ import (
 	"slices"
 )
 
+type Coordinates struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	Z float64 `json:"z"` // For vertical levels (up/down)
+}
+
 type Area struct {
-	ID          string   `json:"id"`
-	Connections []string `json:"connections"`
-	Items       []Item   `json:"items"`
-	Occupants   []string `json:"occupants"`
-	Description string   `json:"description"`
+	ID          string            `json:"id"`
+	Connections map[string]string `json:"connections"` // direction -> room_id
+	Coordinates Coordinates       `json:"coordinates"`
+	Items       []Item            `json:"items"`
+	Occupants   []string          `json:"occupants"`
+	Description string            `json:"description"`
 }
 
 // NewArea creates a new empty area with a unique ID
@@ -21,36 +28,76 @@ func NewArea(id string, description ...string) Area {
 	}
 	return Area{
 		ID:          id,
-		Connections: make([]string, 0),
+		Connections: make(map[string]string),
 		Items:       make([]Item, 0),
 		Occupants:   make([]string, 0),
 		Description: desc,
+		Coordinates: Coordinates{X: 0, Y: 0, Z: 0},
 	}
 }
 
-// AddConnection adds a new area connection
-func (a *Area) AddConnection(area Area) error {
-	// Check if connection already exists
-	if slices.Contains(a.Connections, area.ID) {
-		return fmt.Errorf("area already connected")
+// Direction vectors for coordinate calculation
+var directionVectors = map[string]Coordinates{
+	"north":     {X: 0, Y: -1, Z: 0},
+	"south":     {X: 0, Y: 1, Z: 0},
+	"east":      {X: 1, Y: 0, Z: 0},
+	"west":      {X: -1, Y: 0, Z: 0},
+	"northeast": {X: 0.707, Y: -0.707, Z: 0},
+	"northwest": {X: -0.707, Y: -0.707, Z: 0},
+	"southeast": {X: 0.707, Y: 0.707, Z: 0},
+	"southwest": {X: -0.707, Y: 0.707, Z: 0},
+	"up":        {X: 0, Y: 0, Z: 1},
+	"down":      {X: 0, Y: 0, Z: -1},
+}
+
+// Opposite directions for bidirectional connections
+var oppositeDirection = map[string]string{
+	"north":     "south",
+	"south":     "north",
+	"east":      "west",
+	"west":      "east",
+	"northeast": "southwest",
+	"northwest": "southeast",
+	"southeast": "northwest",
+	"southwest": "northeast",
+	"up":        "down",
+	"down":      "up",
+}
+
+// AddConnection adds a new area connection with a direction
+func (a *Area) AddConnection(direction string, roomID string) error {
+	// Validate direction
+	if _, ok := directionVectors[direction]; !ok {
+		return fmt.Errorf("invalid direction: %s", direction)
 	}
-	a.Connections = append(a.Connections, area.ID)
+	// Check if direction already has a connection
+	if existingID, exists := a.Connections[direction]; exists {
+		return fmt.Errorf("direction %s already connected to %s", direction, existingID)
+	}
+	a.Connections[direction] = roomID
 	return nil
 }
 
-// RemoveConnection removes an area connection
-func (a *Area) RemoveConnection(area Area) error {
-	for i, conn := range a.Connections {
-		if conn == area.ID {
-			a.Connections = append(a.Connections[:i], a.Connections[i+1:]...)
-			return nil
-		}
+// RemoveConnection removes an area connection in a specific direction
+func (a *Area) RemoveConnection(direction string) error {
+	if _, exists := a.Connections[direction]; !exists {
+		return fmt.Errorf("no connection in direction %s", direction)
 	}
-	return fmt.Errorf("area not connected")
+	delete(a.Connections, direction)
+	return nil
 }
 
-// GetConnections returns all connected areas
+// GetConnections returns all connected room IDs
 func (a *Area) GetConnections() []string {
+	connections := make([]string, 0, len(a.Connections))
+	for _, roomID := range a.Connections {
+		connections = append(connections, roomID)
+	}
+	return connections
+}
+
+// GetConnectionsMap returns the directional connections map
+func (a *Area) GetConnectionsMap() map[string]string {
 	return a.Connections
 }
 
@@ -125,11 +172,23 @@ func (a *Area) HasOccupant(name string) bool {
 }
 
 // IsConnected checks if an area is connected
-func (a *Area) IsConnected(area Area) bool {
-	return slices.ContainsFunc(
-		a.Connections,
-		func(c string) bool { return c == area.ID },
-	)
+func (a *Area) IsConnected(roomID string) bool {
+	for _, connectedID := range a.Connections {
+		if connectedID == roomID {
+			return true
+		}
+	}
+	return false
+}
+
+// GetDirectionTo returns the direction to a connected room
+func (a *Area) GetDirectionTo(roomID string) (string, error) {
+	for direction, connectedID := range a.Connections {
+		if connectedID == roomID {
+			return direction, nil
+		}
+	}
+	return "", fmt.Errorf("room %s is not connected", roomID)
 }
 
 // String returns a string representation of the area
@@ -145,7 +204,11 @@ func (a *Area) GetDescription() string {
 
 // GetConnectionIDs returns a slice of connected area IDs
 func (a *Area) GetConnectionIDs() []string {
-	return a.Connections
+	ids := make([]string, 0, len(a.Connections))
+	for _, roomID := range a.Connections {
+		ids = append(ids, roomID)
+	}
+	return ids
 }
 
 // GetItemNames returns a slice of item names in the area

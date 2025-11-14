@@ -115,6 +115,8 @@ function PostComponent() {
       handleSetChatHistory({ type: "player", content: command });
 
       const chat = await SendChat(sessionUUID, { chat: command });
+      console.log("Received game state from server:", chat.game_state);
+      console.log("Rooms in response:", chat.game_state?.rooms);
       setGameState(chat.game_state);
       setCommand("");
     } catch (err) {
@@ -142,37 +144,65 @@ function PostComponent() {
   return (
     <Box
       sx={{
-        height: `calc(100vh - ${AppTheme.mixins.toolbar.minHeight}px - 8px)`,
+        height: `calc(100vh - ${AppTheme.mixins.toolbar.minHeight}px)`,
         display: "flex",
         flexDirection: "row",
         overflow: "hidden",
-        backgroundColor: "#1E1E1E",
+        backgroundColor: "background.default",
+        gap: 2,
+        p: 2,
+        pr: 3,
+        width: "100%",
+        maxWidth: "100vw",
+        boxSizing: "border-box",
       }}
     >
-      <Box sx={{ flex: "0", minWidth: "20vw", p: 2 }}>
-        <Paper sx={{ p: 2, backgroundColor: "#2D2D2D" }}>
-          <Box
+      {/* Left Sidebar - Map (25%) */}
+      <Box sx={{ flex: "0 0 25%", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+        <Paper
+          sx={{
+            flex: 1,
+            p: 2,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            transition: "all 0.3s ease-in-out",
+            "&:hover": {
+              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
+            }
+          }}
+        >
+          <Typography
+            variant="h6"
             sx={{
-              height: "500px",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
+              mb: 2,
+              textAlign: "center",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              borderBottom: `2px solid ${AppTheme.palette.primary.main}`,
+              pb: 1,
             }}
           >
-            <Paper
-              sx={{
-                width: "18vw",
-              }}
-            >
-              <RoomMap gameState={gameState} />
-            </Paper>
+            World Map
+          </Typography>
+          <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <RoomMap gameState={gameState} />
           </Box>
-          <GameInfo gameState={gameState} onItemClick={handleItemClick} />
         </Paper>
       </Box>
 
-      <Box sx={{ flex: "1", p: 4, minHeight: 0 }}>
-        <Paper sx={{ height: "100%", backgroundColor: "#2D2D2D" }}>
+      {/* Center - Chat Area (50%) */}
+      <Box sx={{ flex: "0 0 50%", minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <Paper
+          sx={{
+            flex: 1,
+            overflow: "hidden",
+            transition: "all 0.3s ease-in-out",
+            "&:hover": {
+              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
+            }
+          }}
+        >
           <Chat
             chatHistory={chatHistory}
             command={command}
@@ -181,13 +211,38 @@ function PostComponent() {
             isLoading={isLoading}
           />
         </Paper>
+        {error && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {error}
+          </Alert>
+        )}
       </Box>
 
-      {error && (
-        <Alert severity="error" sx={{ mt: 2, mx: 2 }}>
-          {error}
-        </Alert>
-      )}
+      {/* Right Sidebar - Game Info (25%) */}
+      <Box sx={{ flex: "0 0 25%", minWidth: 0, display: "flex", gap: 2 }}>
+        <Paper
+          sx={{
+            flex: 1,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            transition: "all 0.3s ease-in-out",
+            "&:hover": {
+              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
+            },
+          }}
+        >
+          <GameInfo gameState={gameState} onItemClick={handleItemClick} />
+        </Paper>
+        <Box
+          sx={{
+            width: "4px",
+            backgroundColor: "#000",
+            opacity: 0.5,
+            borderRadius: "2px",
+          }}
+        />
+      </Box>
     </Box>
   );
 }

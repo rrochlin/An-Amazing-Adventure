@@ -18,9 +18,16 @@ export interface Character {
   friendly: boolean;
 }
 
+export interface Coordinates {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface Area {
   id: string;
-  connections: string[];
+  connections: { [direction: string]: string }; // direction -> room_id
+  coordinates: Coordinates;
   items: Item[];
   occupants: string[];
   description: string;
