@@ -37,6 +37,11 @@ func main() {
 		log.Fatal("Failed to create Gemini client:", err)
 	}
 
+	s3Client, err := NewS3Client(ctx)
+	if err != nil {
+		log.Fatal("Failed to create S3 client:", err)
+	}
+
 	partsys := genai.Part{Text: GetSystemInstructions()}
 	psys := make([]*genai.Part, 1)
 	psys[0] = &partsys
@@ -62,6 +67,7 @@ func main() {
 		gemini:      client,
 		chatConfig:  config,
 		dynamodbSvc: svc,
+		s3Client:    s3Client,
 	}
 
 	// game routes
@@ -112,4 +118,5 @@ type apiConfig struct {
 	gemini      *genai.Client
 	chatConfig  *genai.GenerateContentConfig
 	dynamodbSvc *dynamodb.Client
+	s3Client    *S3Client
 }

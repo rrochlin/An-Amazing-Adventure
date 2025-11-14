@@ -86,7 +86,7 @@ func (cfg *apiConfig) HandlerStartGame(w http.ResponseWriter, req *http.Request)
 	game = NewGame(sessionUUID, userUUID)
 
 	// Initialize world generator
-	worldGen := NewWorldGenerator(&game)
+	worldGen := NewWorldGenerator(&game, cfg.gemini, cfg.s3Client)
 	chat, err := cfg.CreateChat(
 		req.Context(),
 		sessionUUID,

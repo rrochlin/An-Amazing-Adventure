@@ -25,17 +25,21 @@ type WorldGenActions struct {
 
 // WorldGenerator handles the world generation process
 type WorldGenerator struct {
-	game    *Game
-	mu      sync.Mutex
-	isReady bool
-	chat    *genai.Chat
+	game         *Game
+	mu           sync.Mutex
+	isReady      bool
+	chat         *genai.Chat
+	geminiClient *genai.Client
+	s3Client     *S3Client
 }
 
 // NewWorldGenerator creates a new world generator
-func NewWorldGenerator(game *Game) *WorldGenerator {
+func NewWorldGenerator(game *Game, geminiClient *genai.Client, s3Client *S3Client) *WorldGenerator {
 	return &WorldGenerator{
-		game:    game,
-		isReady: false,
+		game:         game,
+		geminiClient: geminiClient,
+		s3Client:     s3Client,
+		isReady:      false,
 	}
 }
 
@@ -176,6 +180,35 @@ Tool calls should be in JSON format:
 			fmt.Printf("Warning: Failed to calculate room coordinates: %v\n", err)
 		} else {
 			fmt.Println("Room coordinates calculated successfully!")
+		}
+	}
+
+	// Generate and upload world map image
+	fmt.Println("\nGenerating world map image...")
+	imageGen := NewImageGenerator(wg.geminiClient)
+
+	// Create a world description from the narrative
+	worldDescription := "A fantastical adventure world"
+	if len(wg.game.Narrative) > 0 {
+		// Use the AI's initial world plan as description
+		worldDescription = wg.game.Narrative[0].Parts[0].Text
+	}
+
+	areas := wg.game.GetAllAreas()
+	imageData, err := imageGen.GenerateWorldMapWithRetry(ctx, worldDescription, areas, 3)
+	if err != nil {
+		fmt.Printf("Warning: Failed to generate world map image: %v\n", err)
+	} else {
+		fmt.Printf("World map image generated successfully (%d bytes)\n", len(imageData))
+
+		// Upload to S3
+		fmt.Println("Uploading world map to S3...")
+		imageURL, err := wg.s3Client.UploadMapImage(ctx, wg.game.GameId, "world-map", imageData)
+		if err != nil {
+			fmt.Printf("Warning: Failed to upload world map to S3: %v\n", err)
+		} else {
+			fmt.Printf("World map uploaded successfully: %s\n", imageURL)
+			wg.game.MapImages["world-map"] = imageURL
 		}
 	}
 
