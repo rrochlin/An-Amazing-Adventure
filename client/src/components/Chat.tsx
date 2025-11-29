@@ -4,11 +4,20 @@ import { type ChatMessageType } from "../types/types";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-const LoadingMessage = () => {
+const LoadingMessage = ({ isWorldGenerating = false }: { isWorldGenerating?: boolean }) => {
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
 
-  const flavorTexts = [
+  const flavorTexts = isWorldGenerating ? [
+    "Forging the lands of destiny...",
+    "The gods shape your realm...",
+    "Ancient magic weaves reality...",
+    "Mountains rise from the void...",
+    "Rivers carve their paths...",
+    "Dungeons form in darkness...",
+    "Creatures stir in their lairs...",
+    "The world takes form...",
+  ] : [
     "The Dungeon Master ponders...",
     "Rolling the dice of fate...",
     "Consulting ancient tomes...",
@@ -209,12 +218,14 @@ export const Chat = ({
   setCommand,
   handleCommand,
   isLoading,
+  isWorldGenerating = false,
 }: {
   chatHistory: ChatMessageType[];
   command: string;
   setCommand: (cmd: string) => void;
   handleCommand: () => void;
   isLoading: boolean;
+  isWorldGenerating?: boolean;
 }) => {
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
@@ -270,10 +281,13 @@ export const Chat = ({
           },
         }}
       >
+        {isWorldGenerating && chatHistory.length === 0 && (
+          <LoadingMessage isWorldGenerating={true} />
+        )}
         {chatHistory.map((msg, index) => (
           <ChatMessage key={index} message={msg} />
         ))}
-        {isLoading && <LoadingMessage />}
+        {isLoading && !isWorldGenerating && <LoadingMessage />}
       </Box>
 
       <Box
@@ -302,8 +316,8 @@ export const Chat = ({
               handleSubmit();
             }
           }}
-          placeholder="Speak thy command..."
-          disabled={isLoading}
+          placeholder={isWorldGenerating ? "Awaiting world creation..." : "Speak thy command..."}
+          disabled={isLoading || isWorldGenerating}
           size="small"
           autoComplete="off"
           sx={{
@@ -337,7 +351,7 @@ export const Chat = ({
         <Button
           variant="contained"
           onClick={handleSubmit}
-          disabled={isLoading || !command.trim()}
+          disabled={isLoading || isWorldGenerating || !command.trim()}
           sx={{
             minWidth: "100px",
             height: "40px", // Match TextField small size height

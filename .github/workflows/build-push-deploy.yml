@@ -103,24 +103,76 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
 
+      # GCP pulls Docker Hub images through mirror.gcr.io which may not have
+      # the image immediately after push. We retry with exponential backoff.
       - name: Deploy client to Cloud Run
         run: |
-          gcloud run deploy "${{ env.CLIENT_SERVICE }}" \
-            --image "${{ env.CLIENT_IMAGE }}:${{ env.SHA_TAG }}" \
-            --platform managed \
-            --region "${{ secrets.GCP_REGION }}" \
-            --project "${{ secrets.GCP_PROJECT_ID }}" \
-            --allow-unauthenticated \
-            --port 8080
+          deploy_with_retry() {
+            local service="$1"
+            local image="$2"
+            local max_attempts=5
+            local delay=30
 
-      - name: Deploy server to Cloud Run  
+            for attempt in $(seq 1 $max_attempts); do
+              echo "Deployment attempt $attempt of $max_attempts for $service..."
+
+              if gcloud run deploy "$service" \
+                --image "$image" \
+                --platform managed \
+                --region "${{ secrets.GCP_REGION }}" \
+                --project "${{ secrets.GCP_PROJECT_ID }}" \
+                --allow-unauthenticated \
+                --port 8080; then
+                echo "Successfully deployed $service"
+                return 0
+              fi
+
+              if [ $attempt -lt $max_attempts ]; then
+                echo "Deployment failed. Waiting ${delay}s for Docker Hub mirror sync..."
+                sleep $delay
+                delay=$((delay * 2))
+              fi
+            done
+
+            echo "Failed to deploy $service after $max_attempts attempts"
+            return 1
+          }
+
+          deploy_with_retry "${{ env.CLIENT_SERVICE }}" "${{ env.CLIENT_IMAGE }}:${{ env.SHA_TAG }}"
+
+      - name: Deploy server to Cloud Run
         run: |
-          gcloud run deploy "${{ env.SERVER_SERVICE }}" \
-            --image "${{ env.SERVER_IMAGE }}:${{ env.SHA_TAG }}" \
-            --platform managed \
-            --region "${{ secrets.GCP_REGION }}" \
-            --project "${{ secrets.GCP_PROJECT_ID }}" \
-            --allow-unauthenticated \
-            --port 8080
+          deploy_with_retry() {
+            local service="$1"
+            local image="$2"
+            local max_attempts=5
+            local delay=30
+
+            for attempt in $(seq 1 $max_attempts); do
+              echo "Deployment attempt $attempt of $max_attempts for $service..."
+
+              if gcloud run deploy "$service" \
+                --image "$image" \
+                --platform managed \
+                --region "${{ secrets.GCP_REGION }}" \
+                --project "${{ secrets.GCP_PROJECT_ID }}" \
+                --allow-unauthenticated \
+                --port 8080; then
+                echo "Successfully deployed $service"
+                return 0
+              fi
+
+              if [ $attempt -lt $max_attempts ]; then
+                echo "Deployment failed. Waiting ${delay}s for Docker Hub mirror sync..."
+                sleep $delay
+                delay=$((delay * 2))
+              fi
+            done
+
+            echo "Failed to deploy $service after $max_attempts attempts"
+            return 1
+          }
+
+          deploy_with_retry "${{ env.SERVER_SERVICE }}" "${{ env.SERVER_IMAGE }}:${{ env.SHA_TAG }}"
 
 

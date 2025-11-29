@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -93,11 +94,20 @@ func (s *S3Client) UploadMapImage(ctx context.Context, sessionID uuid.UUID, imag
 		return "", fmt.Errorf("failed to upload image to S3: %w", err)
 	}
 
-	// Generate public URL
-	// Format: https://{bucket}.s3.{region}.amazonaws.com/{key}
-	url := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucketName, s.region, key)
+	// Generate presigned URL (valid for 24 hours)
+	// This allows the bucket to remain private while still serving images directly to clients
+	presignClient := s3.NewPresignClient(s.client)
+	presignResult, err := presignClient.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(key),
+	}, func(opts *s3.PresignOptions) {
+		opts.Expires = 24 * time.Hour
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
+	}
 
-	return url, nil
+	return presignResult.URL, nil
 }
 
 // DeleteMapImages deletes all map images for a game session

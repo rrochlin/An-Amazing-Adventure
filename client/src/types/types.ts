@@ -25,10 +25,16 @@ export interface Coordinates {
   z: number;
 }
 
+export interface PixelCoordinates {
+  x: number; // Pixel X position on map image
+  y: number; // Pixel Y position on map image
+}
+
 export interface Area {
   id: string;
   connections: { [direction: string]: string }; // direction -> room_id
-  coordinates: Coordinates;
+  coordinates: Coordinates; // Logical game coordinates
+  pixel_coordinates?: PixelCoordinates | null; // Pixel position on map image (if exists)
   items: Item[];
   occupants: string[];
   description: string;

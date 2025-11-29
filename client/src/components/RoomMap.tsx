@@ -1,21 +1,65 @@
 import { useMemo, useState, useEffect } from "react";
 import { type GameState } from "../types/types";
 import { Stage, Layer, Rect, Text, Circle, Group, Line } from "react-konva";
-import { Box, IconButton, Typography, Chip, Stack, useColorScheme } from "@mui/material";
+import { Box, IconButton, Typography, Chip, Stack, useColorScheme, CircularProgress } from "@mui/material";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { DungeonColors, ColorTokens } from "../theme/theme";
 
-export const RoomMap = ({ gameState }: { gameState: GameState }) => {
+export const RoomMap = ({ gameState, isLoading = false }: { gameState: GameState | null; isLoading?: boolean }) => {
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
   const colorMode = mode === "system" || !mode ? "dark" : mode;
   const colors = ColorTokens[colorMode];
 
+  // Show loading state when world is generating
+  if (isLoading || !gameState) {
+    return (
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0, maxWidth: "100%" }}>
+        <Box
+          sx={{
+            border: isDark
+              ? `2px solid ${DungeonColors.wall}`
+              : "2px solid #8B6F47",
+            borderRadius: "4px",
+            backgroundColor: isDark
+              ? DungeonColors.fog
+              : "rgba(212, 197, 169, 0.5)",
+            height: "400px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+          }}
+        >
+          <CircularProgress
+            size={48}
+            sx={{
+              color: isDark ? "#C9A962" : "#8B6F47",
+            }}
+          />
+          <Typography
+            sx={{
+              fontFamily: "Crimson Text, Georgia, serif",
+              fontSize: "1.1rem",
+              fontStyle: "italic",
+              color: isDark ? "#C9A962" : "#6B5638",
+              textAlign: "center",
+              px: 2,
+            }}
+          >
+            The cartographer sketches your realm...
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
+
   // Check if we have an AI-generated map image
-  const hasMapImage = gameState.map_images && gameState.map_images["world-map"];
-  const mapImageUrl = hasMapImage ? gameState.map_images!["world-map"] : null;
+  const hasMapImage = gameState?.map_images && gameState.map_images["world-map"];
+  const mapImageUrl = hasMapImage ? gameState!.map_images!["world-map"] : null;
 
   // Room rendering constants
   const baseRoomSize = 50;
@@ -76,20 +120,83 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
     if (!gameState.rooms) return {};
 
     const positions: { [key: string]: { x: number; y: number; z: number } } = {};
-    const centerX = canvasSize.width / 2;
-    const centerY = canvasSize.height / 2;
 
-    Object.keys(gameState.rooms).forEach((roomId) => {
-      const room = gameState.rooms![roomId];
-      positions[roomId] = {
-        x: centerX + room.coordinates.x * baseSpacing,
-        y: centerY + room.coordinates.y * baseSpacing,
-        z: room.coordinates.z,
-      };
-    });
+    // If we have an AI-generated map with pixel coordinates, use those directly
+    if (hasMapImage) {
+      // Check if we have pixel coordinates from AI vision analysis
+      const hasPixelCoordinates = Object.values(gameState.rooms!).some(
+        (room) => room.pixel_coordinates !== null && room.pixel_coordinates !== undefined
+      );
+
+      if (hasPixelCoordinates) {
+        // Use AI-extracted pixel coordinates directly
+        // Map image is 1024x1024, we scale it to canvas size
+        const scale = Math.min(canvasSize.width, canvasSize.height) / 1024;
+
+        Object.keys(gameState.rooms).forEach((roomId) => {
+          const room = gameState.rooms![roomId];
+          if (room.pixel_coordinates) {
+            positions[roomId] = {
+              x: room.pixel_coordinates.x * scale,
+              y: room.pixel_coordinates.y * scale,
+              z: room.coordinates.z,
+            };
+          } else {
+            // Fallback to center if pixel coords not available for this room
+            positions[roomId] = {
+              x: canvasSize.width / 2,
+              y: canvasSize.height / 2,
+              z: room.coordinates.z,
+            };
+          }
+        });
+      } else {
+        // Fallback: normalize logical coordinates (for old maps without pixel coords)
+        const rooms = Object.values(gameState.rooms!);
+        let minX = rooms[0]?.coordinates.x ?? 0;
+        let minY = rooms[0]?.coordinates.y ?? 0;
+        let maxX = minX;
+        let maxY = minY;
+
+        rooms.forEach((room) => {
+          if (room.coordinates.x < minX) minX = room.coordinates.x;
+          if (room.coordinates.x > maxX) maxX = room.coordinates.x;
+          if (room.coordinates.y < minY) minY = room.coordinates.y;
+          if (room.coordinates.y > maxY) maxY = room.coordinates.y;
+        });
+
+        const rangeX = maxX - minX || 1;
+        const rangeY = maxY - minY || 1;
+
+        Object.keys(gameState.rooms).forEach((roomId) => {
+          const room = gameState.rooms![roomId];
+          const normalizedX = ((room.coordinates.x - minX) / rangeX) * 1024;
+          const normalizedY = ((room.coordinates.y - minY) / rangeY) * 1024;
+          const scale = Math.min(canvasSize.width, canvasSize.height) / 1024;
+          positions[roomId] = {
+            x: normalizedX * scale,
+            y: normalizedY * scale,
+            z: room.coordinates.z,
+          };
+        });
+      }
+    } else {
+      // Original coordinate system for non-AI maps
+      const centerX = canvasSize.width / 2;
+      const centerY = canvasSize.height / 2;
+
+      Object.keys(gameState.rooms).forEach((roomId) => {
+        const room = gameState.rooms![roomId];
+        positions[roomId] = {
+          x: centerX + room.coordinates.x * baseSpacing,
+          y: centerY + room.coordinates.y * baseSpacing,
+          z: room.coordinates.z,
+        };
+      });
+    }
 
     return positions;
-  }, [gameState.rooms, baseSpacing, canvasSize]);
+  }, [gameState.rooms, baseSpacing, canvasSize, hasMapImage]);
 
   // Filter rooms by selected layer
   const roomsOnLayer = useMemo(() => {
@@ -231,21 +338,26 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
           justifyContent: "center",
         }}
       >
-        {/* Display AI-generated map image if available */}
-        {mapImageUrl ? (
+        {/* Display AI-generated map image as background if available */}
+        {mapImageUrl && (
           <Box
             component="img"
             src={mapImageUrl}
             alt="World Map"
             sx={{
+              position: "absolute",
+              top: 0,
+              left: 0,
               maxWidth: "100%",
               maxHeight: "100%",
               objectFit: "contain",
               borderRadius: "4px",
+              pointerEvents: "none", // Allow clicks to pass through to the overlay
             }}
           />
-        ) : (
-        <>
+        )}
+
+        {/* Interactive overlay canvas */}
         <Stage
           width={canvasSize.width}
           height={canvasSize.height}
@@ -297,56 +409,83 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                         y={startY}
                         rotation={(angle * 180) / Math.PI}
                       >
-                        {/* Corridor floor */}
-                        <Rect
-                          x={0}
-                          y={-corridorWidth / 2}
-                          width={corridorLength}
-                          height={corridorWidth}
-                          fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-                          fillLinearGradientEndPoint={{ x: 0, y: corridorWidth }}
-                          fillLinearGradientColorStops={
-                            isActive
-                              ? [0, "#4E342E", 0.5, "#6D4C41", 1, "#4E342E"]
-                              : [0, "#3E2723", 0.5, "#4E342E", 1, "#3E2723"]
-                          }
-                          shadowColor="black"
-                          shadowBlur={5}
-                          shadowOpacity={0.5}
-                        />
-                        {/* Corridor walls */}
-                        <Line
-                          points={[0, -corridorWidth / 2, corridorLength, -corridorWidth / 2]}
-                          stroke={DungeonColors.wall}
-                          strokeWidth={2}
-                        />
-                        <Line
-                          points={[0, corridorWidth / 2, corridorLength, corridorWidth / 2]}
-                          stroke={DungeonColors.wall}
-                          strokeWidth={2}
-                        />
-                        {/* Doorway entrance */}
-                        <Rect
-                          x={-4}
-                          y={-corridorWidth / 2 - 2}
-                          width={8}
-                          height={corridorWidth + 4}
-                          fill={DungeonColors.door}
-                          stroke={DungeonColors.wall}
-                          strokeWidth={2}
-                          cornerRadius={2}
-                        />
-                        {/* Doorway exit */}
-                        <Rect
-                          x={corridorLength - 4}
-                          y={-corridorWidth / 2 - 2}
-                          width={8}
-                          height={corridorWidth + 4}
-                          fill={DungeonColors.door}
-                          stroke={DungeonColors.wall}
-                          strokeWidth={2}
-                          cornerRadius={2}
-                        />
+                        {hasMapImage ? (
+                          // Simple visible line for map overlay
+                          <>
+                            {/* White outline for visibility */}
+                            <Line
+                              points={[0, 0, corridorLength, 0]}
+                              stroke="white"
+                              strokeWidth={6}
+                              opacity={0.7}
+                              lineCap="round"
+                            />
+                            {/* Colored connection line */}
+                            <Line
+                              points={[0, 0, corridorLength, 0]}
+                              stroke={isActive ? "#FFD700" : "#9575CD"}
+                              strokeWidth={4}
+                              lineCap="round"
+                              shadowColor="black"
+                              shadowBlur={4}
+                              shadowOpacity={0.5}
+                            />
+                          </>
+                        ) : (
+                          // Original corridor rendering for non-map view
+                          <>
+                            {/* Corridor floor */}
+                            <Rect
+                              x={0}
+                              y={-corridorWidth / 2}
+                              width={corridorLength}
+                              height={corridorWidth}
+                              fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                              fillLinearGradientEndPoint={{ x: 0, y: corridorWidth }}
+                              fillLinearGradientColorStops={
+                                isActive
+                                  ? [0, "#4E342E", 0.5, "#6D4C41", 1, "#4E342E"]
+                                  : [0, "#3E2723", 0.5, "#4E342E", 1, "#3E2723"]
+                              }
+                              shadowColor="black"
+                              shadowBlur={5}
+                              shadowOpacity={0.5}
+                            />
+                            {/* Corridor walls */}
+                            <Line
+                              points={[0, -corridorWidth / 2, corridorLength, -corridorWidth / 2]}
+                              stroke={DungeonColors.wall}
+                              strokeWidth={2}
+                            />
+                            <Line
+                              points={[0, corridorWidth / 2, corridorLength, corridorWidth / 2]}
+                              stroke={DungeonColors.wall}
+                              strokeWidth={2}
+                            />
+                            {/* Doorway entrance */}
+                            <Rect
+                              x={-4}
+                              y={-corridorWidth / 2 - 2}
+                              width={8}
+                              height={corridorWidth + 4}
+                              fill={DungeonColors.door}
+                              stroke={DungeonColors.wall}
+                              strokeWidth={2}
+                              cornerRadius={2}
+                            />
+                            {/* Doorway exit */}
+                            <Rect
+                              x={corridorLength - 4}
+                              y={-corridorWidth / 2 - 2}
+                              width={8}
+                              height={corridorWidth + 4}
+                              fill={DungeonColors.door}
+                              stroke={DungeonColors.wall}
+                              strokeWidth={2}
+                              cornerRadius={2}
+                            />
+                          </>
+                        )}
                       </Group>
                     );
                   }
@@ -388,7 +527,8 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                   strokeColor = "#6D4C41";
                 }
 
-                const roomSize = baseRoomSize;
+                // Make room nodes bigger and more visible when there's a map image
+                const roomSize = hasMapImage ? baseRoomSize * 1.5 : baseRoomSize;
 
                 return (
                   <Group
@@ -398,6 +538,18 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                     onMouseEnter={() => setHoveredRoom(roomId)}
                     onMouseLeave={() => setHoveredRoom(null)}
                   >
+                    {/* White background circle for visibility on map */}
+                    {hasMapImage && (
+                      <Circle
+                        x={0}
+                        y={0}
+                        radius={roomSize / 2 + 4}
+                        fill="white"
+                        opacity={0.8}
+                        listening={false}
+                      />
+                    )}
+
                     {/* Outer glow for current room */}
                     {isCurrentRoom && (
                       <Rect
@@ -693,8 +845,6 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
             </text>
           </svg>
         </Box>
-        </>
-        )}
       </Box>
 
       {/* Legend - only show on canvas mode */}

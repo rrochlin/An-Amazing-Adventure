@@ -209,6 +209,23 @@ Tool calls should be in JSON format:
 		} else {
 			fmt.Printf("World map uploaded successfully: %s\n", imageURL)
 			wg.game.MapImages["world-map"] = imageURL
+
+			// Extract pixel coordinates from the generated image using AI vision
+			fmt.Println("Analyzing map image to extract area coordinates...")
+			pixelCoords, err := imageGen.ExtractCoordinatesFromImage(ctx, imageData, areas)
+			if err != nil {
+				fmt.Printf("Warning: Failed to extract coordinates from image: %v\n", err)
+			} else {
+				// Update each area with its pixel coordinates
+				for areaID, coords := range pixelCoords {
+					if area, exists := wg.game.Map[areaID]; exists {
+						area.PixelCoordinates = &PixelCoordinates{X: coords.X, Y: coords.Y}
+						wg.game.Map[areaID] = area
+						fmt.Printf("Set pixel coordinates for %s: (%d, %d)\n", areaID, coords.X, coords.Y)
+					}
+				}
+				fmt.Printf("Successfully extracted and stored coordinates for %d areas\n", len(pixelCoords))
+			}
 		}
 	}
 

@@ -215,9 +215,23 @@ The game uses Google's Gemini AI as a Dungeon Master with a custom tool system:
 
 The project uses GitHub Actions for CI/CD:
 - Workflow: `.github/workflows/build-push-deploy.yml`
-- Builds Docker images for server
-- Deploys to Google Cloud Platform
+- Builds Docker images for client and server, pushes to Docker Hub
+- Deploys to Google Cloud Run
 - Triggered on pushes to main branch
+
+### Known Deployment Issues
+
+**Docker Hub Mirror Sync Delay:**
+When deploying to Cloud Run, GCP pulls Docker Hub images through `mirror.gcr.io`. This mirror may not have newly pushed images immediately available, causing deployment failures with errors like:
+```
+Image 'mirror.gcr.io/rrochlin/an-amazing-adventure-client:sha-xxx' not found
+```
+
+**Mitigation:** The deployment workflow includes automatic retry with exponential backoff (30s, 60s, 120s, 240s, 480s). If all retries fail:
+1. Wait a few minutes and re-run the workflow manually
+2. Or consider migrating to GCP Artifact Registry for faster, more reliable image pulls
+
+**Alternative (long-term):** Migrate from Docker Hub to GCP Artifact Registry to eliminate mirror sync issues entirely.
 
 ## Testing
 

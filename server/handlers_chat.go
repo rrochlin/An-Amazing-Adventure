@@ -21,6 +21,7 @@ type GameState struct {
 	ConnectedRooms []string             `json:"connected_rooms"`
 	Rooms          map[string]Area      `json:"rooms"`
 	ChatHistory    []ChatMessage        `json:"chat_history"`
+	MapImages      map[string]string    `json:"map_images"`
 }
 
 // getGameState returns the current state of the game for the AI
@@ -50,6 +51,7 @@ func (game *Game) getGameState() GameState {
 		ConnectedRooms: connectedRooms,
 		Rooms:          game.Map,
 		ChatHistory:    game.ChatHistory,
+		MapImages:      game.MapImages,
 	}
 }
 

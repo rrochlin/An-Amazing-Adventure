@@ -11,13 +11,19 @@ type Coordinates struct {
 	Z float64 `json:"z"` // For vertical levels (up/down)
 }
 
+type PixelCoordinates struct {
+	X int `json:"x"` // Pixel X position on map image
+	Y int `json:"y"` // Pixel Y position on map image
+}
+
 type Area struct {
-	ID          string            `json:"id"`
-	Connections map[string]string `json:"connections"` // direction -> room_id
-	Coordinates Coordinates       `json:"coordinates"`
-	Items       []Item            `json:"items"`
-	Occupants   []string          `json:"occupants"`
-	Description string            `json:"description"`
+	ID               string            `json:"id"`
+	Connections      map[string]string `json:"connections"`       // direction -> room_id
+	Coordinates      Coordinates       `json:"coordinates"`       // Logical game coordinates
+	PixelCoordinates *PixelCoordinates `json:"pixel_coordinates"` // Pixel position on map image (if exists)
+	Items            []Item            `json:"items"`
+	Occupants        []string          `json:"occupants"`
+	Description      string            `json:"description"`
 }
 
 // NewArea creates a new empty area with a unique ID

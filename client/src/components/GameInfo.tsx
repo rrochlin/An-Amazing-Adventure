@@ -1,4 +1,4 @@
-import { Button, Typography, Box, Divider, Paper, Tabs, Tab } from "@mui/material";
+import { Button, Typography, Box, Divider, Paper, Tabs, Tab, Skeleton } from "@mui/material";
 import { type GameState } from "../types/types";
 import { useState } from "react";
 
@@ -26,12 +26,78 @@ function TabPanel(props: TabPanelProps) {
 export const GameInfo = ({
   gameState,
   onItemClick,
+  isLoading = false,
 }: {
-  gameState: GameState;
+  gameState: GameState | null;
   onItemClick: (item: string) => void;
+  isLoading?: boolean;
 }) => {
-  const currentRoom = gameState.current_room;
+  const currentRoom = gameState?.current_room;
   const [tabValue, setTabValue] = useState(0);
+
+  // Show loading skeleton when world is generating
+  if (isLoading || !gameState) {
+    return (
+      <Box sx={{ height: "100%", display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <Tabs
+          value={0}
+          sx={{
+            borderBottom: 1,
+            borderColor: "divider",
+            minHeight: "40px",
+            minWidth: 0,
+            "& .MuiTab-root": {
+              minHeight: "40px",
+              textTransform: "uppercase",
+              fontSize: "0.75rem",
+              letterSpacing: "0.05em",
+              minWidth: 0,
+            },
+          }}
+        >
+          <Tab label="Location" disabled />
+          <Tab label="Inventory" disabled />
+          <Tab label="Room" disabled />
+        </Tabs>
+        <Box sx={{ flex: 1, px: 2, py: 2 }}>
+          <Skeleton
+            variant="text"
+            width="60%"
+            height={32}
+            sx={{ mx: "auto", mb: 2 }}
+          />
+          <Paper
+            sx={(theme) => ({
+              p: 1.5,
+              backgroundColor:
+                theme.palette.mode === "dark"
+                  ? "rgba(201, 169, 98, 0.05)"
+                  : "rgba(160, 130, 109, 0.15)",
+              border:
+                theme.palette.mode === "dark"
+                  ? "1px solid rgba(201, 169, 98, 0.2)"
+                  : "2px solid rgba(139, 111, 71, 0.4)",
+            })}
+          >
+            <Skeleton variant="text" width="100%" />
+            <Skeleton variant="text" width="90%" />
+            <Skeleton variant="text" width="75%" />
+          </Paper>
+          <Typography
+            variant="body2"
+            sx={{
+              mt: 3,
+              fontStyle: "italic",
+              textAlign: "center",
+              color: "text.secondary",
+            }}
+          >
+            Gathering intel on the realm...
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);

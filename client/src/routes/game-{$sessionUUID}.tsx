@@ -6,7 +6,7 @@ import {
   DescribeGame,
   WorldReady,
 } from "../services/api.game";
-import { Alert, Box, CircularProgress, Paper, Typography } from "@mui/material";
+import { Alert, Box, Paper, Typography } from "@mui/material";
 import { RoomMap } from "../components/RoomMap";
 import { GameInfo } from "../components/GameInfo";
 import { Chat } from "../components/Chat";
@@ -33,6 +33,7 @@ function PostComponent() {
   const [command, setCommand] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isWorldGenerating, setIsWorldGenerating] = useState(true);
   const [chatHistory, setChatHistory] = useState<ChatMessageType[]>([]);
   const { ready: initialReady } = Route.useLoaderData();
 
@@ -52,7 +53,17 @@ function PostComponent() {
 
   useEffect(() => {
     const getGame = async () => {
+      // If world was already ready on initial load, fetch immediately
+      if (initialReady) {
+        setIsWorldGenerating(false);
+        fetchGame();
+        return;
+      }
+
+      // Otherwise poll for world generation
+      setIsWorldGenerating(true);
       const result = await pollWorldStatus(sessionUUID);
+      setIsWorldGenerating(false);
       if (result) {
         fetchGame();
       } else {
@@ -132,15 +143,6 @@ function PostComponent() {
     return;
   };
 
-  if (!gameState && gameState != "null") {
-    return (
-      <Box sx={{ p: 4, textAlign: "center" }}>
-        <CircularProgress />
-        <Typography sx={{ mt: 2 }}>Loading game state...</Typography>
-      </Box>
-    );
-  }
-
   return (
     <Box
       sx={{
@@ -186,7 +188,7 @@ function PostComponent() {
             World Map
           </Typography>
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
-            <RoomMap gameState={gameState} />
+            <RoomMap gameState={gameState} isLoading={isWorldGenerating} />
           </Box>
         </Paper>
       </Box>
@@ -209,6 +211,7 @@ function PostComponent() {
             setCommand={setCommand}
             handleCommand={handleCommand}
             isLoading={isLoading}
+            isWorldGenerating={isWorldGenerating}
           />
         </Paper>
         {error && (
@@ -232,7 +235,7 @@ function PostComponent() {
             },
           }}
         >
-          <GameInfo gameState={gameState} onItemClick={handleItemClick} />
+          <GameInfo gameState={gameState} onItemClick={handleItemClick} isLoading={isWorldGenerating} />
         </Paper>
         <Box
           sx={{
