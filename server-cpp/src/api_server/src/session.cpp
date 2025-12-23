@@ -1,5 +1,5 @@
+#include "requests.cpp"
 #include "server.h"
-#include "server_utils.cpp"
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
@@ -7,7 +7,6 @@
 #include <boost/beast/version.hpp>
 #include <boost/config.hpp>
 #include <memory>
-#include <string>
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
@@ -19,11 +18,11 @@ class session : public std::enable_shared_from_this<session> {
   beast::tcp_stream stream_;
   beast::flat_buffer buffer_;
   http::request<http::string_body> req_;
-  std::shared_ptr<Server> server_;
+  Server *server_;
 
 public:
   // Take ownership of the stream
-  session(tcp::socket &&socket, std::shared_ptr<Server> const &server)
+  session(tcp::socket &&socket, Server *server)
       : stream_(std::move(socket)), server_(server) {}
 
   // Start the asynchronous operation

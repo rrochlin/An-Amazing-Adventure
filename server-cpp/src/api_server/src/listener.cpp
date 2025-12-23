@@ -7,7 +7,6 @@
 #include <boost/beast/version.hpp>
 #include <boost/config.hpp>
 #include <memory>
-#include <string>
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace net = boost::asio;      // from <boost/asio.hpp>
@@ -17,11 +16,10 @@ using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 class listener : public std::enable_shared_from_this<listener> {
   net::io_context &ioc_;
   tcp::acceptor acceptor_;
-  std::shared_ptr<Server> server_;
+  Server *server_;
 
 public:
-  listener(net::io_context &ioc, tcp::endpoint endpoint,
-           std::shared_ptr<Server> const &server)
+  listener(net::io_context &ioc, tcp::endpoint endpoint, Server *const &server)
       : ioc_(ioc), acceptor_(net::make_strand(ioc)), server_(server) {
     beast::error_code ec;
 

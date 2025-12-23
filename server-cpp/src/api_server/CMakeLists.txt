@@ -1,4 +1,4 @@
-add_library(api_server STATIC src/server.cpp src/listener.cpp src/session.cpp src/server_utils.cpp)
+add_library(api_server STATIC src/server.cpp src/listener.cpp src/session.cpp src/requests.cpp src/handlers.cpp)
 
 target_include_directories(api_server PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

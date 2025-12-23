@@ -7,23 +7,27 @@
 #include <boost/beast/http/message_fwd.hpp>
 #include <boost/beast/http/string_body_fwd.hpp>
 #include <boost/beast/version.hpp>
-#include <cstdlib>
 #include <iostream>
 #include <nlohmann/json.hpp>
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
-namespace net = boost::asio;      // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp; // from <boost/asio/ip/tcp.hpp>
 using json = nlohmann::json;
 
-std::string MIME_TYPE = "application/json"; // we're only returning json
+const std::string MIME_TYPE = "application/json"; // we're only returning json
+const bool DEBUG = true;
 class Requests {
 
   template <class Body, class Allocator>
   static http::message_generator
   respond(http::request<Body, http::basic_fields<Allocator>> &&req,
           std::string why, http::status status) {
+    if (DEBUG) {
+      std::cout << "Debug output display\n"
+                << req.target() << std::endl
+                << req.method_string() << std::endl;
+    }
     http::response<http::string_body> res{status, req.version()};
     json _response;
     _response["body"] = why;
@@ -41,16 +45,17 @@ public:
   template <class Body, class Allocator>
   static http::message_generator
   not_found(http::request<Body, http::basic_fields<Allocator>> &&req) {
-    std::string msg = "The resource '" + req.target() + "' was not found.";
-    return respond(req, msg, http::status::not_found);
+    std::string msg =
+        "The resource '" + std::string(req.target()) + "' was not found.";
+    return respond(std::move(req), msg, http::status::not_found);
   }
 
   template <class Body, class Allocator>
   static http::message_generator
   not_allowed(http::request<Body, http::basic_fields<Allocator>> &&req) {
-    std::string msg =
-        "The resource '" + req.target() + "' does not support: " + req.method();
-    return respond(req, msg, http::status::method_not_allowed);
+    std::string msg = "The resource '" + std::string(req.target()) +
+                      "' does not support: " + req.method_string();
+    return respond(std::move(req), msg, http::status::method_not_allowed);
   }
 
   template <class Body, class Allocator>
@@ -58,7 +63,7 @@ public:
   server_error(http::request<Body, http::basic_fields<Allocator>> &&req,
                std::string error) {
     std::string msg = "An error occured: '" + error + "'";
-    return respond(req, msg, http::status::internal_server_error);
+    return respond(std::move(req), msg, http::status::internal_server_error);
   }
 
   template <class Body, class Allocator>
@@ -67,7 +72,7 @@ public:
             std::string msg) {
     std::string rejection_message =
         msg == "" ? "This resource is fobidden" : msg;
-    return respond(req, rejection_message, http::status::forbidden);
+    return respond(std::move(req), rejection_message, http::status::forbidden);
   }
 
   template <class Body, class Allocator>
@@ -76,7 +81,8 @@ public:
                std::string msg) {
     std::string rejection_message =
         msg == "" ? "This resource is unauthorized" : msg;
-    return respond(req, rejection_message, http::status::unauthorized);
+    return respond(std::move(req), rejection_message,
+                   http::status::unauthorized);
   }
 
   // ---------- SUCCESS CODES ------------
@@ -84,7 +90,7 @@ public:
   static http::message_generator
   ok(http::request<Body, http::basic_fields<Allocator>> &&req,
      std::string msg) {
-    return respond(req, msg, http::status::ok);
+    return respond(std::move(req), msg, http::status::ok);
   }
 };
 

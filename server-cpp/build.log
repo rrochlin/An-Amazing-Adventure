@@ -1,0 +1,16 @@
+[1/3] Building CXX object src/api_server/CMakeFiles/api_server.dir/src/server.cpp.o
+FAILED: src/api_server/CMakeFiles/api_server.dir/src/server.cpp.o 
+/usr/bin/c++ -DBOOST_CONTAINER_NO_LIB -DBOOST_CONTAINER_STATIC_LINK -DBOOST_CONTEXT_EXPORT="" -DBOOST_CONTEXT_NO_LIB="" -DBOOST_CONTEXT_STATIC_LINK="" -DBOOST_DATE_TIME_NO_LIB -DBOOST_DATE_TIME_STATIC_LINK -I/home/rob/repos/An-Amazing-Adventure/server-cpp/src/api_server/include -isystem /home/rob/repos/An-Amazing-Adventure/server-cpp/cmake-build-debug/vcpkg_installed/x64-linux/include -g -std=c++20 -fdiagnostics-color=always -MD -MT src/api_server/CMakeFiles/api_server.dir/src/server.cpp.o -MF src/api_server/CMakeFiles/api_server.dir/src/server.cpp.o.d -o src/api_server/CMakeFiles/api_server.dir/src/server.cpp.o -c /home/rob/repos/An-Amazing-Adventure/server-cpp/src/api_server/src/server.cpp
+/home/rob/repos/An-Amazing-Adventure/server-cpp/src/api_server/src/server.cpp: In instantiation of ‘boost::beast::http::message_generator Server::handle_request(boost::beast::http::request<Body, boost::beast::http::basic_fields<Allocator> >&&) [with Body = boost::beast::http::basic_string_body<char>; Allocator = std::allocator<char>; boost::beast::http::request<Body, boost::beast::http::basic_fields<Allocator> > = boost::beast::http::message<true, boost::beast::http::basic_string_body<char>, boost::beast::http::basic_fields<std::allocator<char> > >]’:
+/home/rob/repos/An-Amazing-Adventure/server-cpp/src/api_server/src/session.cpp:64:42:   required from here
+   64 |     send_response(server_->handle_request(std::move(req_)));
+      |                   ~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+/home/rob/repos/An-Amazing-Adventure/server-cpp/src/api_server/src/server.cpp:61:43: error: cannot convert ‘Handler’ {aka ‘std::function<boost::beast::http::message_generator(boost::beast::http::message<true, boost::beast::http::basic_string_body<char>, boost::beast::http::basic_fields<std::allocator<char> > >&&)>’} to ‘Handler*’ {aka ‘std::function<boost::beast::http::message_generator(boost::beast::http::message<true, boost::beast::http::basic_string_body<char>, boost::beast::http::basic_fields<std::allocator<char> > >&&)>*’} in initialization
+   61 |   Handler *method = _routes->parse_request(req);
+      |                     ~~~~~~~~~~~~~~~~~~~~~~^~~~~
+      |                                           |
+      |                                           Handler {aka std::function<boost::beast::http::message_generator(boost::beast::http::message<true, boost::beast::http::basic_string_body<char>, boost::beast::http::basic_fields<std::allocator<char> > >&&)>}
+/home/rob/repos/An-Amazing-Adventure/server-cpp/src/api_server/src/server.cpp:67:16: error: ‘method’ cannot be used as a function
+   67 |   return method(std::move(req));
+      |          ~~~~~~^~~~~~~~~~~~~~~~
+ninja: build stopped: subcommand failed.
