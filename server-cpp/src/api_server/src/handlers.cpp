@@ -2,23 +2,17 @@
 #include "server.h"
 #include <boost/beast/http.hpp>
 
-http::message_generator test_handler(http::request<http::string_body> &&req) {
-  return Requests::ok(std::move(req), "message received");
+void add_all_routes(Server *server) {
+  //  server->addRoute("GET /api/describe/{uuid}", cfg.HandlerDescribe)
+  //  server->addRoute("POST /api/games/{uuid}", cfg.HandlerStartGame)
+  //  server->addRoute("DELETE /api/games/{uuid}", cfg.HandlerDeleteGame)
+  //  server->addRoute("POST /api/chat/{uuid}", cfg.HandlerChat)
+  //  server->addRoute("GET /api/worldready/{uuid}", cfg.HandlerWorldReady)
+  //  server->addRoute("GET /api/games", cfg.HandlerListGames)
+
+  // server->addRoute("POST /api/login", cfg.HandlerLogin)
+  // server->addRoute("POST /api/refresh", cfg.HandlerRefresh)
+  // server->addRoute("POST /api/revoke", cfg.HandlerRevoke)
+  // server->addRoute("PUT /api/users", cfg.HandlerUpdateUser)
+  // server->addRoute("POST /api/users", cfg.HandlerUsers)
 }
-
-/*
-        // game routes
-        mux.HandleFunc("GET /api/describe/{uuid}", cfg.HandlerDescribe)
-        mux.HandleFunc("POST /api/games/{uuid}", cfg.HandlerStartGame)
-        mux.HandleFunc("DELETE /api/games/{uuid}", cfg.HandlerDeleteGame)
-        mux.HandleFunc("POST /api/chat/{uuid}", cfg.HandlerChat)
-        mux.HandleFunc("GET /api/worldready/{uuid}", cfg.HandlerWorldReady)
-        mux.HandleFunc("GET /api/games", cfg.HandlerListGames)
-
-        // user routes
-        mux.HandleFunc("POST /api/login", cfg.HandlerLogin)
-        mux.HandleFunc("POST /api/refresh", cfg.HandlerRefresh)
-        mux.HandleFunc("POST /api/revoke", cfg.HandlerRevoke)
-        mux.HandleFunc("PUT /api/users", cfg.HandlerUpdateUser)
-        mux.HandleFunc("POST /api/users", cfg.HandlerUsers)
-*/

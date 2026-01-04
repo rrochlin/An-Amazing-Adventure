@@ -11,9 +11,22 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <unordered_map>
+
+enum http_method {
+  GET = 0x1,
+  POST = 0x10,
+  PUT = 0x100,
+  PATCH = 0x1000,
+  DELETE = 0x10000,
+  HEAD = 0x1000000,
+  OPTIONS = 0x10000000,
+};
+
+http_method get_method(std::string str_method);
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
@@ -24,18 +37,16 @@ using Handler =
     std::function<http::message_generator(http::request<http::string_body> &&)>;
 
 struct route_node {
-  // currently will cull all downstream paths
   bool dynamic;
   uint8_t methods;
   std::string base;
   std::unordered_map<std::string, route_node *> children;
-  std::vector<std::string> query_params;
   Handler funcs[7];
 
   template <class Body, class Allocator>
   Handler parse_request(http::request<Body, http::basic_fields<Allocator>> &);
 
-  bool add(std::string, std::string, Handler);
+  bool add(http_method, std::string, Handler);
   bool contains(std::string);
 
 private:
@@ -46,7 +57,7 @@ class Server {
 public:
   Server(std::string host, std::string port);
   void run();
-  bool addRoute(std::string, std::string, Handler);
+  bool addRoute(http_method, std::string, Handler);
   template <class Body, class Allocator>
   http::message_generator
   handle_request(http::request<Body, http::basic_fields<Allocator>> &&);

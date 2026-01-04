@@ -2,6 +2,7 @@
 #include "handlers.cpp"
 #include "listener.cpp"
 #include "requests.cpp"
+#include "tests.cpp"
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/http.hpp>
@@ -17,21 +18,6 @@
 // All asset requests will be served from presigned s3 url's
 // so they do not need to pass through the server.
 // Could also serve them from GCP?
-void add_all_routes(Server *server) {
-  server->addRoute("GET", "/api/test", test_handler);
-  //  server->addRoute("GET /api/describe/{uuid}", cfg.HandlerDescribe)
-  //  server->addRoute("POST /api/games/{uuid}", cfg.HandlerStartGame)
-  //  server->addRoute("DELETE /api/games/{uuid}", cfg.HandlerDeleteGame)
-  //  server->addRoute("POST /api/chat/{uuid}", cfg.HandlerChat)
-  //  server->addRoute("GET /api/worldready/{uuid}", cfg.HandlerWorldReady)
-  //  server->addRoute("GET /api/games", cfg.HandlerListGames)
-
-  // server->addRoute("POST /api/login", cfg.HandlerLogin)
-  // server->addRoute("POST /api/refresh", cfg.HandlerRefresh)
-  // server->addRoute("POST /api/revoke", cfg.HandlerRevoke)
-  // server->addRoute("PUT /api/users", cfg.HandlerUpdateUser)
-  // server->addRoute("POST /api/users", cfg.HandlerUsers)
-}
 
 Server::Server(std::string host, std::string port) {
   _host = net::ip::make_address(host);
@@ -41,6 +27,7 @@ Server::Server(std::string host, std::string port) {
   _routes = new route_node();
 
   add_all_routes(this);
+  add_all_routes_tests(this);
 }
 
 void Server::run() {
@@ -70,20 +57,85 @@ http::message_generator Server::handle_request(
 }
 
 // I only need to add these for now
-bool Server::addRoute(std::string method, std::string route, Handler func) {
+bool Server::addRoute(http_method method, std::string route, Handler func) {
   std::cout << "trying to add a route\n";
   return this->_routes->add(method, route, func);
 }
 
-enum http_method {
-  GET = 0x1,
-  POST = 0x10,
-  PUT = 0x100,
-  PATCH = 0x1000,
-  DELETE = 0x10000,
-  HEAD = 0x1000000,
-  OPTIONS = 0x10000000,
-};
+route_node *route_node::find_match(std::string key) {
+  std::cout << "searching for route: " << key << std::endl;
+  std::stringstream ss(key);
+  std::string temp;
+  route_node *head = this;
+  std::getline(ss, temp, '/');
+  while (std::getline(ss, temp, '/')) {
+    std::cout << "parsing: " << temp << std::endl;
+    if (!head->children.contains(temp) && !head->dynamic) {
+      return nullptr;
+    }
+    if (!head->children.contains(temp) && head->dynamic) {
+      return head->children.at("");
+    }
+    head = head->children.at(temp);
+  }
+  return head;
+}
+
+// TODO pretty sure this is crashing now
+template <class Body, class Allocator>
+Handler route_node::parse_request(
+    http::request<Body, http::basic_fields<Allocator>> &req) {
+  std::cout << "parsing request\n";
+  http_method method = get_method(req.method_string());
+  std::cout << "got method: " << req.method_string() << std::endl;
+  auto head = this->find_match(Requests::extract_route(req));
+  std::cout << "found method " << method << std::endl;
+  if (head == nullptr || !((method && head->methods) == method)) {
+    std::cout << "error method not found\n";
+    std::cout << method << std::endl << head->methods << std::endl;
+    throw std::invalid_argument("this method does not exist on the route");
+  }
+  std::cout << "returning\n";
+  return head->funcs[(int)std::log2((int)method)];
+}
+
+bool route_node::add(http_method method, std::string route, Handler func) {
+  std::cout << "trying to add " << route << std::endl;
+  std::stringstream ss(route);
+  std::string temp;
+  route_node *head = this;
+  std::getline(ss, temp, '/');
+  while (std::getline(ss, temp, '/')) {
+    std::cout << "adding: " << temp << std::endl;
+    if (temp[0] == '{') {
+      if (!head->dynamic) {
+        head->dynamic = true;
+        head->children.emplace("", new route_node());
+      }
+      head = head->children.at("");
+      break;
+    }
+    if (!head->children.contains(temp)) {
+      std::cout << "creating new node\n";
+      auto node = new route_node();
+      node->base = temp;
+      head->children.emplace(temp, node);
+    }
+    head = head->children.at(temp);
+    if (head->dynamic) {
+      break;
+    }
+  }
+
+  if ((method && head->methods) != 0) {
+    // can't add things twice currently
+    return false;
+  }
+
+  head->funcs[(int)std::log2((int)method)] = func;
+  head->methods |= method;
+  return true;
+}
 
 http_method get_method(std::string str_method) {
   if (str_method == "GET")
@@ -101,65 +153,4 @@ http_method get_method(std::string str_method) {
   if (str_method == "OPTIONS")
     return OPTIONS;
   throw std::invalid_argument("unsupported method: " + str_method);
-}
-
-route_node *route_node::find_match(std::string key) {
-  std::stringstream ss(key);
-  std::string temp;
-  route_node *head = this;
-  while (std::getline(ss, temp, '/')) {
-    if (!head->children.contains(temp)) {
-      return nullptr;
-    }
-    head = children.at(temp);
-    if (head->dynamic) {
-      break;
-    }
-  }
-  return head;
-}
-
-// TODO pretty sure this is crashing now
-template <class Body, class Allocator>
-Handler route_node::parse_request(
-    http::request<Body, http::basic_fields<Allocator>> &req) {
-  std::cout << "parsing request\n";
-  http_method method = get_method(req.method_string());
-  auto head = this->find_match(req.target());
-  if (!((method && head->methods) == method)) {
-    throw std::invalid_argument("this method does not exist on the route");
-  }
-  return head->funcs[(int)std::log2((int)method)];
-}
-
-// TODO super janky needs a lot of work
-bool route_node::add(std::string method, std::string route, Handler func) {
-  if (DEBUG) {
-    std::cout << "trying to add " << route << std::endl;
-  }
-  std::stringstream ss(route);
-  std::string temp;
-  route_node *head = this;
-  std::getline(ss, temp, '/');
-  while (std::getline(ss, temp, '/')) {
-    std::cout << "adding " << temp << std::endl;
-    if (!head->children.contains(temp)) {
-      auto node = new route_node();
-      node->base = temp;
-      this->children.emplace(temp, node);
-    }
-    head = children.at(temp);
-    if (head->dynamic) {
-      break;
-    }
-  }
-
-  auto method_c = get_method(method);
-  if ((method_c && head->methods) != 0) {
-    return false;
-  }
-
-  head->funcs[(int)std::log2((int)method_c)] = func;
-  head->methods |= method_c;
-  return true;
 }

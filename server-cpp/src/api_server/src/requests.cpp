@@ -4,11 +4,15 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/core/string_type.hpp>
 #include <boost/beast/http.hpp>
+#include <boost/beast/http/fields.hpp>
 #include <boost/beast/http/message_fwd.hpp>
 #include <boost/beast/http/string_body_fwd.hpp>
 #include <boost/beast/version.hpp>
 #include <iostream>
 #include <nlohmann/json.hpp>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
@@ -91,6 +95,58 @@ public:
   ok(http::request<Body, http::basic_fields<Allocator>> &&req,
      std::string msg) {
     return respond(std::move(req), msg, http::status::ok);
+  }
+
+  // --------- HELPER FUNCTIONS ----------
+  template <class Body, class Allocator>
+  static std::string
+  grab_dynamic_query(http::request<Body, http::basic_fields<Allocator>> &req) {
+    auto r = std::string(req.target());
+    size_t start = r.rfind('/');
+    if (start == std::string::npos) {
+      throw std::invalid_argument("request target has no /'s");
+    }
+    std::string tail = r.substr(start + 1);
+    size_t end = tail.find('?');
+    if (end != std::string::npos) {
+      tail = tail.substr(0, end);
+    }
+    return tail;
+  }
+
+  template <class Body, class Allocator>
+  static std::unordered_map<std::string, std::string>
+  grab_query_params(http::request<Body, http::basic_fields<Allocator>> &req) {
+    auto r = std::string(req.target());
+    size_t start = r.find('?');
+    if (start == std::string::npos) {
+      return {};
+    }
+    std::string tail = r.substr(start + 1);
+    std::unordered_map<std::string, std::string> map = {};
+    while (tail.length() > 0) {
+      start = tail.find('=');
+      size_t end = tail.find('&');
+      if (start == std::string::npos || end == std::string::npos) {
+        throw std::invalid_argument("malformatted query parameter");
+      }
+      std::string param = tail.substr(0, start);
+      std::string value = tail.substr(start + 1, end - start);
+      map.emplace(param, value);
+      tail = tail.substr(end + 1);
+    }
+    return map;
+  }
+
+  template <class Body, class Allocator>
+  static std::string
+  extract_route(http::request<Body, http::basic_fields<Allocator>> &req) {
+    auto r = std::string(req.target());
+    size_t start = r.find('?');
+    if (start == std::string::npos) {
+      return r;
+    }
+    return r.substr(0, start);
   }
 };
 
