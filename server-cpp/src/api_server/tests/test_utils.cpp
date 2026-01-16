@@ -1,6 +1,7 @@
 #pragma once
 #include "test_utils.h"
 #include <exception>
+#include <iostream>
 
 int main(int argc, char *argv[]) {
    std::string filter = "";

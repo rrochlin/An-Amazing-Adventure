@@ -1,5 +1,6 @@
 #include <functional>
 #include <iostream>
+#include <string>
 #include <vector>
 
 struct TestInfo {
