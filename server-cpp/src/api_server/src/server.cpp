@@ -2,7 +2,6 @@
 #include "handlers.cpp"
 #include "listener.cpp"
 #include "requests.cpp"
-#include "tests.cpp"
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/http.hpp>
@@ -27,7 +26,6 @@ Server::Server(std::string host, std::string port) {
   _routes = new route_node();
 
   add_all_routes(this);
-  add_all_routes_tests(this);
 }
 
 void Server::run() {
@@ -81,7 +79,6 @@ route_node *route_node::find_match(std::string key) {
   return head;
 }
 
-// TODO pretty sure this is crashing now
 template <class Body, class Allocator>
 Handler route_node::parse_request(
     http::request<Body, http::basic_fields<Allocator>> &req) {
@@ -90,7 +87,7 @@ Handler route_node::parse_request(
   std::cout << "got method: " << req.method_string() << std::endl;
   auto head = this->find_match(Requests::extract_route(req));
   std::cout << "found method " << method << std::endl;
-  if (head == nullptr || !((method && head->methods) == method)) {
+  if (head == nullptr || !((method & head->methods) == method)) {
     std::cout << "error method not found\n";
     std::cout << method << std::endl << head->methods << std::endl;
     throw std::invalid_argument("this method does not exist on the route");
@@ -100,7 +97,8 @@ Handler route_node::parse_request(
 }
 
 bool route_node::add(http_method method, std::string route, Handler func) {
-  std::cout << "trying to add " << route << std::endl;
+  std::cout << "trying to add " << get_method_string(method) << " " << route
+            << std::endl;
   std::stringstream ss(route);
   std::string temp;
   route_node *head = this;
@@ -123,18 +121,29 @@ bool route_node::add(http_method method, std::string route, Handler func) {
     }
     head = head->children.at(temp);
     if (head->dynamic) {
+      std::cout << "dynamic route, breaking early\n";
       break;
     }
   }
 
-  if ((method && head->methods) != 0) {
-    // can't add things twice currently
+  if ((method & head->methods) != 0) {
+    std::cout << "method already defined\n";
+    head->print_methods();
     return false;
   }
 
   head->funcs[(int)std::log2((int)method)] = func;
   head->methods |= method;
   return true;
+}
+
+void route_node::print_methods() {
+  for (int i = 0; i < 7; i++) {
+    http_method cur = http_method(1 << i);
+    std::string method = get_method_string(cur);
+    std::string check = ((cur & this->methods) != 0 ? "[X]" : "[ ]");
+    std::cout << std::setw(7) << method << " " << check << std::endl;
+  }
 }
 
 http_method get_method(std::string str_method) {
@@ -153,4 +162,23 @@ http_method get_method(std::string str_method) {
   if (str_method == "OPTIONS")
     return OPTIONS;
   throw std::invalid_argument("unsupported method: " + str_method);
+}
+
+std::string get_method_string(http_method method) {
+  switch (method) {
+  case GET:
+    return "GET";
+  case POST:
+    return "POST";
+  case PATCH:
+    return "PATCH";
+  case DELETE:
+    return "DELETE";
+  case PUT:
+    return "PUT";
+  case HEAD:
+    return "HEAD";
+  case OPTIONS:
+    return "OPTIONS";
+  }
 }

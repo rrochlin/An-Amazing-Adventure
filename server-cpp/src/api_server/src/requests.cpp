@@ -127,8 +127,11 @@ public:
     while (tail.length() > 0) {
       start = tail.find('=');
       size_t end = tail.find('&');
-      if (start == std::string::npos || end == std::string::npos) {
+      if (start == std::string::npos) {
         throw std::invalid_argument("malformatted query parameter");
+      }
+      if (end == std::string::npos) {
+        end = tail.length() - 1;
       }
       std::string param = tail.substr(0, start);
       std::string value = tail.substr(start + 1, end - start);
@@ -148,6 +151,10 @@ public:
     }
     return r.substr(0, start);
   }
+
+  template <class Body, class Allocator>
+  static std::string
+  grab_claims(http::request<Body, http::basic_fields<Allocator>> &req) {}
 };
 
 void fail(beast::error_code ec, char const *what) {

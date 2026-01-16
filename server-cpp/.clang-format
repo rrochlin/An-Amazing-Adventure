@@ -1,0 +1,17 @@
+---
+# Based on LLVM style but customized for project preferences
+BasedOnStyle: LLVM
+
+# Indentation settings
+IndentWidth: 3
+TabWidth: 3
+UseTab: Never
+
+# Brace wrapping - keep braces on same line
+BreakBeforeBraces: Attach
+
+# Additional formatting preferences
+ColumnLimit: 80
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false

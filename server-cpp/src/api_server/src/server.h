@@ -17,16 +17,17 @@
 #include <unordered_map>
 
 enum http_method {
-  GET = 0x1,
-  POST = 0x10,
-  PUT = 0x100,
-  PATCH = 0x1000,
-  DELETE = 0x10000,
-  HEAD = 0x1000000,
-  OPTIONS = 0x10000000,
+  GET = 0b1,
+  POST = 0b10,
+  PUT = 0b100,
+  PATCH = 0b1000,
+  DELETE = 0b10000,
+  HEAD = 0b100000,
+  OPTIONS = 0b1000000,
 };
 
 http_method get_method(std::string str_method);
+std::string get_method_string(http_method method);
 
 namespace beast = boost::beast;   // from <boost/beast.hpp>
 namespace http = beast::http;     // from <boost/beast/http.hpp>
@@ -37,8 +38,8 @@ using Handler =
     std::function<http::message_generator(http::request<http::string_body> &&)>;
 
 struct route_node {
-  bool dynamic;
-  uint8_t methods;
+  bool dynamic = false;
+  uint8_t methods = 0;
   std::string base;
   std::unordered_map<std::string, route_node *> children;
   Handler funcs[7];
@@ -51,6 +52,8 @@ struct route_node {
 
 private:
   route_node *find_match(std::string key);
+  void print_methods();
+  void visualize();
 };
 
 class Server {
