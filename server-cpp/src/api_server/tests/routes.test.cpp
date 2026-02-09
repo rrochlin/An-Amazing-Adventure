@@ -1,10 +1,16 @@
-#pragma once
 #include "../src/requests.cpp"
 #include "../src/server.h"
-#include "test_utils.h"
 #include <boost/beast/http.hpp>
 #include <boost/beast/http/message_fwd.hpp>
 #include <boost/beast/http/string_body_fwd.hpp>
+#include <gtest/gtest.h>
+
+class SessionTest : public ::testing::Test {
+ protected:
+   void SetUp() override {}
+   void TearDown() override {}
+};
+
 http::message_generator test_handler(http::request<http::string_body> &&req) {
    std::cout << "running the test handler\n";
    return Requests::ok(std::move(req), "message received");
@@ -48,35 +54,35 @@ void add_all_routes_tests(Server *server) {
    server->addRoute(POST, "/api/test", test_unauth_post);
 }
 
-TEST(route_get_basic) {
+TEST(SessionTest, route_get_basic) {
    route_node root;
-   ASSERT_TRUE(root.add(GET, "/api/test", test_handler));
+   EXPECT_TRUE(root.add(GET, "/api/test", test_handler));
 
    http::request<http::string_body> req{http::verb::get, "/api/test", 11};
    Handler h = root.parse_request(req);
 }
 
-TEST(route_get_dynamic_handler) {
+TEST(SessionTest, route_get_dynamic_handler) {
    route_node root;
-   ASSERT_TRUE(root.add(GET, "/api/test/dynamic/{uuid}", test_dynamic_handler));
+   EXPECT_TRUE(root.add(GET, "/api/test/dynamic/{uuid}", test_dynamic_handler));
 
    http::request<http::string_body> req{http::verb::get,
-                                        "/api/test/dynamic/{uuid}", 1928349832};
+                                        "/api/test/dynamic/{uuid}", 11};
    Handler h = root.parse_request(req);
 }
 
-TEST(route_get_query_param) {
+TEST(SessionTest, route_get_query_param) {
    route_node root;
-   ASSERT_TRUE(
+   EXPECT_TRUE(
        root.add(GET, "/api/test/query_params", test_query_param_handler));
 
    http::request<http::string_body> req{http::verb::get,
-                                        "/api/test/query_params?searching", 0};
+                                        "/api/test/query_params?searching", 11};
    Handler h = root.parse_request(req);
 }
 
-TEST(route_post_public) {
+TEST(SessionTest, route_post_public) {
    route_node root;
-   ASSERT_TRUE(root.add(POST, "/api/test", test_unauth_post));
-   http::request<http::string_body> req{http::verb::post, "/api/test", 928374};
+   EXPECT_TRUE(root.add(POST, "/api/test", test_unauth_post));
+   http::request<http::string_body> req{http::verb::post, "/api/test", 11};
 }

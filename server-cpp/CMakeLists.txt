@@ -9,4 +9,5 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 # export compile_commands.json that clangd can pickup to show definitions for api's
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+enable_testing()
 add_subdirectory(src)

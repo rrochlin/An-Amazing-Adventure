@@ -23,140 +23,141 @@ const std::string MIME_TYPE = "application/json"; // we're only returning json
 const bool DEBUG = true;
 class Requests {
 
-  template <class Body, class Allocator>
-  static http::message_generator
-  respond(http::request<Body, http::basic_fields<Allocator>> &&req,
-          std::string why, http::status status) {
-    if (DEBUG) {
-      std::cout << "Debug output display\n"
-                << req.target() << std::endl
-                << req.method_string() << std::endl;
-    }
-    http::response<http::string_body> res{status, req.version()};
-    json _response;
-    _response["body"] = why;
-    std::string response = _response.dump();
-    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-    res.set(http::field::content_type, MIME_TYPE);
-    res.keep_alive(req.keep_alive());
-    res.body() = response;
-    res.prepare_payload();
-    return res;
-  }
+   template <class Body, class Allocator>
+   static http::message_generator
+   respond(http::request<Body, http::basic_fields<Allocator>> &&req,
+           std::string why, http::status status) {
+      if (DEBUG) {
+         std::cout << "Debug output display\n"
+                   << req.target() << std::endl
+                   << req.method_string() << std::endl;
+      }
+      http::response<http::string_body> res{status, req.version()};
+      json _response;
+      _response["body"] = why;
+      std::string response = _response.dump();
+      res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+      res.set(http::field::content_type, MIME_TYPE);
+      res.keep_alive(req.keep_alive());
+      res.body() = response;
+      res.prepare_payload();
+      return res;
+   }
 
-public:
-  // ------- ERROR CODES ---------
-  template <class Body, class Allocator>
-  static http::message_generator
-  not_found(http::request<Body, http::basic_fields<Allocator>> &&req) {
-    std::string msg =
-        "The resource '" + std::string(req.target()) + "' was not found.";
-    return respond(std::move(req), msg, http::status::not_found);
-  }
+ public:
+   // ------- ERROR CODES ---------
+   template <class Body, class Allocator>
+   static http::message_generator
+   not_found(http::request<Body, http::basic_fields<Allocator>> &&req) {
+      std::string msg =
+          "The resource '" + std::string(req.target()) + "' was not found.";
+      return respond(std::move(req), msg, http::status::not_found);
+   }
 
-  template <class Body, class Allocator>
-  static http::message_generator
-  not_allowed(http::request<Body, http::basic_fields<Allocator>> &&req) {
-    std::string msg = "The resource '" + std::string(req.target()) +
-                      "' does not support: " + req.method_string();
-    return respond(std::move(req), msg, http::status::method_not_allowed);
-  }
+   template <class Body, class Allocator>
+   static http::message_generator
+   not_allowed(http::request<Body, http::basic_fields<Allocator>> &&req) {
+      std::string msg = "The resource '" + std::string(req.target()) +
+                        "' does not support: " + req.method_string();
+      return respond(std::move(req), msg, http::status::method_not_allowed);
+   }
 
-  template <class Body, class Allocator>
-  static http::message_generator
-  server_error(http::request<Body, http::basic_fields<Allocator>> &&req,
-               std::string error) {
-    std::string msg = "An error occured: '" + error + "'";
-    return respond(std::move(req), msg, http::status::internal_server_error);
-  }
+   template <class Body, class Allocator>
+   static http::message_generator
+   server_error(http::request<Body, http::basic_fields<Allocator>> &&req,
+                std::string error) {
+      std::string msg = "An error occured: '" + error + "'";
+      return respond(std::move(req), msg, http::status::internal_server_error);
+   }
 
-  template <class Body, class Allocator>
-  static http::message_generator
-  forbidden(http::request<Body, http::basic_fields<Allocator>> &&req,
-            std::string msg) {
-    std::string rejection_message =
-        msg == "" ? "This resource is fobidden" : msg;
-    return respond(std::move(req), rejection_message, http::status::forbidden);
-  }
+   template <class Body, class Allocator>
+   static http::message_generator
+   forbidden(http::request<Body, http::basic_fields<Allocator>> &&req,
+             std::string msg) {
+      std::string rejection_message =
+          msg == "" ? "This resource is fobidden" : msg;
+      return respond(std::move(req), rejection_message,
+                     http::status::forbidden);
+   }
 
-  template <class Body, class Allocator>
-  static http::message_generator
-  unauthorized(http::request<Body, http::basic_fields<Allocator>> &&req,
-               std::string msg) {
-    std::string rejection_message =
-        msg == "" ? "This resource is unauthorized" : msg;
-    return respond(std::move(req), rejection_message,
-                   http::status::unauthorized);
-  }
+   template <class Body, class Allocator>
+   static http::message_generator
+   unauthorized(http::request<Body, http::basic_fields<Allocator>> &&req,
+                std::string msg) {
+      std::string rejection_message =
+          msg == "" ? "This resource is unauthorized" : msg;
+      return respond(std::move(req), rejection_message,
+                     http::status::unauthorized);
+   }
 
-  // ---------- SUCCESS CODES ------------
-  template <class Body, class Allocator>
-  static http::message_generator
-  ok(http::request<Body, http::basic_fields<Allocator>> &&req,
-     std::string msg) {
-    return respond(std::move(req), msg, http::status::ok);
-  }
+   // ---------- SUCCESS CODES ------------
+   template <class Body, class Allocator>
+   static http::message_generator
+   ok(http::request<Body, http::basic_fields<Allocator>> &&req,
+      std::string msg) {
+      return respond(std::move(req), msg, http::status::ok);
+   }
 
-  // --------- HELPER FUNCTIONS ----------
-  template <class Body, class Allocator>
-  static std::string
-  grab_dynamic_query(http::request<Body, http::basic_fields<Allocator>> &req) {
-    auto r = std::string(req.target());
-    size_t start = r.rfind('/');
-    if (start == std::string::npos) {
-      throw std::invalid_argument("request target has no /'s");
-    }
-    std::string tail = r.substr(start + 1);
-    size_t end = tail.find('?');
-    if (end != std::string::npos) {
-      tail = tail.substr(0, end);
-    }
-    return tail;
-  }
-
-  template <class Body, class Allocator>
-  static std::unordered_map<std::string, std::string>
-  grab_query_params(http::request<Body, http::basic_fields<Allocator>> &req) {
-    auto r = std::string(req.target());
-    size_t start = r.find('?');
-    if (start == std::string::npos) {
-      return {};
-    }
-    std::string tail = r.substr(start + 1);
-    std::unordered_map<std::string, std::string> map = {};
-    while (tail.length() > 0) {
-      start = tail.find('=');
-      size_t end = tail.find('&');
+   // --------- HELPER FUNCTIONS ----------
+   template <class Body, class Allocator>
+   static std::string
+   grab_dynamic_query(http::request<Body, http::basic_fields<Allocator>> &req) {
+      auto r = std::string(req.target());
+      size_t start = r.rfind('/');
       if (start == std::string::npos) {
-        throw std::invalid_argument("malformatted query parameter");
+         throw std::invalid_argument("request target has no /'s");
       }
-      if (end == std::string::npos) {
-        end = tail.length() - 1;
+      std::string tail = r.substr(start + 1);
+      size_t end = tail.find('?');
+      if (end != std::string::npos) {
+         tail = tail.substr(0, end);
       }
-      std::string param = tail.substr(0, start);
-      std::string value = tail.substr(start + 1, end - start);
-      map.emplace(param, value);
-      tail = tail.substr(end + 1);
-    }
-    return map;
-  }
+      return tail;
+   }
 
-  template <class Body, class Allocator>
-  static std::string
-  extract_route(http::request<Body, http::basic_fields<Allocator>> &req) {
-    auto r = std::string(req.target());
-    size_t start = r.find('?');
-    if (start == std::string::npos) {
-      return r;
-    }
-    return r.substr(0, start);
-  }
+   template <class Body, class Allocator>
+   static std::unordered_map<std::string, std::string>
+   grab_query_params(http::request<Body, http::basic_fields<Allocator>> &req) {
+      auto r = std::string(req.target());
+      size_t start = r.find('?');
+      if (start == std::string::npos) {
+         return {};
+      }
+      std::string tail = r.substr(start + 1);
+      std::unordered_map<std::string, std::string> map = {};
+      while (tail.length() > 0) {
+         start = tail.find('=');
+         size_t end = tail.find('&');
+         if (start == std::string::npos) {
+            throw std::invalid_argument("malformatted query parameter");
+         }
+         if (end == std::string::npos) {
+            end = tail.length() - 1;
+         }
+         std::string param = tail.substr(0, start);
+         std::string value = tail.substr(start + 1, end - start);
+         map.emplace(param, value);
+         tail = tail.substr(end + 1);
+      }
+      return map;
+   }
 
-  template <class Body, class Allocator>
-  static std::string
-  grab_claims(http::request<Body, http::basic_fields<Allocator>> &req) {}
+   template <class Body, class Allocator>
+   static std::string
+   extract_route(http::request<Body, http::basic_fields<Allocator>> &req) {
+      auto r = std::string(req.target());
+      size_t start = r.find('?');
+      if (start == std::string::npos) {
+         return r;
+      }
+      return r.substr(0, start);
+   }
+
+   template <class Body, class Allocator>
+   static std::string
+   grab_claims(http::request<Body, http::basic_fields<Allocator>> &req) {}
 };
 
-void fail(beast::error_code ec, char const *what) {
-  std::cerr << what << ": " << ec.message() << "\n";
+inline void fail(beast::error_code ec, char const *what) {
+   std::cerr << what << ": " << ec.message() << "\n";
 }

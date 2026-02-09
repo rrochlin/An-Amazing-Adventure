@@ -1,18 +1,13 @@
-echo "testing default route output"
-curl localhost:3000/api/test | jq '.'
-echo ""
+#!/bin/bash
+set -e
 
-echo "testing dynamic url params"
-curl localhost:3000/api/test/dynamic/334 | jq '.'
-echo ""
+BUILD_DIR="build"
 
-echo "testing query params"
-curl localhost:3000/api/test/query_params?"v1=lksjdfl&v2=lsdkjfsdl" | jq '.'
-echo ""
+cmake -B "$BUILD_DIR" \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_TOOLCHAIN_FILE=/home/rob/.vcpkg-clion/vcpkg/scripts/buildsystems/vcpkg.cmake >/dev/null
 
-echo "testing basic post"
-curl -X POST localhost:3000/api/test \
-    -H "Content-Type: application/json" \
-    -d '{Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30"}' |
-    jq '.'
-echo ""
+cmake --build "$BUILD_DIR" -j 30 >build.log
+
+cd "$BUILD_DIR"
+ctest --output-on-failure
