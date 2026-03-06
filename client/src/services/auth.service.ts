@@ -1,94 +1,169 @@
-import type {
-  AxiosRequestConfig,
-  AxiosRequestHeaders,
-  AxiosResponse,
-} from "axios";
-import axios, { AxiosHeaders } from "axios";
-import type {
-  ApiRefreshResponse,
-  ApiRevokeResponse,
-  RefreshResponse,
-  RevokeResponse,
-} from "../types/api.types";
-import type { stored_tokens } from "../types/types";
+/**
+ * auth.service.ts
+ * All authentication is handled via Amazon Cognito User Pools.
+ * Tokens are stored in localStorage under "AAA_TOKENS".
+ */
+import {
+  AuthenticationDetails,
+  CognitoUser,
+  CognitoUserAttribute,
+  CognitoUserPool,
+  type CognitoUserSession,
+} from "amazon-cognito-identity-js";
 import { redirect } from "@tanstack/react-router";
 
-const APP_URI = import.meta.env.VITE_APP_URI || "http://localhost:8080";
+const STORAGE_KEY = "AAA_TOKENS";
 
-export async function getAuthHeaders(
-  rtoken?: boolean,
-): Promise<AxiosRequestHeaders> {
-  const headers = new AxiosHeaders();
-  const localJWT = getJWT();
+const USER_POOL_ID = import.meta.env.VITE_COGNITO_USER_POOL_ID as string;
+const CLIENT_ID = import.meta.env.VITE_COGNITO_CLIENT_ID as string;
 
-  if (!localJWT) {
-    console.error("No JWT found, redirecting to login");
-    throw redirect({ to: "/login", search: { redirect: location.href } });
-  }
-
-  // Check if refresh token itself has expired
-  if (localJWT.expiresAt < Date.now()) {
-    console.log("Refresh token has expired, user will need to reauth");
-    ClearUserAuth();
-    throw redirect({ to: "/login", search: { redirect: location.href } });
-  }
-
-  // Set the appropriate token in headers
-  if (rtoken) {
-    headers.setAuthorization(`Bearer ${localJWT.rtoken}`);
-  } else {
-    headers.setAuthorization(`Bearer ${localJWT.jwt}`);
-  }
-
-  return headers;
+function getUserPool(): CognitoUserPool {
+  return new CognitoUserPool({ UserPoolId: USER_POOL_ID, ClientId: CLIENT_ID });
 }
 
-export function getJWT(): stored_tokens | undefined {
-  let raw_localJWT = localStorage.getItem("AAA_JWT");
+export interface StoredTokens {
+  accessToken: string;
+  idToken: string;
+  refreshToken: string;
+  expiresAt: number; // ms epoch
+  userSub: string;
+}
 
-  if (!raw_localJWT) {
-    console.error("unable to retrieve JWT, please sign in");
-    return undefined;
+export function getStoredTokens(): StoredTokens | null {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as StoredTokens;
+  } catch {
+    return null;
   }
-  const localJWT: stored_tokens = JSON.parse(raw_localJWT ?? "");
-  return localJWT;
 }
 
-export async function refreshToken(
-  headers: AxiosRequestHeaders,
-): Promise<AxiosResponse<RefreshResponse>> {
-  // Use axios directly to avoid circular dependency and interceptor triggering
-  const config: AxiosRequestConfig = { headers: headers };
-  const response = await axios.post<ApiRefreshResponse>(
-    `${APP_URI}/api/refresh`,
-    {},
-    config
-  );
-
-  let raw_localJWT = localStorage.getItem("AAA_JWT");
-  const localJWT: stored_tokens = JSON.parse(raw_localJWT ?? "");
-  localJWT.expiresAt = Date.now();
-  localJWT.rtoken = response.data.token;
-  localStorage.setItem("AAA_JWT", JSON.stringify(localJWT));
-  return response;
-}
-
-export async function revokeToken(): Promise<RevokeResponse> {
-  const config: AxiosRequestConfig = { headers: await getAuthHeaders(true) };
-  const response = await axios.post<ApiRevokeResponse>(
-    `${APP_URI}/api/revoke`,
-    {},
-    config
-  );
-  return { success: response.status == 204 };
+function storeSession(session: CognitoUserSession, userSub: string) {
+  const tokens: StoredTokens = {
+    accessToken: session.getAccessToken().getJwtToken(),
+    idToken: session.getIdToken().getJwtToken(),
+    refreshToken: session.getRefreshToken().getToken(),
+    expiresAt: session.getAccessToken().getExpiration() * 1000,
+    userSub,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
 }
 
 export function isAuthenticated(): boolean {
-  const tokens = getJWT();
-  if (!tokens) return false;
-  return tokens.expiresAt > Date.now();
+  const t = getStoredTokens();
+  if (!t) return false;
+  return t.expiresAt > Date.now();
 }
 
 export function ClearUserAuth() {
-  localStorage.removeItem("AAA_JWT");
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+/** Returns the Authorization header value for API calls. */
+export function getAuthHeader(): string {
+  const t = getStoredTokens();
+  if (!t) throw redirect({ to: "/login" });
+  return `Bearer ${t.accessToken}`;
+}
+
+/** Returns the user's Cognito sub (UUID) from stored tokens. */
+export function getUserSub(): string {
+  return getStoredTokens()?.userSub ?? "";
+}
+
+// ----------------------------------------------------------------
+// Auth operations
+// ----------------------------------------------------------------
+
+export interface LoginResult {
+  success: boolean;
+  error?: string;
+  needsConfirmation?: boolean;
+}
+
+export async function login(email: string, password: string): Promise<LoginResult> {
+  return new Promise((resolve) => {
+    const pool = getUserPool();
+    const user = new CognitoUser({ Username: email, Pool: pool });
+    const authDetails = new AuthenticationDetails({
+      Username: email,
+      Password: password,
+    });
+    user.authenticateUser(authDetails, {
+      onSuccess: (session) => {
+        const sub = session.getIdToken().decodePayload()["sub"] as string;
+        storeSession(session, sub);
+        resolve({ success: true });
+      },
+      onFailure: (err) => {
+        resolve({ success: false, error: err.message });
+      },
+    });
+  });
+}
+
+export interface SignUpResult {
+  success: boolean;
+  error?: string;
+  needsConfirmation: boolean;
+}
+
+export async function signUp(email: string, password: string): Promise<SignUpResult> {
+  return new Promise((resolve) => {
+    const pool = getUserPool();
+    const attrs = [new CognitoUserAttribute({ Name: "email", Value: email })];
+    pool.signUp(email, password, attrs, [], (err) => {
+      if (err) {
+        resolve({ success: false, error: err.message, needsConfirmation: false });
+        return;
+      }
+      resolve({ success: true, needsConfirmation: true });
+    });
+  });
+}
+
+export async function confirmSignUp(email: string, code: string): Promise<{ success: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    const pool = getUserPool();
+    const user = new CognitoUser({ Username: email, Pool: pool });
+    user.confirmRegistration(code, true, (err) => {
+      if (err) {
+        resolve({ success: false, error: err.message });
+        return;
+      }
+      resolve({ success: true });
+    });
+  });
+}
+
+export async function signOut(): Promise<void> {
+  const pool = getUserPool();
+  const user = pool.getCurrentUser();
+  if (user) {
+    user.signOut();
+  }
+  ClearUserAuth();
+}
+
+export async function refreshSession(): Promise<boolean> {
+  const tokens = getStoredTokens();
+  if (!tokens) return false;
+  return new Promise((resolve) => {
+    const pool = getUserPool();
+    const user = pool.getCurrentUser();
+    if (!user) {
+      resolve(false);
+      return;
+    }
+    user.getSession((err: Error | null, session: CognitoUserSession | null) => {
+      if (err || !session || !session.isValid()) {
+        resolve(false);
+        return;
+      }
+      const sub = session.getIdToken().decodePayload()["sub"] as string;
+      storeSession(session, sub);
+      resolve(true);
+    });
+  });
 }

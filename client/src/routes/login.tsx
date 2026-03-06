@@ -1,45 +1,29 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { type AuthProvider } from "@toolpad/core/SignInPage";
-import { Login } from "../services/api.users";
-import { TextField, Button, Box, Paper, Typography } from "@mui/material";
+import { TextField, Button, Box, Paper, Typography, Alert } from "@mui/material";
 import { useState } from "react";
+import { login } from "../services/auth.service";
 
 export const Route = createFileRoute("/login")({
   component: RouteComponent,
 });
 
-const signIn: (
-  provider: AuthProvider,
-  formData: FormData,
-) => Promise<boolean> = async (_, formData) => {
-  const login = await Login({
-    email: formData.get("email")?.toString() || "",
-    password: formData.get("password")?.toString() || "",
-  });
-  if (!login.success) {
-    alert("incorrect credentials");
-    return false;
-  }
-  return true;
-};
-
 function RouteComponent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const formData = new FormData();
-    formData.set("email", email);
-    formData.set("password", password);
-    if (
-      !(await signIn(
-        { id: "credentials", name: "Email and Password" } as AuthProvider,
-        formData,
-      ))
-    )
+    setError("");
+    setIsLoading(true);
+    const result = await login(email, password);
+    setIsLoading(false);
+    if (!result.success) {
+      setError(result.error ?? "Incorrect credentials");
       return;
+    }
     navigate({ to: "/" });
   };
 
@@ -57,6 +41,13 @@ function RouteComponent() {
         <Typography variant="h4" component="h1" gutterBottom align="center">
           Sign In
         </Typography>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
         <form onSubmit={handleSubmit}>
           <TextField
             fullWidth
@@ -83,17 +74,15 @@ function RouteComponent() {
             fullWidth
             variant="contained"
             sx={{ mt: 3, mb: 2 }}
+            disabled={isLoading}
           >
-            Sign In
+            {isLoading ? "Signing in..." : "Sign In"}
           </Button>
         </form>
 
         <Typography variant="body2" align="center">
           Don't have an account?{" "}
-          <Link
-            to="/signup"
-            style={{ color: "#1976d2", textDecoration: "none" }}
-          >
+          <Link to="/signup" style={{ color: "#1976d2", textDecoration: "none" }}>
             Sign Up
           </Link>
         </Typography>

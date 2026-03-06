@@ -1,68 +1,48 @@
-import type {
-  StartGameResponse,
-  ApiStartGameResponse,
-  DescribeResponse,
-  ApiDescribeResponse,
-  ChatResponse,
-  ApiChatRequest,
-  ApiChatResponse,
-  WorldReadyResponse,
-  ApiWorldReadyResponse,
-  ListGamesResponse,
-  ApiListGamesResponse,
-  ApiStartGameRequest,
-} from "../types/api.types";
-import { v4 as uuidv4 } from "uuid";
 import { DELETE, GET, POST } from "./api.service";
+import type { GameStateView } from "../types/types";
 
-export async function StartGame(
-  body: ApiStartGameRequest,
-  sessionId?: string,
-): Promise<StartGameResponse> {
-  const sessionUUID = sessionId || uuidv4();
-  const response = await POST<ApiStartGameResponse>(
-    `games/${sessionUUID}`,
-    body,
-  );
-  return {
-    success: response.status == 200,
-    error: response.data.error,
-    ready: response.data.ready || false,
-    sessionUUID: sessionUUID,
-  };
+export interface GameListItem {
+  session_id: string;
+  player_name: string;
+  ready: boolean;
 }
 
-export async function ListGames(): Promise<ListGamesResponse[]> {
-  const response = await GET<ApiListGamesResponse[]>("games");
-  return response.data;
-}
-export async function DescribeGame(
-  sessionUUID: string,
-): Promise<DescribeResponse> {
-  const response = await GET<ApiDescribeResponse>(`describe/${sessionUUID}`);
-  return response.data;
+export interface GameLoadResponse {
+  session_id: string;
+  ready: boolean;
+  state: GameStateView;
 }
 
-export async function DeleteGame(sessionUUID: string): Promise<boolean> {
-  const response = await DELETE<void>(`games/${sessionUUID}`);
-  return response.status == 200;
+export async function ListGames(): Promise<GameListItem[]> {
+  const res = await GET<GameListItem[]>("api/games");
+  return res.data;
 }
 
-export async function Chat(
-  sessionUUID: string,
-  reqBody: ApiChatRequest,
-): Promise<ChatResponse> {
-  const response = await POST<ApiChatResponse>(`chat/${sessionUUID}`, reqBody);
-  return response.data;
+export async function CreateGame(
+  playerName: string,
+): Promise<{ session_id: string; ready: boolean }> {
+  const res = await POST<{ session_id: string; ready: boolean }>("api/games", {
+    player_name: playerName,
+  });
+  return res.data;
+}
+
+export async function LoadGame(sessionId: string): Promise<GameLoadResponse> {
+  const res = await GET<GameLoadResponse>(`api/games/${sessionId}`);
+  return res.data;
+}
+
+export async function DeleteGame(sessionId: string): Promise<void> {
+  await DELETE(`api/games/${sessionId}`);
 }
 
 export async function WorldReady(
-  sessionUUID: string,
-): Promise<WorldReadyResponse> {
-  const response = await GET<ApiWorldReadyResponse>(
-    `worldready/${sessionUUID}`,
-  );
-  return {
-    ready: response.status == 200,
-  };
+  sessionId: string,
+): Promise<{ ready: boolean }> {
+  try {
+    const res = await GET<void>(`api/worldready/${sessionId}`);
+    return { ready: res.status === 200 };
+  } catch {
+    return { ready: false };
+  }
 }

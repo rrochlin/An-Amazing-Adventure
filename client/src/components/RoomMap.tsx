@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
-import { type GameState } from "../types/types";
+import { type GameStateView } from "../types/types";
 import { Stage, Layer, Rect, Text, Circle, Group, Line } from "react-konva";
 import { Box, IconButton, Typography, Chip, Stack, useColorScheme } from "@mui/material";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
@@ -7,7 +7,7 @@ import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { DungeonColors, ColorTokens } from "../theme/theme";
 
-export const RoomMap = ({ gameState }: { gameState: GameState }) => {
+export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
   const colorMode = mode === "system" || !mode ? "dark" : mode;
@@ -53,30 +53,30 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
 
   // Get all unique Z-levels
   const zLevels = useMemo(() => {
-    if (!gameState.rooms) return [0];
+    if (!gameState?.rooms) return [0];
     const levels = new Set(
-      Object.values(gameState.rooms).map((room) => room.coordinates.z)
+      Object.values(gameState?.rooms).map((room) => room.coordinates.z)
     );
     return Array.from(levels).sort((a, b) => b - a);
-  }, [gameState.rooms]);
+  }, [gameState?.rooms]);
 
   // Set initial layer to player's current layer
   useEffect(() => {
-    if (gameState.current_room) {
-      setSelectedLayer(gameState.current_room.coordinates.z);
+    if (gameState?.current_room) {
+      setSelectedLayer(gameState?.current_room.coordinates.z);
     }
-  }, [gameState.current_room]);
+  }, [gameState?.current_room]);
 
   // Calculate room positions (before zoom/pan)
   const roomPositions = useMemo(() => {
-    if (!gameState.rooms) return {};
+    if (!gameState?.rooms) return {};
 
     const positions: { [key: string]: { x: number; y: number; z: number } } = {};
     const centerX = canvasSize.width / 2;
     const centerY = canvasSize.height / 2;
 
-    Object.keys(gameState.rooms).forEach((roomId) => {
-      const room = gameState.rooms![roomId];
+    Object.keys(gameState?.rooms).forEach((roomId) => {
+      const room = gameState?.rooms![roomId];
       positions[roomId] = {
         x: centerX + room.coordinates.x * baseSpacing,
         y: centerY + room.coordinates.y * baseSpacing,
@@ -85,29 +85,28 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
     });
 
     return positions;
-  }, [gameState.rooms, baseSpacing, canvasSize]);
+  }, [gameState?.rooms, baseSpacing, canvasSize]);
 
   // Filter rooms by selected layer
   const roomsOnLayer = useMemo(() => {
-    if (!gameState.rooms) return [];
-    return Object.keys(gameState.rooms).filter(
-      (roomId) => gameState.rooms![roomId].coordinates.z === selectedLayer
+    if (!gameState?.rooms) return [];
+    return Object.keys(gameState?.rooms).filter(
+      (roomId) => gameState?.rooms![roomId].coordinates.z === selectedLayer
     );
-  }, [gameState.rooms, selectedLayer]);
+  }, [gameState?.rooms, selectedLayer]);
 
   // Track visited rooms
   const visitedRooms = useMemo(() => {
     const visited = new Set<string>();
-    if (!gameState.rooms) return visited;
+    if (!gameState?.rooms) return visited;
 
-    visited.add(gameState.current_room.id);
-    Object.values(gameState.current_room.connections).forEach((roomId) => {
+    visited.add(gameState?.current_room.id);
+    Object.values(gameState?.current_room.connections).forEach((roomId) => {
       visited.add(roomId);
     });
-    gameState.connected_rooms?.forEach((roomId) => visited.add(roomId));
 
     return visited;
-  }, [gameState.current_room, gameState.connected_rooms, gameState.rooms]);
+  }, [gameState?.current_room, gameState?.rooms]);
 
   // Zoom handlers
   const handleZoomIn = () => {
@@ -155,7 +154,7 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
         {/* Layer Selector */}
         <Stack direction="row" spacing={0.5} flexWrap="wrap">
           {zLevels.map((level) => {
-            const hasPlayer = gameState.current_room.coordinates.z === level;
+            const hasPlayer = gameState?.current_room.coordinates.z === level;
             return (
               <Chip
                 key={level}
@@ -240,9 +239,9 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
             y={position.y}
           >
             {/* Draw connections/corridors */}
-            {gameState.rooms &&
+            {gameState?.rooms &&
               roomsOnLayer.map((roomId) => {
-                const room = gameState.rooms![roomId];
+                const room = gameState?.rooms![roomId];
                 return Object.entries(room.connections).map(
                   ([direction, connectedRoomId]) => {
                     if (direction === "up" || direction === "down") return null;
@@ -253,8 +252,8 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
                     if (!start || !end) return null;
 
                     const isActive =
-                      roomId === gameState.current_room.id ||
-                      connectedRoomId === gameState.current_room.id;
+                      roomId === gameState?.current_room.id ||
+                      connectedRoomId === gameState?.current_room.id;
 
                     const dx = end.x - start.x;
                     const dy = end.y - start.y;
@@ -332,16 +331,16 @@ export const RoomMap = ({ gameState }: { gameState: GameState }) => {
               })}
 
             {/* Draw rooms */}
-            {gameState.rooms &&
+            {gameState?.rooms &&
               roomsOnLayer.map((roomId) => {
                 const pos = roomPositions[roomId];
-                const room = gameState.rooms![roomId];
+                const room = gameState?.rooms![roomId];
                 if (!pos) return null;
 
-                const isCurrentRoom = roomId === gameState.current_room.id;
+                const isCurrentRoom = roomId === gameState?.current_room.id;
                 const isConnected =
-                  Object.values(gameState.current_room.connections).includes(roomId) ||
-                  Object.values(room.connections).includes(gameState.current_room.id);
+                  Object.values(gameState?.current_room.connections).includes(roomId) ||
+                  Object.values(room.connections).includes(gameState?.current_room.id);
                 const isVisited = visitedRooms.has(roomId);
                 const isHovered = hoveredRoom === roomId;
 

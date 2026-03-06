@@ -1,0 +1,80 @@
+name: Deploy Server Lambdas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server-v2/**'
+      - '.github/workflows/deploy-server.yml'
+  workflow_dispatch:
+
+permissions:
+  id-token: write  # required for OIDC
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  GO_VERSION: '1.24'
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy Lambdas
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: server-v2/go.sum
+
+      - name: Run tests
+        working-directory: server-v2
+        run: go test ./internal/... -race -timeout 60s
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build and zip all Lambdas
+        working-directory: server-v2
+        run: |
+          set -e
+          LAMBDAS=(ws-connect ws-disconnect ws-chat ws-game-action http-games http-users world-gen)
+          for name in "${LAMBDAS[@]}"; do
+            echo "Building $name..."
+            GOARCH=arm64 GOOS=linux go build \
+              -tags lambda.norpc \
+              -trimpath \
+              -ldflags="-s -w" \
+              -o "/tmp/${name}/bootstrap" \
+              ./cmd/${name}/
+            cd /tmp/${name}
+            zip -q "/tmp/${name}.zip" bootstrap
+            cd -
+          done
+
+      - name: Update Lambda function code
+        run: |
+          set -e
+          LAMBDAS=(ws-connect ws-disconnect ws-chat ws-game-action http-games http-users world-gen)
+          PREFIX="amazing-adventure-prod"
+          for name in "${LAMBDAS[@]}"; do
+            FUNCTION_NAME="${PREFIX}-${name}"
+            echo "Deploying $FUNCTION_NAME..."
+            aws lambda update-function-code \
+              --function-name "$FUNCTION_NAME" \
+              --zip-file "fileb:///tmp/${name}.zip" \
+              --architectures arm64 \
+              --no-cli-pager
+            # Wait for update to complete before moving to next function
+            aws lambda wait function-updated \
+              --function-name "$FUNCTION_NAME" \
+              --no-cli-pager
+            echo "$FUNCTION_NAME deployed successfully"
+          done

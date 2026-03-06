@@ -15,11 +15,10 @@ import {
 } from "@mui/material";
 import z from "zod";
 import { isAuthenticated } from "@/services/auth.service";
-import { ListGames, StartGame } from "@/services/api.game";
+import { ListGames, CreateGame, type GameListItem } from "@/services/api.game";
 import AddIcon from "@mui/icons-material/Add";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { useState } from "react";
-import type { ListGamesResponse } from "@/types/api.types";
 
 export const Route = createFileRoute("/")({
   validateSearch: z.object({
@@ -41,8 +40,8 @@ export const Route = createFileRoute("/")({
 });
 
 function RouteComponent() {
-  const [games, setGames] = useState<ListGamesResponse[]>(
-    Route.useLoaderData(),
+  const [games, setGames] = useState<GameListItem[]>(
+    Route.useLoaderData() as GameListItem[],
   );
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
@@ -62,17 +61,16 @@ function RouteComponent() {
     const formData = new FormData(event.currentTarget);
     const formJson = Object.fromEntries((formData as any).entries());
     const name = formJson.characterName;
-    const response = await StartGame({ playerName: name });
-    handleClose();
-    if (!response.success) {
-      console.error(response.error);
-      alert("Error creating game please try again later");
-      return;
+    try {
+      const response = await CreateGame(name);
+      handleClose();
+      setGames((prev) => [
+        ...prev,
+        { player_name: name, session_id: response.session_id, ready: false },
+      ]);
+    } catch {
+      alert("Error creating game — please try again");
     }
-    setGames((prev) => [
-      ...prev,
-      { playerName: name, sessionId: response.sessionUUID },
-    ]);
   };
 
   return (
@@ -187,9 +185,9 @@ function RouteComponent() {
           </Typography>
 
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {games.map((game: ListGamesResponse) => (
+            {games.map((game: GameListItem) => (
               <Paper
-                key={game.sessionId}
+                key={game.session_id}
                 sx={{
                   p: 3,
                   cursor: "pointer",
@@ -211,7 +209,7 @@ function RouteComponent() {
                 onClick={() =>
                   navigate({
                     to: "/game-{$sessionUUID}",
-                    params: { sessionUUID: game.sessionId },
+                    params: { sessionUUID: game.session_id },
                   })
                 }
               >
@@ -224,7 +222,7 @@ function RouteComponent() {
                       fontFamily: '"Crimson Text", "Georgia", serif',
                     }}
                   >
-                    {game.playerName}
+                    {game.player_name}
                   </Typography>
                 </Box>
               </Paper>

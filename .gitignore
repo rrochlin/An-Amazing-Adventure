@@ -1,2 +1,9 @@
 server/game_state.json
 .DS_Store
+
+# C++ server build artifacts
+server-cpp/build/
+server-cpp/.cache/
+server-cpp/.idea/
+server-cpp/*.log
+server-v2/http-users
