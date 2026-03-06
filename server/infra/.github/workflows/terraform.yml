@@ -1,74 +1,77 @@
-name: "Terraform"
+name: Terraform
+
 on:
   push:
-    branches:
-      - main
-    release:
-      types:
-        - created
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   terraform:
-    name: "Terraform"
+    name: Terraform
     runs-on: ubuntu-latest
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
     defaults:
       run:
-        working-directory: config
+        working-directory: amazing-adventure
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.12.2
+          terraform_version: "~1.5"
           terraform_wrapper: false
 
-      - name: Terraform Format
+      - name: Terraform Format Check
         id: fmt
-        run: terraform fmt -check
+        run: terraform fmt -check -recursive
 
       - name: Terraform Init
         id: init
         run: terraform init
 
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate
+
       - name: Terraform Plan
         id: plan
         if: github.event_name == 'pull_request'
-        run: terraform plan -no-color
+        run: terraform plan -no-color -out=tfplan
         continue-on-error: true
 
-      - uses: actions/github-script@0.9.0
+      - name: Post Plan to PR
+        uses: actions/github-script@v7
         if: github.event_name == 'pull_request'
         env:
           PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }} # automatically created by github
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-            <details><summary>Show Plan</summary>
-            \`\`\`${process.env.PLAN}\`\`\`
-            </details>
-            *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
-            github.issues.createComment({
+            const output = [
+              `#### Format 🖌 \`${{ steps.fmt.outcome }}\``,
+              `#### Init ⚙️ \`${{ steps.init.outcome }}\``,
+              `#### Validate 🤖 \`${{ steps.validate.outcome }}\``,
+              `#### Plan 📖 \`${{ steps.plan.outcome }}\``,
+              `<details><summary>Show Plan</summary>\n\n\`\`\`\n${process.env.PLAN}\n\`\`\`\n</details>`,
+              `*Pushed by @${{ github.actor }}*`
+            ].join('\n');
+            github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
-            })
+            });
 
-      - name: Terraform Plan Status
+      - name: Fail on Plan Error
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
       - name: Terraform Apply
-        working-directory: config
-        run: |
-          terraform init
-          terraform apply -auto-approve
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform apply -auto-approve
