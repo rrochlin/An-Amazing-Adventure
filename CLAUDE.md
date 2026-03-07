@@ -22,7 +22,7 @@ An AI-powered text adventure game. Claude (via AWS Bedrock) acts as the Dungeon 
 - **UI:** Material UI (MUI) — dark fantasy theme (Cinzel/Crimson Text, gold/purple)
 - **State:** Zustand (`gameStore.ts`)
 - **HTTP:** Axios with Cognito JWT auth header + 401 refresh interceptor
-- **WebSocket:** custom `useGameSocket` + `useWorldGenSocket` hooks
+- **WebSocket:** custom `useGameSocket` hook (handles both game frames and world-gen progress)
 - **Testing:** Vitest + Testing Library
 
 ### Infrastructure
@@ -40,14 +40,14 @@ An-Amazing-Adventure/
 │   ├── src/
 │   │   ├── routes/          # TanStack file-based routes
 │   │   ├── components/      # Chat, GameInfo, RoomMap, WorldGenTerminal, ...
-│   │   ├── hooks/           # useGameSocket, useWorldGenSocket
+│   │   ├── hooks/           # useGameSocket
 │   │   ├── services/        # api.service, api.game, api.users, auth.service
 │   │   ├── store/           # gameStore.ts (Zustand)
 │   │   └── types/           # types.ts
 │   └── vite.config.ts
 ├── server-v2/               # Go Lambda handlers
 │   ├── cmd/
-│   │   ├── http-games/      # GET/POST/DELETE /api/games, /api/worldready
+│   │   ├── http-games/      # GET/POST/DELETE /api/games
 │   │   ├── http-users/      # PUT /api/users (profile update via Cognito)
 │   │   ├── world-gen/       # Async Lambda: blueprint → world build → WS progress
 │   │   ├── ws-connect/      # WebSocket $connect
@@ -98,14 +98,14 @@ git subtree push --prefix server/infra git@github.com:rrochlin/terraform-infrast
 ## Architecture
 
 ### Game Flow
-1. User creates game → `POST /api/games` → returns `session_id`
-2. `http-games` fires `world-gen` Lambda async
-3. Client opens WebSocket immediately with `session_id`
-4. `world-gen` queries connections table → pushes `world_gen_log` frames to client terminal
-5. On completion → `world_gen_ready` frame → client navigates to game
-6. Client opens persistent WebSocket for game play
-7. Chat messages → `ws-chat` → Bedrock streaming → `narrative_chunk` frames
-8. Game actions (move/pick_up/equip) → `ws-game-action` → state delta frames
+1. User fills out `/create` wizard (character + adventure prefs) → `POST /api/games` with `AdventureCreationParams` → returns `session_id`
+2. Client navigates immediately to `/game-{uuid}`; `useGameSocket` connects; `WorldGenTerminal` shown inline
+3. `http-games` fires `world-gen` Lambda async with all creation params
+4. `world-gen` calls `GenerateBlueprint` (enriched prompt), builds world deterministically, persists `Title`/`Theme`/`QuestGoal`/`TotalTokens`/`CreationParams` to `SaveState`
+5. `world-gen` emits `world_gen_log` frames → terminal; then `world_gen_ready` → `useGameSocket.onWorldReady` → `LoadGame` refetch → render game
+6. Chat messages → `ws-chat` → Bedrock streaming → `narrative_chunk` frames; increments `ConversationCount` + `TotalTokens` on save
+7. Game actions (move/pick_up/equip) → `ws-game-action` → state delta frames
+8. `/game-{uuid}/details` shows persisted `Title`, `Theme`, `QuestGoal`, `CreationParams`, and stats
 
 ### DynamoDB Key Types
 Both tables use **Binary (`B`) type** for key attributes (`session_id`, `user_id`, `connection_id`).
@@ -129,6 +129,36 @@ Must use cross-region inference profile IDs (with `us.` prefix):
 - `us.anthropic.claude-sonnet-4-6` — narrator and architect
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` — sub-agents
 Bare model IDs without prefix are rejected with `ValidationException`.
+
+## Working Process
+
+### Commit cadence
+**Commit early and often — do not accumulate a large diff before committing.**
+
+Every logical phase of work should be its own commit before moving to the next:
+1. Data model changes (Go structs / TS types)
+2. Backend API / Lambda handler changes
+3. Frontend routes / components
+4. Tests and cleanup
+
+A good signal: if `git diff --stat` shows more than ~10 files or ~300 lines, you've waited too long. Typical commit sequence for a feature:
+```
+feat: extend SaveState with new metadata fields          ← data model
+feat: update API handlers and world-gen Lambda           ← backend
+feat: new /create wizard and game details page           ← frontend
+chore: update tests, gitignore, CLAUDE.md                ← cleanup
+```
+
+Always create a feature branch (`git checkout -b feat/...`) before starting any non-trivial work.
+
+### Deploy / PR workflow
+- **This monorepo** (client + server-v2): open a PR to `main` via `gh pr create`. GitHub Actions runs tests on every PR and deploys on merge to `main`.
+- **Infrastructure changes** (new AWS resources, API Gateway routes, Lambda env vars, DynamoDB tables, etc.): these live in a **separate repo** `rrochlin/terraform-infrastructure`, linked here as a git subtree at `server/infra/`. Push changes with:
+  ```bash
+  git subtree push --prefix server/infra git@github.com:rrochlin/terraform-infrastructure.git <branch-name>
+  gh pr create --repo rrochlin/terraform-infrastructure ...
+  ```
+- **Never commit compiled Lambda binaries** (`server-v2/http-games`, `server-v2/world-gen`, etc.) — they are in `.gitignore`. CI builds them from source on every deploy.
 
 ## CI/CD
 

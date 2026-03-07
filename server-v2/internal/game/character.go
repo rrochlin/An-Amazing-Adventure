@@ -13,7 +13,8 @@ type Character struct {
 	Name        string    `json:"name" dynamodbav:"name"`
 	Description string    `json:"description" dynamodbav:"description"`
 	Backstory   string    `json:"backstory,omitempty" dynamodbav:"backstory,omitempty"`
-	LocationID  string    `json:"location_id" dynamodbav:"location_id"` // room UUID; "" = not placed
+	Age         string    `json:"age,omitempty" dynamodbav:"age,omitempty"` // optional age descriptor, e.g. "early 30s"
+	LocationID  string    `json:"location_id" dynamodbav:"location_id"`     // room UUID; "" = not placed
 	Alive       bool      `json:"alive" dynamodbav:"alive"`
 	Health      int       `json:"health" dynamodbav:"health"` // 0-100
 	Friendly    bool      `json:"friendly" dynamodbav:"friendly"`

@@ -66,7 +66,6 @@ describe("useGameSocket", () => {
   it("opens a WebSocket URL containing token and gameId", async () => {
     renderHook(() => useGameSocket({ sessionId: "sess-123" }));
     await flushPromises();
-    // Base URL comes from VITE_WS_ENDPOINT or window.location — both valid in tests
     expect(lastWs?.url).toMatch(/^wss?:\/\//);
     expect(lastWs?.url).toContain("token=test-access-token");
     expect(lastWs?.url).toContain("gameId=sess-123");
@@ -147,10 +146,33 @@ describe("useGameSocket", () => {
     }).not.toThrow();
   });
 
-  it("does not open WS when enabled=false", async () => {
-    renderHook(() => useGameSocket({ sessionId: "sess-1", enabled: false }));
+  it("always opens WebSocket without enabled gate", async () => {
+    // The hook now connects unconditionally — no enabled prop
+    renderHook(() => useGameSocket({ sessionId: "sess-1" }));
     await flushPromises();
-    expect(lastWs).toBeNull();
+    expect(lastWs).not.toBeNull();
+    expect(lastWs?.url).toContain("sess-1");
+  });
+
+  it("calls onWorldReady callback when world_gen_ready frame arrives", async () => {
+    const onWorldReady = vi.fn();
+    renderHook(() => useGameSocket({ sessionId: "sess-1", onWorldReady }));
+    await flushPromises();
+    act(() => {
+      lastWs?.onmessage?.({ data: JSON.stringify({ type: "world_gen_ready" }) });
+    });
+    expect(useGameStore.getState().worldGenReady).toBe(true);
+    expect(onWorldReady).toHaveBeenCalledOnce();
+  });
+
+  it("appends world_gen_log lines to store", async () => {
+    renderHook(() => useGameSocket({ sessionId: "sess-1" }));
+    await flushPromises();
+    act(() => {
+      lastWs?.onmessage?.({ data: JSON.stringify({ type: "world_gen_log", payload: { line: "Building rooms..." } }) });
+      lastWs?.onmessage?.({ data: JSON.stringify({ type: "world_gen_log", payload: { line: "Placing items..." } }) });
+    });
+    expect(useGameStore.getState().worldGenLog).toEqual(["Building rooms...", "Placing items..."]);
   });
 
   it("closes WebSocket on unmount", async () => {

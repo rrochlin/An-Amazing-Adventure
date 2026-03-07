@@ -45,9 +45,14 @@ func TestHandlerWorldGen_MissingSessionID(t *testing.T) {
 
 func TestHandlerWorldGen_EventParsed(t *testing.T) {
 	evt := worldGenEvent{
-		SessionID:  "sess-abc-123",
-		UserID:     "user-xyz",
-		PlayerName: "Aragorn",
+		SessionID:         "sess-abc-123",
+		UserID:            "user-xyz",
+		PlayerName:        "Aragorn",
+		PlayerDescription: "Tall ranger from the north",
+		PlayerAge:         "late 30s",
+		PlayerBackstory:   "Heir to the throne of Gondor",
+		ThemeHint:         "high fantasy epic",
+		Preferences:       []string{"combat", "exploration"},
 	}
 	if evt.SessionID != "sess-abc-123" {
 		t.Errorf("session ID not preserved: %q", evt.SessionID)
@@ -57,6 +62,28 @@ func TestHandlerWorldGen_EventParsed(t *testing.T) {
 	}
 	if evt.UserID != "user-xyz" {
 		t.Errorf("user ID not preserved: %q", evt.UserID)
+	}
+	if evt.PlayerDescription != "Tall ranger from the north" {
+		t.Errorf("player description not preserved: %q", evt.PlayerDescription)
+	}
+	if len(evt.Preferences) != 2 || evt.Preferences[0] != "combat" {
+		t.Errorf("preferences not preserved: %v", evt.Preferences)
+	}
+}
+
+func TestHandlerWorldGen_EventParsed_EmptyPlayerName(t *testing.T) {
+	// player_name is now optional — verify empty name is preserved
+	evt := worldGenEvent{
+		SessionID:  "sess-abc-456",
+		UserID:     "user-xyz",
+		PlayerName: "", // intentionally empty — AI will generate
+		ThemeHint:  "cosmic horror",
+	}
+	if evt.PlayerName != "" {
+		t.Errorf("expected empty player name, got: %q", evt.PlayerName)
+	}
+	if evt.ThemeHint != "cosmic horror" {
+		t.Errorf("theme hint not preserved: %q", evt.ThemeHint)
 	}
 }
 

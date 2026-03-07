@@ -110,7 +110,8 @@ func TestHandlerListGames_EmptyList(t *testing.T) {
 
 // ---- POST /api/games ----
 
-func TestHandlerCreateGame_MissingPlayerName(t *testing.T) {
+func TestHandlerCreateGame_EmptyBody_AcceptsAIGenerated(t *testing.T) {
+	// player_name is now optional — empty body should reach the DB layer (not 400)
 	t.Setenv("SESSIONS_TABLE", "test-table")
 	t.Setenv("WORLD_GEN_ARN", "")
 	req := makeHTTPReq("POST", "/api/games", `{}`, "user-123", nil)
@@ -118,8 +119,32 @@ func TestHandlerCreateGame_MissingPlayerName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected lambda error: %v", err)
 	}
-	if resp.StatusCode != 400 {
-		t.Errorf("expected 400 for missing player_name, got %d\nbody: %s", resp.StatusCode, resp.Body)
+	// Should NOT be a 400 (bad request) — will fail at DB layer (500) without real credentials
+	if resp.StatusCode == 400 {
+		t.Errorf("empty body should not return 400 now that player_name is optional, got %d\nbody: %s", resp.StatusCode, resp.Body)
+	}
+}
+
+func TestHandlerCreateGame_WithAllParams(t *testing.T) {
+	// Verify the handler accepts all new optional creation params
+	t.Setenv("SESSIONS_TABLE", "test-table")
+	t.Setenv("WORLD_GEN_ARN", "")
+	body := `{
+		"player_name": "Aria",
+		"player_age": "mid 20s",
+		"player_description": "A nimble rogue with sharp eyes",
+		"player_backstory": "Raised by thieves, seeking redemption",
+		"theme_hint": "gritty noir",
+		"preferences": ["stealth", "mystery"]
+	}`
+	req := makeHTTPReq("POST", "/api/games", body, "user-123", nil)
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected lambda error: %v", err)
+	}
+	// Should reach DB layer, not return 400
+	if resp.StatusCode == 400 {
+		t.Errorf("valid body with all params should not return 400, got %d\nbody: %s", resp.StatusCode, resp.Body)
 	}
 }
 
@@ -152,22 +177,6 @@ func TestHandlerDeleteGame_MissingUUID(t *testing.T) {
 	var body map[string]any
 	if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
 		t.Errorf("response is not valid JSON: %s", resp.Body)
-	}
-}
-
-// ---- GET /api/worldready/{uuid} ----
-
-func TestHandlerWorldReady_NoUUID(t *testing.T) {
-	t.Setenv("SESSIONS_TABLE", "test-table")
-	t.Setenv("CONNECTIONS_TABLE", "test-connections")
-	req := makeHTTPReq("GET", "/api/worldready/", "", "user-123", map[string]string{})
-	resp, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected lambda error: %v", err)
-	}
-	// DB call will fail without real credentials — should be non-zero valid status
-	if resp.StatusCode == 0 {
-		t.Error("expected non-zero status")
 	}
 }
 
@@ -240,21 +249,4 @@ func TestHandlerGames_NoCONNECTIONS_TABLE_DoesNotPanic(t *testing.T) {
 		}
 	}()
 	handler(context.Background(), req) //nolint:errcheck
-}
-
-func TestMatchesWorldReadyPath(t *testing.T) {
-	cases := []struct {
-		path  string
-		match bool
-	}{
-		{"/api/worldready/abc-123", true}, // UUID present — match
-		{"/api/worldready/", false},       // trailing slash only — no match
-		{"/api/worldready", false},        // base path — no match
-	}
-	for _, c := range cases {
-		got := matchesWorldReadyPath(c.path)
-		if got != c.match {
-			t.Errorf("matchesWorldReadyPath(%q) = %v, want %v", c.path, got, c.match)
-		}
-	}
 }

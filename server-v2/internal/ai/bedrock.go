@@ -42,12 +42,26 @@ func New(ctx context.Context) (*Client, error) {
 	return &Client{br: bedrockruntime.NewFromConfig(cfg)}, nil
 }
 
+// ---- Token usage ----
+
+// TokenUsage holds the Bedrock token counts from a single model call.
+type TokenUsage struct {
+	InputTokens  int
+	OutputTokens int
+}
+
+// Total returns the sum of input and output tokens.
+func (u TokenUsage) Total() int {
+	return u.InputTokens + u.OutputTokens
+}
+
 // ---- Narrator (streaming chat) ----
 
 // NarratorResult holds everything that comes back from a streaming narrator turn.
 type NarratorResult struct {
 	Narrative   string                  // accumulated text sent to the player
 	NewMessages []game.NarrativeMessage // updated history to persist
+	Tokens      TokenUsage              // token usage for this turn
 }
 
 // NarrateStream runs a single narrator turn with streaming.
@@ -79,6 +93,7 @@ func (c *Client) NarrateStream(
 
 	// Agentic loop: keep calling Bedrock until the model stops with tool use
 	var fullNarrative strings.Builder
+	var totalTokens TokenUsage
 	allMessages := messages
 
 	for {
@@ -147,6 +162,11 @@ func (c *Client) NarrateStream(
 						Value: currentText.String(),
 					})
 				}
+			case *types.ConverseStreamOutputMemberMetadata:
+				if e.Value.Usage != nil {
+					totalTokens.InputTokens += int(aws.ToInt32(e.Value.Usage.InputTokens))
+					totalTokens.OutputTokens += int(aws.ToInt32(e.Value.Usage.OutputTokens))
+				}
 			}
 		}
 		if err := stream.Err(); err != nil {
@@ -207,6 +227,7 @@ func (c *Client) NarrateStream(
 	return NarratorResult{
 		Narrative:   fullNarrative.String(),
 		NewMessages: newHistory,
+		Tokens:      totalTokens,
 	}, nil
 }
 
@@ -276,6 +297,11 @@ func (c *Client) TrimHistory(ctx context.Context, history []game.NarrativeMessag
 		return history, nil
 	}
 
+	if resp.Usage != nil {
+		log.Printf("TrimHistory: tokens — input: %d, output: %d",
+			aws.ToInt32(resp.Usage.InputTokens), aws.ToInt32(resp.Usage.OutputTokens))
+	}
+
 	summary := extractText(resp.Output)
 	summaryMsg := game.NarrativeMessage{
 		Role: "assistant",
@@ -299,6 +325,7 @@ type WorldBlueprint struct {
 	Theme        string               `json:"theme"`
 	QuestGoal    string               `json:"quest_goal"`
 	OpeningScene string               `json:"opening_scene"`
+	PlayerName   string               `json:"player_name,omitempty"` // AI-generated name if player left it blank
 	Rooms        []BlueprintRoom      `json:"rooms"`
 	Items        []BlueprintItem      `json:"items"`
 	Characters   []BlueprintCharacter `json:"characters"`
@@ -331,17 +358,45 @@ type BlueprintCharacter struct {
 
 // GenerateBlueprint asks the Architect to produce a complete world blueprint
 // in a single structured Converse call (no streaming, no tools).
-func (c *Client) GenerateBlueprint(ctx context.Context, playerName, themeHint string) (WorldBlueprint, string, error) {
-	prompt := fmt.Sprintf(`You are designing a complete, closed-ended one-shot text adventure game.
-The player's name is %q.
-%s
+//
+// All player parameters are optional — the AI will invent values for any blank
+// fields and return them in the blueprint (e.g. player_name if playerName=="").
+func (c *Client) GenerateBlueprint(
+	ctx context.Context,
+	playerName, playerDescription, playerBackstory, themeHint string,
+	preferences []string,
+) (WorldBlueprint, string, TokenUsage, error) {
+	// Build optional player context section
+	var playerSections strings.Builder
+	if playerName != "" {
+		playerSections.WriteString(fmt.Sprintf("Player name: %q\n", playerName))
+	} else {
+		playerSections.WriteString("Player name: (not provided — invent a fitting name and return it in the \"player_name\" field)\n")
+	}
+	if playerDescription != "" {
+		playerSections.WriteString(fmt.Sprintf("Player appearance/description: %s\n", playerDescription))
+	}
+	if playerBackstory != "" {
+		playerSections.WriteString(fmt.Sprintf("Player backstory: %s\n", playerBackstory))
+	}
+	if themeHint != "" {
+		playerSections.WriteString(fmt.Sprintf("Desired world tone/theme: %s\n", themeHint))
+	}
+	if len(preferences) > 0 {
+		playerSections.WriteString(fmt.Sprintf("Preferred gameplay elements: %s\n", strings.Join(preferences, ", ")))
+		playerSections.WriteString("Design the adventure so these elements are prominent.\n")
+	}
 
+	prompt := fmt.Sprintf(`You are designing a complete, closed-ended one-shot text adventure game.
+
+%s
 Return a single JSON object matching this schema exactly — no markdown, no commentary:
 {
   "title": "adventure title",
   "theme": "one-line world description",
   "quest_goal": "what the player must achieve to win",
   "opening_scene": "2-3 sentences the player reads at the start",
+  "player_name": "the player's name (only set this if you invented it; leave empty if provided above)",
   "rooms": [
     {
       "name": "unique room name",
@@ -375,7 +430,8 @@ Rules:
 - 4-8 items, some of which are puzzle keys
 - 2-4 NPCs, mix of friendly and hostile
 - All room connections must be bidirectionally consistent
-- Player starts in the first room in the rooms array`, playerName, themeHint)
+- Player starts in the first room in the rooms array
+- Incorporate any player description/backstory into the opening scene and world lore`, playerSections.String())
 
 	resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
 		ModelId: aws.String(ModelNarrator),
@@ -391,7 +447,13 @@ Rules:
 		},
 	})
 	if err != nil {
-		return WorldBlueprint{}, "", fmt.Errorf("generate blueprint: %w", err)
+		return WorldBlueprint{}, "", TokenUsage{}, fmt.Errorf("generate blueprint: %w", err)
+	}
+
+	var usage TokenUsage
+	if resp.Usage != nil {
+		usage.InputTokens = int(aws.ToInt32(resp.Usage.InputTokens))
+		usage.OutputTokens = int(aws.ToInt32(resp.Usage.OutputTokens))
 	}
 
 	text := extractText(resp.Output)
@@ -407,9 +469,9 @@ Rules:
 
 	var bp WorldBlueprint
 	if err := json.Unmarshal([]byte(text), &bp); err != nil {
-		return WorldBlueprint{}, text, fmt.Errorf("parse blueprint JSON: %w (raw: %s)", err, text[:min(200, len(text))])
+		return WorldBlueprint{}, text, usage, fmt.Errorf("parse blueprint JSON: %w (raw: %s)", err, text[:min(200, len(text))])
 	}
-	return bp, text, nil
+	return bp, text, usage, nil
 }
 
 // BuildWorldFromBlueprint executes the blueprint deterministically — no AI loop.
