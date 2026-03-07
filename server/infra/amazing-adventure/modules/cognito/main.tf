@@ -12,8 +12,8 @@ resource "aws_cognito_user_pool" "main" {
 
   verification_message_template {
     default_email_option = "CONFIRM_WITH_CODE"
-    email_subject        = "Your Amazing Adventure verification code"
-    email_message        = "Your verification code is {####}"
+    email_subject        = "Your verification seal — An Amazing Adventure"
+    email_message        = "Hail, adventurer.\n\nYour verification seal is: {####}\n\nSpeak this code to complete your oath of registration. It expires in 24 hours.\n\nIf you did not attempt to register, you may disregard this scroll.\n\n-- An Amazing Adventure"
   }
 
   password_policy {
@@ -40,6 +40,18 @@ resource "aws_cognito_user_pool" "main" {
     string_attribute_constraints {
       min_length = 5
       max_length = 254
+    }
+  }
+
+  # Invitation email — sent when an admin creates a user account
+  admin_create_user_config {
+    allow_admin_create_user_only = false
+
+    invite_message_template {
+      email_subject = "⚔ Your invitation to An Amazing Adventure"
+
+      email_message = "Hail, {username}.\n\nYou have been summoned to An Amazing Adventure. Your temporary passphrase is:\n\n{####}\n\nYou will be asked to forge a permanent passphrase upon your first entry. This invitation expires in 7 days.\n\n-- An Amazing Adventure"
+      sms_message   = "An Amazing Adventure: {username}, your temporary password is {####}"
     }
   }
 

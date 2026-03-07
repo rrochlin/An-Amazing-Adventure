@@ -146,6 +146,82 @@ export async function signOut(): Promise<void> {
   ClearUserAuth();
 }
 
+// ----------------------------------------------------------------
+// Password reset flow
+// ----------------------------------------------------------------
+
+export interface ForgotPasswordResult {
+  success: boolean;
+  error?: string;
+  deliveryMedium?: string; // "EMAIL"
+  destination?: string;    // masked e.g. "t***@example.com"
+}
+
+/**
+ * Initiates the Cognito "forgot password" flow.
+ * Cognito sends a verification code to the user's registered email.
+ */
+export async function forgotPassword(email: string): Promise<ForgotPasswordResult> {
+  return new Promise((resolve) => {
+    const pool = getUserPool();
+    const user = new CognitoUser({ Username: email, Pool: pool });
+    user.forgotPassword({
+      onSuccess: (data) => {
+        resolve({
+          success: true,
+          deliveryMedium: data?.CodeDeliveryDetails?.DeliveryMedium,
+          destination: data?.CodeDeliveryDetails?.Destination,
+        });
+      },
+      onFailure: (err) => {
+        resolve({ success: false, error: err.message });
+      },
+    });
+  });
+}
+
+export interface ConfirmPasswordResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Completes the password reset — submits the verification code and new password.
+ */
+export async function confirmForgotPassword(
+  email: string,
+  code: string,
+  newPassword: string,
+): Promise<ConfirmPasswordResult> {
+  return new Promise((resolve) => {
+    const pool = getUserPool();
+    const user = new CognitoUser({ Username: email, Pool: pool });
+    user.confirmPassword(code, newPassword, {
+      onSuccess: () => resolve({ success: true }),
+      onFailure: (err) => resolve({ success: false, error: err.message }),
+    });
+  });
+}
+
+/**
+ * Resends the email verification code for sign-up confirmation.
+ */
+export async function resendConfirmationCode(
+  email: string,
+): Promise<{ success: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    const pool = getUserPool();
+    const user = new CognitoUser({ Username: email, Pool: pool });
+    user.resendConfirmationCode((err) => {
+      if (err) {
+        resolve({ success: false, error: err.message });
+        return;
+      }
+      resolve({ success: true });
+    });
+  });
+}
+
 export async function refreshSession(): Promise<boolean> {
   const tokens = getStoredTokens();
   if (!tokens) return false;

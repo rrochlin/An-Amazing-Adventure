@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useGameStore } from "../store/gameStore";
-import type { GameStateView, StateDelta } from "../types/types";
+import { useGameStore } from "@/store/gameStore";
+import type { GameStateView, StateDelta } from "@/types/types";
 
 // Reset store between tests
 beforeEach(() => {

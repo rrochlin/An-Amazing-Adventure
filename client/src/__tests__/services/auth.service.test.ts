@@ -4,12 +4,20 @@ import {
   getStoredTokens,
   isAuthenticated,
   ClearUserAuth,
-} from "../services/auth.service";
+  getUserSub,
+} from "@/services/auth.service";
 
-// Mock amazon-cognito-identity-js since it has browser-only internals
 vi.mock("amazon-cognito-identity-js", () => ({
   CognitoUserPool: vi.fn(),
-  CognitoUser: vi.fn(),
+  CognitoUser: vi.fn(() => ({
+    authenticateUser: vi.fn(),
+    forgotPassword: vi.fn(),
+    confirmPassword: vi.fn(),
+    confirmRegistration: vi.fn(),
+    resendConfirmationCode: vi.fn(),
+    signOut: vi.fn(),
+    getSession: vi.fn(),
+  })),
   AuthenticationDetails: vi.fn(),
   CognitoUserAttribute: vi.fn(),
 }));
@@ -76,5 +84,16 @@ describe("ClearUserAuth", () => {
 
   it("does not throw when nothing is stored", () => {
     expect(() => ClearUserAuth()).not.toThrow();
+  });
+});
+
+describe("getUserSub", () => {
+  it("returns empty string when not authenticated", () => {
+    expect(getUserSub()).toBe("");
+  });
+
+  it("returns the sub from stored tokens", () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(validTokens));
+    expect(getUserSub()).toBe("user-uuid-123");
   });
 });
