@@ -97,10 +97,13 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
-  # WebSocket API Gateway origin — domain only, no protocol prefix
+  # WebSocket API Gateway origin — domain only, no protocol prefix.
+  # origin_path prepends the stage name so CloudFront /ws → API GW /prod.
+  # websocket_api_endpoint is "domain/stage" (e.g. "xxx.execute-api.../prod").
   origin {
     origin_id   = local.ws_origin_id
     domain_name = split("/", var.websocket_api_endpoint)[0]
+    origin_path = "/${split("/", var.websocket_api_endpoint)[1]}"
     custom_origin_config {
       http_port              = 80
       https_port             = 443
