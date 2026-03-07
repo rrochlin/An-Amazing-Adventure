@@ -1,5 +1,5 @@
 import { Button, Typography, Box, Divider, Paper, Tabs, Tab } from "@mui/material";
-import { type GameState } from "../types/types";
+import { type GameStateView } from "../types/types";
 import { useState } from "react";
 
 interface TabPanelProps {
@@ -27,10 +27,10 @@ export const GameInfo = ({
   gameState,
   onItemClick,
 }: {
-  gameState: GameState;
+  gameState: GameStateView | null;
   onItemClick: (item: string) => void;
 }) => {
-  const currentRoom = gameState.current_room;
+  const currentRoom = gameState?.current_room;
   const [tabValue, setTabValue] = useState(0);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -117,9 +117,7 @@ export const GameInfo = ({
               overflowWrap: "break-word",
             }}
           >
-            {gameState.current_room.id.split("_").map(
-              (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-            ).join(" ")}
+            {currentRoom?.name ?? "Unknown Location"}
           </Typography>
 
           <Paper
@@ -158,10 +156,10 @@ export const GameInfo = ({
                   : "rgba(139, 111, 71, 0.4)",
             })}
           />
-          {gameState.player.inventory && gameState.player.inventory.length > 0 ? (
+          {gameState?.player.inventory && gameState.player.inventory.length > 0 ? (
             <Box component="ul" sx={{ pl: 2, m: 0 }}>
-              {gameState.player.inventory.map((item, idx) => (
-                <Box component="li" key={idx} sx={{ mb: 0.5 }}>
+              {gameState.player.inventory.map((item) => (
+                <Box component="li" key={item.id} sx={{ mb: 0.5 }}>
                   <Button
                     onClick={() => onItemClick(item.name)}
                     sx={{
@@ -207,8 +205,8 @@ export const GameInfo = ({
           />
           {currentRoom?.items && currentRoom.items.length > 0 ? (
             <Box component="ul" sx={{ pl: 2, m: 0 }}>
-              {currentRoom.items.map((item, idx) => (
-                <Box component="li" key={10 * idx} sx={{ mb: 0.5 }}>
+              {currentRoom.items.map((item) => (
+                <Box component="li" key={item.id} sx={{ mb: 0.5 }}>
                   <Button
                     onClick={() => onItemClick(item.name)}
                     sx={{
@@ -252,9 +250,9 @@ export const GameInfo = ({
           {currentRoom?.occupants && currentRoom.occupants.length > 0 ? (
             <Box component="ul" sx={{ pl: 2, m: 0 }}>
               {currentRoom.occupants.map((occupant) => (
-                <Box component="li" key={occupant} sx={{ mb: 0.5 }}>
+                <Box component="li" key={occupant.id} sx={{ mb: 0.5 }}>
                   <Typography variant="body2" sx={{ fontFamily: "Crimson Text, Georgia, serif", wordWrap: "break-word", overflowWrap: "break-word" }}>
-                    {occupant}
+                    {occupant.name}
                   </Typography>
                 </Box>
               ))}

@@ -1,145 +1,92 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import type { ChatMessageType, GameState } from "../types/types";
-import {
-  Chat as SendChat,
-  DescribeGame,
-  WorldReady,
-} from "../services/api.game";
 import { Alert, Box, CircularProgress, Paper, Typography } from "@mui/material";
 import { RoomMap } from "../components/RoomMap";
 import { GameInfo } from "../components/GameInfo";
 import { Chat } from "../components/Chat";
 import { isAuthenticated } from "../services/auth.service";
-import { AppTheme } from "@/theme/theme";
+import { LoadGame, WorldReady } from "../services/api.game";
 import { pollWorldStatus } from "@/components/WaitForWorld";
+import { useGameStore } from "../store/gameStore";
+import { useGameSocket } from "../hooks/useGameSocket";
+import { AppTheme } from "@/theme/theme";
 
 export const Route = createFileRoute("/game-{$sessionUUID}")({
-  component: PostComponent,
+  component: GamePage,
   beforeLoad: async ({ location }) => {
     if (!isAuthenticated()) {
-      throw redirect({
-        to: "/login",
-        search: { redirect: location.href },
-      });
+      throw redirect({ to: "/login", search: { redirect: location.href } });
     }
   },
   loader: async ({ params }) => WorldReady(params.sessionUUID),
 });
 
-function PostComponent() {
+function GamePage() {
   const { sessionUUID } = Route.useParams();
-  const [gameState, setGameState] = useState<GameState | null>(null);
   const [command, setCommand] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [chatHistory, setChatHistory] = useState<ChatMessageType[]>([]);
-  const { ready: initialReady } = Route.useLoaderData();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingGame, setLoadingGame] = useState(true);
 
-  // loads chat from localStorage. Should default to pull from API if not available
-  const handleSetChatHistory = (message: ChatMessageType) => {
-    setChatHistory((prevChatHistory) => {
-      const newChat = [...prevChatHistory, message];
-      return newChat;
-    });
-  };
+  const { gameState, chatMessages, streamingMessage, isStreaming, wsError, wsStatus, addChatMessage, setGameState, reset } =
+    useGameStore();
 
+  const { sendChat } = useGameSocket({ sessionId: sessionUUID, enabled: !!gameState });
+
+  // Load game state on mount (poll world-ready then fetch full state)
   useEffect(() => {
-    if (!gameState) return;
-    localStorage.setItem(`gameState-${sessionUUID}`, JSON.stringify(gameState));
-    setChatHistory(gameState?.chat_history ?? []);
-  }, [gameState]);
-
-  useEffect(() => {
-    const getGame = async () => {
-      const result = await pollWorldStatus(sessionUUID);
-      if (result) {
-        fetchGame();
-      } else {
-        setError(
-          "World generation is taking a long time please refresh\nif the issue persists create a new game",
-        );
+    reset();
+    let cancelled = false;
+    const init = async () => {
+      const ready = await pollWorldStatus(sessionUUID);
+      if (cancelled) return;
+      if (!ready) {
+        setLoadError("World generation timed out — please refresh or create a new game.");
+        setLoadingGame(false);
         return;
       }
-    };
-    getGame();
-  }, []);
-
-  // This will load gameState into the client. We can write this to localStorage
-  // and also verify that it's in sync with the backend
-  const fetchGame = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      if (!initialReady) {
-        // will be true initially if onload worldready call succeeded
-        const worldGenerated = await WorldReady(sessionUUID);
-        if (!worldGenerated.ready) {
-          setError(
-            "World generation is taking longer than expected. You can still try to play, but some features might not be available yet.",
-          );
-          console.log("returned early");
-          return;
+      try {
+        const data = await LoadGame(sessionUUID);
+        if (!cancelled) {
+          setGameState(data.state);
         }
+      } catch {
+        if (!cancelled) setLoadError("Failed to load game — please try again.");
+      } finally {
+        if (!cancelled) setLoadingGame(false);
       }
+    };
+    init();
+    return () => { cancelled = true; };
+  }, [sessionUUID]);
 
-      // Get initial game state for quick load
-      let state: GameState;
-      const localState = localStorage.getItem(`gameState-${sessionUUID}`);
-      if (localState != null && localState != "null") {
-        state = JSON.parse(localState);
-        setGameState(state);
-      }
-
-      const gameResponse = await DescribeGame(sessionUUID);
-      state = gameResponse.game_state;
-      setGameState(state);
-    } catch (err) {
-      setError(
-        "Failed to start game. Please check if the server is running and try again.",
-      );
-      console.error("Error starting game:", err);
-    }
-    setIsLoading(false);
+  const handleCommand = () => {
+    if (!command.trim() || isStreaming) return;
+    addChatMessage({ type: "player", content: command });
+    sendChat(command);
+    setCommand("");
   };
 
-  // Sends a chat and updates the game
-  const handleCommand = async () => {
-    if (!command.trim()) return;
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      handleSetChatHistory({ type: "player", content: command });
-
-      const chat = await SendChat(sessionUUID, { chat: command });
-      console.log("Received game state from server:", chat.game_state);
-      console.log("Rooms in response:", chat.game_state?.rooms);
-      setGameState(chat.game_state);
-      setCommand("");
-    } catch (err) {
-      setError("Failed to process command. Please try again.");
-      console.error("Error processing command:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleItemClick = async (item: string) => {
-    console.log(item);
-    return;
-  };
-
-  if (!gameState && gameState != "null") {
+  if (loadingGame) {
     return (
       <Box sx={{ p: 4, textAlign: "center" }}>
         <CircularProgress />
-        <Typography sx={{ mt: 2 }}>Loading game state...</Typography>
+        <Typography sx={{ mt: 2 }}>Loading adventure...</Typography>
       </Box>
     );
   }
+
+  if (loadError) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Alert severity="error">{loadError}</Alert>
+      </Box>
+    );
+  }
+
+  // Combine committed messages with any in-flight streaming message
+  const displayMessages = streamingMessage
+    ? [...chatMessages, { type: "narrative" as const, content: streamingMessage }]
+    : chatMessages;
 
   return (
     <Box
@@ -157,32 +104,17 @@ function PostComponent() {
         boxSizing: "border-box",
       }}
     >
-      {/* Left Sidebar - Map (25%) */}
+      {/* Left — Map (25%) */}
       <Box sx={{ flex: "0 0 25%", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-        <Paper
-          sx={{
-            flex: 1,
-            p: 2,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            transition: "all 0.3s ease-in-out",
-            "&:hover": {
-              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
-            }
-          }}
-        >
-          <Typography
-            variant="h6"
-            sx={{
-              mb: 2,
-              textAlign: "center",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              borderBottom: `2px solid ${AppTheme.palette.primary.main}`,
-              pb: 1,
-            }}
-          >
+        <Paper sx={{
+          flex: 1, p: 2, display: "flex", flexDirection: "column", overflow: "hidden",
+          transition: "all 0.3s ease-in-out",
+          "&:hover": { boxShadow: "0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)" },
+        }}>
+          <Typography variant="h6" sx={{
+            mb: 2, textAlign: "center", textTransform: "uppercase",
+            letterSpacing: "0.1em", borderBottom: `2px solid ${AppTheme.palette.primary.main}`, pb: 1,
+          }}>
             World Map
           </Typography>
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
@@ -191,57 +123,38 @@ function PostComponent() {
         </Paper>
       </Box>
 
-      {/* Center - Chat Area (50%) */}
+      {/* Center — Chat (50%) */}
       <Box sx={{ flex: "0 0 50%", minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <Paper
-          sx={{
-            flex: 1,
-            overflow: "hidden",
-            transition: "all 0.3s ease-in-out",
-            "&:hover": {
-              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
-            }
-          }}
-        >
+        <Paper sx={{
+          flex: 1, overflow: "hidden",
+          transition: "all 0.3s ease-in-out",
+          "&:hover": { boxShadow: "0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)" },
+        }}>
           <Chat
-            chatHistory={chatHistory}
+            chatHistory={displayMessages}
             command={command}
             setCommand={setCommand}
             handleCommand={handleCommand}
-            isLoading={isLoading}
+            isLoading={isStreaming}
           />
         </Paper>
-        {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {error}
+        {(wsError || wsStatus === "error") && (
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            {wsError ?? "Connection lost — retrying..."}
           </Alert>
         )}
       </Box>
 
-      {/* Right Sidebar - Game Info (25%) */}
+      {/* Right — Game Info (25%) */}
       <Box sx={{ flex: "0 0 25%", minWidth: 0, display: "flex", gap: 2 }}>
-        <Paper
-          sx={{
-            flex: 1,
-            overflow: "hidden",
-            display: "flex",
-            flexDirection: "column",
-            transition: "all 0.3s ease-in-out",
-            "&:hover": {
-              boxShadow: "0 6px 24px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(201, 169, 98, 0.2)",
-            },
-          }}
-        >
-          <GameInfo gameState={gameState} onItemClick={handleItemClick} />
+        <Paper sx={{
+          flex: 1, overflow: "hidden", display: "flex", flexDirection: "column",
+          transition: "all 0.3s ease-in-out",
+          "&:hover": { boxShadow: "0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)" },
+        }}>
+          <GameInfo gameState={gameState} onItemClick={() => {}} />
         </Paper>
-        <Box
-          sx={{
-            width: "4px",
-            backgroundColor: "#000",
-            opacity: 0.5,
-            borderRadius: "2px",
-          }}
-        />
+        <Box sx={{ width: "4px", backgroundColor: "#000", opacity: 0.5, borderRadius: "2px" }} />
       </Box>
     </Box>
   );

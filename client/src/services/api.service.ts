@@ -1,146 +1,60 @@
-import axios, { type AxiosRequestConfig, type AxiosResponse, type AxiosError, type InternalAxiosRequestConfig } from "axios";
-import { getAuthHeaders, refreshToken, ClearUserAuth, getJWT } from "./auth.service";
+/**
+ * api.service.ts
+ * Base Axios wrappers. All authenticated calls attach the Cognito access token.
+ * Token refresh is handled by Cognito SDK — no custom interceptor needed.
+ */
+import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
+import { getAuthHeader, refreshSession, ClearUserAuth } from "./auth.service";
 
-const APP_URI = import.meta.env.VITE_APP_URI || "http://localhost:8080";
+// Base origin for API calls. Call sites include the full path (e.g. "api/games").
+// In production this is "" (same-origin through CloudFront).
+// In development point to a specific host if needed.
+export const APP_URI = (import.meta.env.VITE_APP_URI as string) || "";
 
-// Track if we're currently refreshing to avoid multiple refresh calls
-let isRefreshing = false;
-let failedQueue: Array<{
-  resolve: (value?: any) => void;
-  reject: (reason?: any) => void;
-}> = [];
-
-const processQueue = (error: Error | null, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error);
-    } else {
-      prom.resolve(token);
-    }
-  });
-  failedQueue = [];
-};
-
-// Axios response interceptor for handling 401 errors
+// Single response interceptor: on 401, attempt token refresh once then give up.
 axios.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
-
-    // If error is 401 and we haven't retried yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      if (isRefreshing) {
-        // If already refreshing, queue this request
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject });
-        })
-          .then(() => {
-            // Retry with new token
-            return axios(originalRequest);
-          })
-          .catch((err) => {
-            return Promise.reject(err);
-          });
+  (r) => r,
+  async (error) => {
+    const original = error.config as AxiosRequestConfig & { _retry?: boolean };
+    if (error.response?.status === 401 && !original._retry) {
+      original._retry = true;
+      const refreshed = await refreshSession();
+      if (refreshed) {
+        original.headers = {
+          ...original.headers,
+          Authorization: getAuthHeader(),
+        };
+        return axios(original);
       }
-
-      originalRequest._retry = true;
-      isRefreshing = true;
-
-      try {
-        const tokens = getJWT();
-        if (!tokens) {
-          throw new Error("No tokens available");
-        }
-
-        // Attempt to refresh the token
-        const refreshHeaders = new (await import("axios")).AxiosHeaders();
-        refreshHeaders.setAuthorization(`Bearer ${tokens.rtoken}`);
-
-        await refreshToken(refreshHeaders);
-
-        // Token refreshed successfully
-        processQueue(null, tokens.jwt);
-        isRefreshing = false;
-
-        // Retry the original request with new token
-        originalRequest.headers = await getAuthHeaders();
-        return axios(originalRequest);
-      } catch (refreshError) {
-        // Refresh failed - clear auth and redirect to login
-        processQueue(refreshError as Error, null);
-        isRefreshing = false;
-        ClearUserAuth();
-
-        // Redirect to login
-        window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
-        return Promise.reject(refreshError);
-      }
+      ClearUserAuth();
+      window.location.href = "/login";
     }
-
     return Promise.reject(error);
   }
 );
 
+function authConfig(): AxiosRequestConfig {
+  return { headers: { Authorization: getAuthHeader() } };
+}
+
+function url(uri: string): string {
+  // Handles both "" (same-origin) and "https://host" (cross-origin dev)
+  const base = APP_URI.replace(/\/$/, "");
+  return base ? `${base}/${uri}` : `/${uri}`;
+}
+
 export async function GET<T>(uri: string): Promise<AxiosResponse<T>> {
-  const config: AxiosRequestConfig = {
-    headers: await getAuthHeaders(),
-  };
-  const response: AxiosResponse<T> = await axios.get(
-    `${APP_URI}/${uri}`,
-    config,
-  );
-  if (response.status > 299) {
-    console.error("server returned error response", response);
-  }
-  return response;
+  return axios.get<T>(url(uri), authConfig());
+}
+
+export async function POST<T>(uri: string, body?: unknown): Promise<AxiosResponse<T>> {
+  return axios.post<T>(url(uri), body, authConfig());
+}
+
+export async function PUT<T>(uri: string, body: unknown): Promise<AxiosResponse<T>> {
+  return axios.put<T>(url(uri), body, authConfig());
 }
 
 export async function DELETE<T>(uri: string): Promise<AxiosResponse<T>> {
-  const config: AxiosRequestConfig = {
-    headers: await getAuthHeaders(),
-  };
-  const response: AxiosResponse<T> = await axios.delete(
-    `${APP_URI}/${uri}`,
-    config,
-  );
-  if (response.status > 299) {
-    console.error("server returned error response", response);
-  }
-  return response;
-}
-
-export async function POST<T>(
-  uri: string,
-  body?: any,
-): Promise<AxiosResponse<T>> {
-  const config: AxiosRequestConfig = {
-    headers: await getAuthHeaders(),
-  };
-  const response: AxiosResponse<T> = await axios.post(
-    `${APP_URI}/${uri}`,
-    body,
-    config,
-  );
-  if (response.status > 299) {
-    console.error("server returned error response", response);
-  }
-  return response;
-}
-
-export async function PUT<T>(
-  uri: string,
-  body: any,
-): Promise<AxiosResponse<T>> {
-  const config: AxiosRequestConfig = {
-    headers: await getAuthHeaders(),
-  };
-  const response: AxiosResponse<T> = await axios.put(
-    `${APP_URI}/${uri}`,
-    body,
-    config,
-  );
-  if (response.status > 299) {
-    console.error("server returned error response", response);
-  }
-  return response;
+  return axios.delete<T>(url(uri), authConfig());
 }

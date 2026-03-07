@@ -1,4 +1,4 @@
-import { ClearUserAuth, isAuthenticated } from "@/services/auth.service";
+import { signOut, isAuthenticated } from "@/services/auth.service";
 import { useNavigate } from "@tanstack/react-router";
 import React, { useState, type ReactElement } from "react";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
@@ -45,11 +45,9 @@ export default function AccountPanel() {
     });
   };
 
-  const handleLogout = () => {
-    ClearUserAuth();
-    navigate({
-      to: "/login",
-    });
+  const handleLogout = async () => {
+    await signOut();
+    navigate({ to: "/login" });
   };
 
   const handleSignIn = () => {
