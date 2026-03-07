@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useRouter } from "@tanstack/react-router";
 import {
   Button,
   Dialog,
@@ -12,19 +12,44 @@ import {
   TextField,
   useColorScheme,
   Divider,
+  Alert,
+  IconButton,
+  Tooltip,
+  CircularProgress,
 } from "@mui/material";
 import z from "zod";
 import { isAuthenticated } from "@/services/auth.service";
-import { ListGames, CreateGame, type GameListItem } from "@/services/api.game";
+import { ListGames, CreateGame, DeleteGame, type GameListItem } from "@/services/api.game";
 import AddIcon from "@mui/icons-material/Add";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useState } from "react";
+
+function GamesErrorFallback() {
+  const router = useRouter();
+  return (
+    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "calc(100vh - 64px)", p: 4 }}>
+      <Paper sx={{ maxWidth: 480, width: "100%", p: 4, textAlign: "center" }}>
+        <Typography variant="h5" sx={{ mb: 2, fontFamily: '"Cinzel", serif' }}>
+          Could Not Load Adventures
+        </Typography>
+        <Alert severity="error" sx={{ mb: 3, textAlign: "left" }}>
+          The server encountered an error. Your adventures are safe — please try again.
+        </Alert>
+        <Button variant="contained" onClick={() => router.invalidate()}>
+          Retry
+        </Button>
+      </Paper>
+    </Box>
+  );
+}
 
 export const Route = createFileRoute("/")({
   validateSearch: z.object({
     count: z.number().optional(),
   }),
   component: RouteComponent,
+  errorComponent: GamesErrorFallback,
   beforeLoad: () => {
     if (!isAuthenticated()) {
       throw redirect({
@@ -44,16 +69,20 @@ function RouteComponent() {
     Route.useLoaderData() as GameListItem[],
   );
   const [open, setOpen] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
 
   const handleClickOpen = () => {
+    setCreateError(null);
     setOpen(true);
   };
 
   const handleClose = () => {
     setOpen(false);
+    setCreateError(null);
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -69,7 +98,20 @@ function RouteComponent() {
         { player_name: name, session_id: response.session_id, ready: false },
       ]);
     } catch {
-      alert("Error creating game — please try again");
+      setCreateError("Failed to create adventure — please try again.");
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    setDeletingId(sessionId);
+    try {
+      await DeleteGame(sessionId);
+      setGames((prev) => prev.filter((g) => g.session_id !== sessionId));
+    } catch {
+      // Non-fatal — show nothing, game remains in list
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -127,6 +169,9 @@ function RouteComponent() {
             />
           </form>
         </DialogContent>
+        {createError && (
+          <Alert severity="error" sx={{ mx: 3, mb: 1 }}>{createError}</Alert>
+        )}
         <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button onClick={handleClose} variant="outlined" sx={{ fontSize: "1rem" }}>
             Cancel
@@ -217,13 +262,22 @@ function RouteComponent() {
                   <PlayArrowIcon sx={{ color: "primary.main", fontSize: "2rem" }} />
                   <Typography
                     variant="h6"
-                    sx={{
-                      fontSize: "1.5rem",
-                      fontFamily: '"Crimson Text", "Georgia", serif',
-                    }}
+                    sx={{ fontSize: "1.5rem", fontFamily: '"Crimson Text", "Georgia", serif', flex: 1 }}
                   >
                     {game.player_name}
                   </Typography>
+                  <Tooltip title="Delete adventure" placement="left">
+                    <IconButton
+                      size="small"
+                      onClick={(e) => handleDelete(e, game.session_id)}
+                      disabled={deletingId === game.session_id}
+                      sx={{ color: "error.main", opacity: 0.6, "&:hover": { opacity: 1 } }}
+                    >
+                      {deletingId === game.session_id
+                        ? <CircularProgress size={18} color="error" />
+                        : <DeleteIcon fontSize="small" />}
+                    </IconButton>
+                  </Tooltip>
                 </Box>
               </Paper>
             ))}

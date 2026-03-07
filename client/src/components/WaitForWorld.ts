@@ -1,8 +1,8 @@
 import { WorldReady } from "../services/api.game";
 
-const MAX_WAIT_TIME = 60_000; // 1 minute in milliseconds
+const MAX_WAIT_TIME = 180_000; // 3 minutes — world-gen can take 60-90s
 const INITIAL_BACKOFF = 5_000; // Start with 5 seconds
-const MAX_BACKOFF = 30_000; // Maximum backoff of 30 seconds
+const MAX_BACKOFF = 15_000; // Cap at 15s so we stay responsive
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

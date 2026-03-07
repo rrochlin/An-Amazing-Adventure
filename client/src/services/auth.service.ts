@@ -222,6 +222,43 @@ export async function resendConfirmationCode(
   });
 }
 
+export interface ChangePasswordResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Changes the current user's password. Requires the user to be logged in.
+ * Uses the Cognito SDK changePassword flow (current + new password).
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<ChangePasswordResult> {
+  return new Promise((resolve) => {
+    const pool = getUserPool();
+    const user = pool.getCurrentUser();
+    if (!user) {
+      resolve({ success: false, error: "Not logged in." });
+      return;
+    }
+    // getSession refreshes tokens if needed before calling changePassword
+    user.getSession((err: Error | null, session: CognitoUserSession | null) => {
+      if (err || !session) {
+        resolve({ success: false, error: "Session expired — please log in again." });
+        return;
+      }
+      user.changePassword(currentPassword, newPassword, (err2) => {
+        if (err2) {
+          resolve({ success: false, error: err2.message });
+          return;
+        }
+        resolve({ success: true });
+      });
+    });
+  });
+}
+
 export async function refreshSession(): Promise<boolean> {
   const tokens = getStoredTokens();
   if (!tokens) return false;

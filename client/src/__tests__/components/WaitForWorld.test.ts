@@ -50,8 +50,8 @@ describe("pollWorldStatus", () => {
   it("returns false after max wait time exhausted", async () => {
     mockWorldReady.mockResolvedValue({ ready: false });
     const promise = pollWorldStatus("session-3");
-    // Advance well past the 60s max
-    await vi.advanceTimersByTimeAsync(120_000);
+    // Advance well past the 3 minute max
+    await vi.advanceTimersByTimeAsync(300_000);
     const result = await promise;
     expect(result).toBe(false);
   });
