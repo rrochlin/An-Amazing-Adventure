@@ -126,6 +126,9 @@ resource "aws_cloudfront_distribution" "main" {
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
     cache_policy_id        = aws_cloudfront_cache_policy.no_cache.id
+    # Forward all headers except Host so API Gateway sees its own domain, not the CF domain.
+    # Without this, API GW returns 403 Forbidden because the Host header is the CF domain.
+    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # Managed-AllViewerExceptHostHeader
   }
 
   ordered_cache_behavior {

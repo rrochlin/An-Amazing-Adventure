@@ -18,8 +18,8 @@ import (
 
 // Model IDs
 const (
-	ModelNarrator = "anthropic.claude-sonnet-4-6" // heavy — narrator & architect
-	ModelSubAgent = "anthropic.claude-haiku-4-5"  // light — world-gen sub-agents
+	ModelNarrator = "anthropic.claude-sonnet-4-6"              // heavy — narrator & architect
+	ModelSubAgent = "anthropic.claude-haiku-4-5-20251001-v1:0" // light — world-gen sub-agents
 )
 
 // Client wraps the Bedrock runtime client.

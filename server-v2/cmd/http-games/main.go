@@ -192,12 +192,14 @@ func invokeWorldGen(ctx context.Context, payload []byte) error {
 }
 
 func matchesGamePath(path string) bool {
-	// matches /api/games/{uuid}
-	return len(path) > len("/api/games/")
+	// matches /api/games/{uuid} — must have a non-empty segment after /api/games/
+	const prefix = "/api/games/"
+	return len(path) > len(prefix) && path[:len(prefix)] == prefix
 }
 
 func matchesWorldReadyPath(path string) bool {
-	return len(path) > len("/api/worldready/")
+	const prefix = "/api/worldready/"
+	return len(path) > len(prefix) && path[:len(prefix)] == prefix
 }
 
 func jsonResponse(code int, body any) events.APIGatewayV2HTTPResponse {

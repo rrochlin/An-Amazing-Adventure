@@ -71,10 +71,9 @@ jobs:
               --function-name "$FUNCTION_NAME" \
               --zip-file "fileb:///tmp/${name}.zip" \
               --architectures arm64 \
-              --no-cli-pager
+              --query 'FunctionName' --output text
             # Wait for update to complete before moving to next function
             aws lambda wait function-updated \
-              --function-name "$FUNCTION_NAME" \
-              --no-cli-pager
+              --function-name "$FUNCTION_NAME"
             echo "$FUNCTION_NAME deployed successfully"
           done
