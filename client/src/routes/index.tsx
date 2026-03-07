@@ -20,10 +20,12 @@ import {
 import z from "zod";
 import { isAuthenticated } from "@/services/auth.service";
 import { ListGames, CreateGame, DeleteGame, type GameListItem } from "@/services/api.game";
+import { useWorldGenSocket } from "@/hooks/useWorldGenSocket";
+import { WorldGenTerminal } from "@/components/WorldGenTerminal";
 import AddIcon from "@mui/icons-material/Add";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import DeleteIcon from "@mui/icons-material/Delete";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 function GamesErrorFallback() {
   const router = useRouter();
@@ -71,9 +73,24 @@ function RouteComponent() {
   const [open, setOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // World-gen terminal state
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
+  const [pendingPlayerName, setPendingPlayerName] = useState<string>("");
+
   const navigate = useNavigate();
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
+
+  const handleWorldGenReady = useCallback(() => {
+    if (pendingSessionId) {
+      navigate({ to: "/game-{$sessionUUID}", params: { sessionUUID: pendingSessionId } });
+    }
+  }, [pendingSessionId, navigate]);
+
+  const { lines: terminalLines, ready: terminalReady } = useWorldGenSocket({
+    sessionId: pendingSessionId,
+    onReady: handleWorldGenReady,
+  });
 
   const handleClickOpen = () => {
     setCreateError(null);
@@ -89,7 +106,7 @@ function RouteComponent() {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const formJson = Object.fromEntries((formData as any).entries());
-    const name = formJson.characterName;
+    const name = formJson.characterName as string;
     try {
       const response = await CreateGame(name);
       handleClose();
@@ -97,6 +114,9 @@ function RouteComponent() {
         ...prev,
         { player_name: name, session_id: response.session_id, ready: false },
       ]);
+      // Open the terminal and start the WebSocket connection
+      setPendingPlayerName(name);
+      setPendingSessionId(response.session_id);
     } catch {
       setCreateError("Failed to create adventure — please try again.");
     }
@@ -180,6 +200,48 @@ function RouteComponent() {
             Create World
           </Button>
         </DialogActions>
+      </Dialog>
+
+      {/* World-gen terminal dialog — shown while the world is being built */}
+      <Dialog
+        open={!!pendingSessionId}
+        fullWidth
+        maxWidth="sm"
+        disableEscapeKeyDown
+        PaperProps={{
+          sx: {
+            background: "rgba(0, 8, 0, 0.96)",
+            border: "1px solid rgba(0, 255, 70, 0.25)",
+            boxShadow: "0 0 40px rgba(0, 255, 70, 0.15)",
+          },
+        }}
+      >
+        <DialogTitle sx={{
+          fontFamily: '"Cinzel", "Georgia", serif',
+          color: "rgba(0, 255, 70, 0.9)",
+          borderBottom: "1px solid rgba(0, 255, 70, 0.2)",
+          pb: 1.5,
+        }}>
+          Forging World for {pendingPlayerName || "your adventurer"}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <WorldGenTerminal lines={terminalLines} ready={terminalReady} />
+          {terminalReady && (
+            <Alert
+              severity="success"
+              sx={{ mt: 2, background: "rgba(0, 255, 70, 0.08)", color: "rgba(0,255,70,0.9)", border: "1px solid rgba(0,255,70,0.3)" }}
+            >
+              World ready — entering adventure...
+            </Alert>
+          )}
+        </DialogContent>
+        {!terminalReady && (
+          <DialogActions sx={{ px: 3, py: 1.5, borderTop: "1px solid rgba(0,255,70,0.1)" }}>
+            <Typography variant="caption" sx={{ color: "rgba(0,255,70,0.4)", fontFamily: "monospace", flex: 1 }}>
+              This may take up to 60 seconds
+            </Typography>
+          </DialogActions>
+        )}
       </Dialog>
 
       <Box sx={{

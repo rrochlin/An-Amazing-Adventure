@@ -64,7 +64,9 @@ export type WsFrameType =
   | "game_state_update"
   | "state_delta"
   | "error"
-  | "streaming_blocked";
+  | "streaming_blocked"
+  | "world_gen_log"
+  | "world_gen_ready";
 
 export interface WsFrame {
   type: WsFrameType;
@@ -73,6 +75,10 @@ export interface WsFrame {
 
 export interface NarrativeChunkPayload {
   content: string;
+}
+
+export interface WorldGenLogPayload {
+  line: string;
 }
 
 export interface StateDelta {

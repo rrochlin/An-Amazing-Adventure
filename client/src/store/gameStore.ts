@@ -20,6 +20,9 @@ interface GameStore {
   isStreaming: boolean;
   wsStatus: WsStatus;
   wsError: string | null;
+  // World-gen terminal
+  worldGenLog: string[];
+  worldGenReady: boolean;
 
   // Actions
   setGameState: (state: GameStateView) => void;
@@ -30,6 +33,8 @@ interface GameStore {
   setStreaming: (v: boolean) => void;
   setWsStatus: (s: WsStatus) => void;
   setWsError: (e: string | null) => void;
+  appendWorldGenLog: (line: string) => void;
+  setWorldGenReady: () => void;
   reset: () => void;
 }
 
@@ -40,6 +45,8 @@ const initialState = {
   isStreaming: false,
   wsStatus: "idle" as WsStatus,
   wsError: null,
+  worldGenLog: [] as string[],
+  worldGenReady: false,
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -103,6 +110,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setWsStatus: (s) => set({ wsStatus: s }),
 
   setWsError: (e) => set({ wsError: e }),
+
+  appendWorldGenLog: (line) =>
+    set((s) => ({ worldGenLog: [...s.worldGenLog, line] })),
+
+  setWorldGenReady: () => set({ worldGenReady: true }),
 
   reset: () => set(initialState),
 }));

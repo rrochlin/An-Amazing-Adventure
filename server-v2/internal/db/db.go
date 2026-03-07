@@ -321,6 +321,32 @@ func (c *Client) DeleteUserConnections(ctx context.Context, userID string) error
 	return nil
 }
 
+// GetConnectionByUserID returns the most recent active connection for a user,
+// or an error if none exists. Used by world-gen to push progress frames.
+func (c *Client) GetConnectionByUserID(ctx context.Context, userID string) (Connection, error) {
+	c.requireConnectionsTable()
+	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(c.connectionsTable),
+		IndexName:              aws.String("user-connections-index"),
+		KeyConditionExpression: aws.String("user_id = :uid"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":uid": binaryIDVal(userID),
+		},
+		Limit: aws.Int32(1), // one connection per user enforced on $connect
+	})
+	if err != nil {
+		return Connection{}, fmt.Errorf("get connection by user: %w", err)
+	}
+	if len(out.Items) == 0 {
+		return Connection{}, fmt.Errorf("no active connection for user %s", userID)
+	}
+	var conn Connection
+	if err := attributevalue.UnmarshalMap(out.Items[0], &conn); err != nil {
+		return Connection{}, fmt.Errorf("unmarshal connection: %w", err)
+	}
+	return conn, nil
+}
+
 // SetStreaming atomically sets the streaming flag on a connection record.
 func (c *Client) SetStreaming(ctx context.Context, connectionID string, streaming bool) error {
 	c.requireConnectionsTable()
