@@ -87,7 +87,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Fetch Terraform outputs (Cognito IDs + WS endpoint)
+      - name: Fetch Terraform outputs (Cognito IDs)
         id: tf_outputs
         run: |
           USER_POOL_ID=$(aws ssm get-parameter \
@@ -96,23 +96,17 @@ jobs:
           CLIENT_ID=$(aws ssm get-parameter \
             --name "/amazing-adventure-prod/cognito/client-id" \
             --query "Parameter.Value" --output text)
-          # WebSocket connects directly to API Gateway — not through CloudFront.
-          # CloudFront does not reliably proxy WebSocket upgrades.
-          WS_API_ID=$(aws apigatewayv2 get-apis \
-            --region ${{ env.AWS_REGION }} \
-            --query "Items[?Name=='amazing-adventure-prod-ws'].ApiId | [0]" \
-            --output text)
-          WS_ENDPOINT="wss://${WS_API_ID}.execute-api.${{ env.AWS_REGION }}.amazonaws.com/prod"
           echo "user_pool_id=$USER_POOL_ID" >> "$GITHUB_OUTPUT"
           echo "client_id=$CLIENT_ID" >> "$GITHUB_OUTPUT"
-          echo "ws_endpoint=$WS_ENDPOINT" >> "$GITHUB_OUTPUT"
 
       - name: Build Vite app
         working-directory: client
         env:
           # Empty = same-origin through CloudFront; call sites include "api/" in path
           VITE_APP_URI: ""
-          VITE_WS_ENDPOINT: ${{ steps.tf_outputs.outputs.ws_endpoint }}
+          # WebSocket connects directly to API Gateway — not through CloudFront.
+          # CloudFront does not reliably proxy WebSocket upgrades.
+          VITE_WS_ENDPOINT: ${{ secrets.VITE_WS_ENDPOINT }}
           VITE_COGNITO_USER_POOL_ID: ${{ steps.tf_outputs.outputs.user_pool_id }}
           VITE_COGNITO_CLIENT_ID: ${{ steps.tf_outputs.outputs.client_id }}
         run: pnpm build
