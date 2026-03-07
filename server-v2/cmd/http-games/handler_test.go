@@ -3,10 +3,34 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
 )
+
+func assertPanicsWithEnvAbsent(t *testing.T, envVar string, fn func()) {
+	t.Helper()
+	t.Setenv(envVar, "")
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Errorf("expected panic for missing %s, but handler did not panic", envVar)
+			return
+		}
+		msg := ""
+		switch v := r.(type) {
+		case string:
+			msg = v
+		case error:
+			msg = v.Error()
+		}
+		if !strings.Contains(msg, envVar) {
+			t.Errorf("panic message %q does not mention %s", msg, envVar)
+		}
+	}()
+	fn()
+}
 
 // makeHTTPReq builds a minimal APIGatewayV2HTTPRequest with Cognito sub claim.
 func makeHTTPReq(method, path string, body string, sub string, pathParams map[string]string) events.APIGatewayV2HTTPRequest {
@@ -190,6 +214,32 @@ func TestMatchesGamePath(t *testing.T) {
 			t.Errorf("matchesGamePath(%q) = %v, want %v", c.path, got, c.match)
 		}
 	}
+}
+
+// ---- Required env var tests ----
+// http-games requires: SESSIONS_TABLE
+// (CONNECTIONS_TABLE is NOT required — http-games never touches connections)
+
+func TestHandlerGames_MissingSESSIONS_TABLE_Panics(t *testing.T) {
+	req := makeHTTPReq("GET", "/api/games", "", "user-sub-123", nil)
+	assertPanicsWithEnvAbsent(t, "SESSIONS_TABLE", func() {
+		handler(context.Background(), req) //nolint:errcheck
+	})
+}
+
+func TestHandlerGames_NoCONNECTIONS_TABLE_DoesNotPanic(t *testing.T) {
+	// http-games must NOT panic when CONNECTIONS_TABLE is absent —
+	// it never uses the connections table.
+	t.Setenv("SESSIONS_TABLE", "test-sessions")
+	t.Setenv("CONNECTIONS_TABLE", "") // explicitly absent
+	req := makeHTTPReq("GET", "/api/games", "", "user-sub-123", nil)
+	// Should reach DynamoDB (and fail with a credential/network error), not panic
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("http-games panicked with CONNECTIONS_TABLE absent: %v", r)
+		}
+	}()
+	handler(context.Background(), req) //nolint:errcheck
 }
 
 func TestMatchesWorldReadyPath(t *testing.T) {

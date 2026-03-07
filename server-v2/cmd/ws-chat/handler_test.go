@@ -3,10 +3,34 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
 )
+
+func assertPanicsWithEnvAbsent(t *testing.T, envVar string, fn func()) {
+	t.Helper()
+	t.Setenv(envVar, "")
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Errorf("expected panic for missing %s, but handler did not panic", envVar)
+			return
+		}
+		msg := ""
+		switch v := r.(type) {
+		case string:
+			msg = v
+		case error:
+			msg = v.Error()
+		}
+		if !strings.Contains(msg, envVar) {
+			t.Errorf("panic message %q does not mention %s", msg, envVar)
+		}
+	}()
+	fn()
+}
 
 func makeWSChatReq(connID, body string) events.APIGatewayWebsocketProxyRequest {
 	return events.APIGatewayWebsocketProxyRequest{
@@ -56,6 +80,22 @@ func TestHandlerChat_ValidMessage_ReachesDB(t *testing.T) {
 	if resp.StatusCode == 400 {
 		t.Errorf("routing/parse failure (400) — expected to reach DB layer")
 	}
+}
+
+// ---- Required env var tests ----
+// ws-chat calls GetConnection first, so CONNECTIONS_TABLE panics immediately.
+// SESSIONS_TABLE is required later (GetGame) but the test can't reach it without
+// a real DynamoDB connection returning a valid connection record.
+// Both vars are set in Terraform — the Terraform config is the source of truth.
+
+func TestHandlerChat_MissingCONNECTIONS_TABLE_Panics(t *testing.T) {
+	t.Setenv("SESSIONS_TABLE", "test-sessions")
+	t.Setenv("WEBSOCKET_API_ENDPOINT", "https://test.execute-api.us-west-2.amazonaws.com/prod")
+	t.Setenv("BEDROCK_REGION", "us-west-2")
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "hello"})
+	assertPanicsWithEnvAbsent(t, "CONNECTIONS_TABLE", func() {
+		handler(context.Background(), makeWSChatReq("conn-1", string(body))) //nolint:errcheck
+	})
 }
 
 func TestChatRequest_Parsed(t *testing.T) {
