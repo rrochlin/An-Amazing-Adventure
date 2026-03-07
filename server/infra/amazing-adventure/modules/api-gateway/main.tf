@@ -229,7 +229,9 @@ output "http_api_endpoint" {
   value = replace(aws_apigatewayv2_api.http.api_endpoint, "https://", "")
 }
 output "websocket_api_endpoint" {
-  value = "${replace(aws_apigatewayv2_api.websocket.api_endpoint, "https://", "")}/${var.environment}"
+  # Strip both https:// and wss:// prefixes — AWS uses https:// for the management API
+  # but the raw endpoint may report either depending on SDK version.
+  value = "${replace(replace(aws_apigatewayv2_api.websocket.api_endpoint, "https://", ""), "wss://", "")}/${var.environment}"
 }
 output "websocket_api_execution_arn" {
   value = aws_apigatewayv2_api.websocket.execution_arn

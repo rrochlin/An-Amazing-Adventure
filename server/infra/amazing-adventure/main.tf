@@ -42,10 +42,30 @@ module "cognito" {
 }
 
 module "s3" {
-  source                      = "./modules/s3"
-  prefix                      = local.prefix
-  common_tags                 = local.common_tags
-  cloudfront_distribution_arn = module.cloudfront.distribution_arn
+  source      = "./modules/s3"
+  prefix      = local.prefix
+  common_tags = local.common_tags
+}
+
+# Bucket policy lives in root to break the s3 <-> cloudfront circular dependency.
+# CloudFront OAC is created inside the cloudfront module; its ID is passed here.
+resource "aws_s3_bucket_policy" "app_cf_read" {
+  bucket     = module.s3.app_bucket_id
+  depends_on = [module.s3]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "AllowCloudFrontServicePrincipal"
+      Effect    = "Allow"
+      Principal = { Service = "cloudfront.amazonaws.com" }
+      Action    = "s3:GetObject"
+      Resource  = "${module.s3.app_bucket_arn}/*"
+      Condition = {
+        StringEquals = { "AWS:SourceArn" = module.cloudfront.distribution_arn }
+      }
+    }]
+  })
 }
 
 module "lambdas" {
