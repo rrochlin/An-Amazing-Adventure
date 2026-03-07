@@ -1,5 +1,13 @@
 // Core domain types — mirror the server-v2 game engine view models.
 
+export interface AdventureCreationParams {
+  player_description?: string;
+  player_age?: string;
+  player_backstory?: string;
+  theme_hint?: string;
+  preferences?: string[];
+}
+
 export interface Coordinates {
   x: number;
   y: number;

@@ -1,14 +1,15 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Alert, Box, Button, CircularProgress, Paper, Typography } from "@mui/material";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Box, Button, IconButton, Paper, Tooltip, Typography } from "@mui/material";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { RoomMap } from "../components/RoomMap";
 import { GameInfo } from "../components/GameInfo";
 import { Chat } from "../components/Chat";
 import { isAuthenticated } from "../services/auth.service";
-import { LoadGame, WorldReady } from "../services/api.game";
-import { pollWorldStatus } from "@/components/WaitForWorld";
+import { LoadGame } from "../services/api.game";
 import { useGameStore } from "../store/gameStore";
 import { useGameSocket } from "../hooks/useGameSocket";
+import { WorldGenTerminal } from "../components/WorldGenTerminal";
 import { AppTheme } from "@/theme/theme";
 
 function GameErrorFallback() {
@@ -38,46 +39,54 @@ export const Route = createFileRoute("/game-{$sessionUUID}")({
       throw redirect({ to: "/login", search: { redirect: location.href } });
     }
   },
-  loader: async ({ params }) => WorldReady(params.sessionUUID),
 });
 
 function GamePage() {
   const { sessionUUID } = Route.useParams();
+  const navigate = useNavigate();
   const [command, setCommand] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingGame, setLoadingGame] = useState(true);
 
-  const { gameState, chatMessages, streamingMessage, isStreaming, wsError, wsStatus, addChatMessage, setGameState, reset } =
+  const { gameState, chatMessages, streamingMessage, isStreaming, wsError, wsStatus, worldGenLog, worldGenReady, addChatMessage, setGameState, reset } =
     useGameStore();
 
-  const { sendChat, sendAction } = useGameSocket({ sessionId: sessionUUID, enabled: !!gameState });
+  // Load game state from the server. Called once on mount, and again when world_gen_ready fires.
+  const loadGameRef = useRef(false);
+  const loadGame = useCallback(async () => {
+    if (loadGameRef.current) return;
+    loadGameRef.current = true;
+    try {
+      const data = await LoadGame(sessionUUID);
+      if (data.ready && data.state) {
+        setGameState(data.state);
+      }
+      // If not ready, the WebSocket will deliver world_gen_ready when done
+    } catch {
+      setLoadError("Failed to load game — please try again.");
+    } finally {
+      setLoadingGame(false);
+    }
+  }, [sessionUUID, setGameState]);
 
-  // Load game state on mount (poll world-ready then fetch full state)
+  // Called by useGameSocket when world_gen_ready arrives
+  const handleWorldReady = useCallback(() => {
+    loadGameRef.current = false; // allow reload
+    setLoadingGame(true);
+    loadGame();
+  }, [loadGame]);
+
+  const { sendChat, sendAction } = useGameSocket({
+    sessionId: sessionUUID,
+    onWorldReady: handleWorldReady,
+  });
+
   useEffect(() => {
     reset();
-    let cancelled = false;
-    const init = async () => {
-      const ready = await pollWorldStatus(sessionUUID);
-      if (cancelled) return;
-      if (!ready) {
-        setLoadError("World generation timed out — please refresh or create a new game.");
-        setLoadingGame(false);
-        return;
-      }
-      try {
-        const data = await LoadGame(sessionUUID);
-        if (!cancelled) {
-          setGameState(data.state);
-        }
-      } catch {
-        if (!cancelled) setLoadError("Failed to load game — please try again.");
-      } finally {
-        if (!cancelled) setLoadingGame(false);
-      }
-    };
-    init();
-    return () => { cancelled = true; };
-  }, [sessionUUID]);
+    loadGameRef.current = false;
+    loadGame();
+    return () => { /* cleanup handled in useGameSocket */ };
+  }, [sessionUUID]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCommand = () => {
     if (!command.trim() || isStreaming) return;
@@ -86,19 +95,83 @@ function GamePage() {
     setCommand("");
   };
 
-  if (loadingGame) {
-    return (
-      <Box sx={{ p: 4, textAlign: "center" }}>
-        <CircularProgress />
-        <Typography sx={{ mt: 2 }}>Loading adventure...</Typography>
-      </Box>
-    );
-  }
-
   if (loadError) {
     return (
       <Box sx={{ p: 4 }}>
         <Alert severity="error">{loadError}</Alert>
+      </Box>
+    );
+  }
+
+  // Show world-gen terminal while world is being built (not yet ready)
+  if (loadingGame || (!gameState && !loadError)) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          minHeight: "calc(100vh - 64px)",
+          p: 4,
+          gap: 3,
+        }}
+      >
+        <Paper
+          sx={{
+            maxWidth: 600,
+            width: "100%",
+            background: "rgba(0, 8, 0, 0.96)",
+            border: "1px solid rgba(0, 255, 70, 0.25)",
+            boxShadow: "0 0 40px rgba(0, 255, 70, 0.15)",
+            overflow: "hidden",
+          }}
+        >
+          <Box
+            sx={{
+              px: 2,
+              py: 1.5,
+              borderBottom: "1px solid rgba(0, 255, 70, 0.2)",
+            }}
+          >
+            <Typography
+              sx={{
+                fontFamily: '"Cinzel", "Georgia", serif',
+                color: "rgba(0, 255, 70, 0.9)",
+                fontSize: "1rem",
+              }}
+            >
+              Forging Your World
+            </Typography>
+          </Box>
+          <Box sx={{ p: 2 }}>
+            <WorldGenTerminal lines={worldGenLog} ready={worldGenReady} />
+          </Box>
+          {worldGenLog.length === 0 && !worldGenReady && (
+            <Box sx={{ px: 2, pb: 1.5 }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "rgba(0,255,70,0.4)", fontFamily: "monospace" }}
+              >
+                Connecting to world generator...
+              </Typography>
+            </Box>
+          )}
+        </Paper>
+        {worldGenReady && (
+          <Alert
+            severity="success"
+            sx={{
+              maxWidth: 600,
+              width: "100%",
+              background: "rgba(0, 255, 70, 0.08)",
+              color: "rgba(0,255,70,0.9)",
+              border: "1px solid rgba(0,255,70,0.3)",
+            }}
+          >
+            World ready — loading your adventure...
+          </Alert>
+        )}
       </Box>
     );
   }
@@ -131,12 +204,22 @@ function GamePage() {
           transition: "all 0.3s ease-in-out",
           "&:hover": { boxShadow: "0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)" },
         }}>
-          <Typography variant="h6" sx={{
-            mb: 2, textAlign: "center", textTransform: "uppercase",
-            letterSpacing: "0.1em", borderBottom: `2px solid ${AppTheme.palette.primary.main}`, pb: 1,
-          }}>
-            World Map
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", mb: 2, borderBottom: `2px solid ${AppTheme.palette.primary.main}`, pb: 1 }}>
+            <Typography variant="h6" sx={{
+              flex: 1, textAlign: "center", textTransform: "uppercase", letterSpacing: "0.1em",
+            }}>
+              World Map
+            </Typography>
+            <Tooltip title="Adventure details">
+              <IconButton
+                size="small"
+                onClick={() => navigate({ to: "/game-{$sessionUUID}/details", params: { sessionUUID } })}
+                sx={{ color: "primary.main", opacity: 0.7, "&:hover": { opacity: 1 } }}
+              >
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
             <RoomMap gameState={gameState} />
           </Box>

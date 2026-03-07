@@ -14,7 +14,9 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GameChar123sessionUUIDChar125RouteImport } from './routes/game-{$sessionUUID}'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as CreateRouteImport } from './routes/create'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as GameChar123sessionUUIDChar125DetailsRouteImport } from './routes/game-{$sessionUUID}.details'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -42,68 +44,92 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CreateRoute = CreateRouteImport.update({
+  id: '/create',
+  path: '/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GameChar123sessionUUIDChar125DetailsRoute =
+  GameChar123sessionUUIDChar125DetailsRouteImport.update({
+    id: '/details',
+    path: '/details',
+    getParentRoute: () => GameChar123sessionUUIDChar125Route,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/create': typeof CreateRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125Route
+  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
+  '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/create': typeof CreateRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125Route
+  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
+  '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/create': typeof CreateRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125Route
+  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
   '/signup': typeof SignupRoute
+  '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/create'
     | '/forgot-password'
     | '/game-{$sessionUUID}'
     | '/login'
     | '/profile'
     | '/signup'
+    | '/game-{$sessionUUID}/details'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/create'
     | '/forgot-password'
     | '/game-{$sessionUUID}'
     | '/login'
     | '/profile'
     | '/signup'
+    | '/game-{$sessionUUID}/details'
   id:
     | '__root__'
     | '/'
+    | '/create'
     | '/forgot-password'
     | '/game-{$sessionUUID}'
     | '/login'
     | '/profile'
     | '/signup'
+    | '/game-{$sessionUUID}/details'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CreateRoute: typeof CreateRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
-  GameChar123sessionUUIDChar125Route: typeof GameChar123sessionUUIDChar125Route
+  GameChar123sessionUUIDChar125Route: typeof GameChar123sessionUUIDChar125RouteWithChildren
   LoginRoute: typeof LoginRoute
   ProfileRoute: typeof ProfileRoute
   SignupRoute: typeof SignupRoute
@@ -146,6 +172,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/create': {
+      id: '/create'
+      path: '/create'
+      fullPath: '/create'
+      preLoaderRoute: typeof CreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -153,13 +186,37 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/game-{$sessionUUID}/details': {
+      id: '/game-{$sessionUUID}/details'
+      path: '/details'
+      fullPath: '/game-{$sessionUUID}/details'
+      preLoaderRoute: typeof GameChar123sessionUUIDChar125DetailsRouteImport
+      parentRoute: typeof GameChar123sessionUUIDChar125Route
+    }
   }
 }
 
+interface GameChar123sessionUUIDChar125RouteChildren {
+  GameChar123sessionUUIDChar125DetailsRoute: typeof GameChar123sessionUUIDChar125DetailsRoute
+}
+
+const GameChar123sessionUUIDChar125RouteChildren: GameChar123sessionUUIDChar125RouteChildren =
+  {
+    GameChar123sessionUUIDChar125DetailsRoute:
+      GameChar123sessionUUIDChar125DetailsRoute,
+  }
+
+const GameChar123sessionUUIDChar125RouteWithChildren =
+  GameChar123sessionUUIDChar125Route._addFileChildren(
+    GameChar123sessionUUIDChar125RouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CreateRoute: CreateRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
-  GameChar123sessionUUIDChar125Route: GameChar123sessionUUIDChar125Route,
+  GameChar123sessionUUIDChar125Route:
+    GameChar123sessionUUIDChar125RouteWithChildren,
   LoginRoute: LoginRoute,
   ProfileRoute: ProfileRoute,
   SignupRoute: SignupRoute,

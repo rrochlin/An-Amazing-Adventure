@@ -8,6 +8,7 @@ import { useGameStore } from "../store/gameStore";
 import { getStoredTokens } from "../services/auth.service";
 import type { WsFrame, StateDelta, GameStateView, NarrativeChunkPayload, WorldGenLogPayload } from "../types/types";
 
+
 const WS_ENDPOINT = import.meta.env.VITE_WS_ENDPOINT as string | undefined;
 
 function getWsEndpoint(sessionId: string): string {
@@ -20,14 +21,16 @@ function getWsEndpoint(sessionId: string): string {
 
 interface UseGameSocketOptions {
   sessionId: string;
-  enabled?: boolean;
+  onWorldReady?: () => void;
 }
 
-export function useGameSocket({ sessionId, enabled = true }: UseGameSocketOptions) {
+export function useGameSocket({ sessionId, onWorldReady }: UseGameSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const retryCount = useRef(0);
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMounted = useRef(true);
+  const onWorldReadyRef = useRef(onWorldReady);
+  onWorldReadyRef.current = onWorldReady;
 
   const {
     setWsStatus,
@@ -77,6 +80,7 @@ export function useGameSocket({ sessionId, enabled = true }: UseGameSocketOption
 
       case "world_gen_ready":
         setWorldGenReady();
+        onWorldReadyRef.current?.();
         break;
 
       case "error":
@@ -88,7 +92,7 @@ export function useGameSocket({ sessionId, enabled = true }: UseGameSocketOption
   }, [appendStreamChunk, applyDelta, appendWorldGenLog, finalizeStreamingMessage, setGameState, setStreaming, setWsError, setWorldGenReady]);
 
   const connect = useCallback(() => {
-    if (!isMounted.current || !enabled) return;
+    if (!isMounted.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     setWsStatus("connecting");
@@ -118,7 +122,7 @@ export function useGameSocket({ sessionId, enabled = true }: UseGameSocketOption
         retryTimer.current = setTimeout(connect, delay);
       }
     };
-  }, [sessionId, enabled, handleMessage, setWsStatus, setWsError]);
+  }, [sessionId, handleMessage, setWsStatus, setWsError]);
 
   // Send a chat message through the WebSocket
   const sendChat = useCallback((content: string) => {
