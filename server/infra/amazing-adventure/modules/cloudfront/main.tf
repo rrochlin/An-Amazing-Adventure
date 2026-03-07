@@ -17,13 +17,13 @@ variable "domain_name" {
 variable "app_bucket_regional_domain" { type = string }
 variable "app_bucket_id" { type = string }
 variable "http_api_endpoint" { type = string }
-variable "websocket_api_endpoint" { type = string }
+# websocket_api_endpoint removed — WebSocket connects directly to API GW,
+# not through CloudFront. See CLAUDE.md for architecture notes.
 
 locals {
   has_domain     = var.domain_name != ""
   s3_origin_id   = "s3-${var.app_bucket_id}"
   http_origin_id = "apigw-http"
-  ws_origin_id   = "apigw-ws"
 }
 
 resource "aws_acm_certificate" "main" {
@@ -33,40 +33,6 @@ resource "aws_acm_certificate" "main" {
   validation_method = "DNS"
   lifecycle { create_before_destroy = true }
   tags = var.common_tags
-}
-
-resource "aws_cloudfront_origin_request_policy" "websocket" {
-  name    = "${var.prefix}-websocket-headers"
-  comment = "Forward WebSocket upgrade headers"
-  cookies_config { cookie_behavior = "none" }
-  headers_config {
-    header_behavior = "whitelist"
-    headers {
-      items = [
-        "Sec-WebSocket-Key",
-        "Sec-WebSocket-Version",
-        "Sec-WebSocket-Protocol",
-        "Sec-WebSocket-Accept",
-        "Sec-WebSocket-Extensions",
-      ]
-    }
-  }
-  query_strings_config { query_string_behavior = "all" }
-}
-
-resource "aws_cloudfront_cache_policy" "no_cache" {
-  name        = "${var.prefix}-no-cache"
-  comment     = "No caching for API and WebSocket origins"
-  min_ttl     = 0
-  default_ttl = 0
-  max_ttl     = 0
-  parameters_in_cache_key_and_forwarded_to_origin {
-    cookies_config { cookie_behavior = "none" }
-    headers_config { header_behavior = "none" }
-    query_strings_config { query_string_behavior = "none" }
-    enable_accept_encoding_brotli = false
-    enable_accept_encoding_gzip   = false
-  }
 }
 
 resource "aws_cloudfront_distribution" "main" {
@@ -97,18 +63,6 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
-  # WebSocket API Gateway origin — domain only, no protocol prefix
-  origin {
-    origin_id   = local.ws_origin_id
-    domain_name = split("/", var.websocket_api_endpoint)[0]
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "https-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
-    }
-  }
-
   default_cache_behavior {
     target_origin_id       = local.s3_origin_id
     viewer_protocol_policy = "redirect-to-https"
@@ -125,21 +79,15 @@ resource "aws_cloudfront_distribution" "main" {
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = aws_cloudfront_cache_policy.no_cache.id
+    # AWS managed CachingDisabled policy — no caching for API calls
+    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
     # Forward all headers except Host so API Gateway sees its own domain, not the CF domain.
     # Without this, API GW returns 403 Forbidden because the Host header is the CF domain.
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # Managed-AllViewerExceptHostHeader
   }
-
-  ordered_cache_behavior {
-    path_pattern             = "/ws"
-    target_origin_id         = local.ws_origin_id
-    viewer_protocol_policy   = "redirect-to-https"
-    allowed_methods          = ["GET", "HEAD"]
-    cached_methods           = ["GET", "HEAD"]
-    cache_policy_id          = aws_cloudfront_cache_policy.no_cache.id
-    origin_request_policy_id = aws_cloudfront_origin_request_policy.websocket.id
-  }
+  # NOTE: WebSocket connections bypass CloudFront entirely — clients connect
+  # directly to the API Gateway WebSocket endpoint. CloudFront does not
+  # reliably proxy WebSocket upgrades.
 
   custom_error_response {
     error_code            = 403
