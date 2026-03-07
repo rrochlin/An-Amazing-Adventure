@@ -72,6 +72,23 @@ export function getUserSub(): string {
   return getStoredTokens()?.userSub ?? "";
 }
 
+/** Returns the user's email by decoding the stored ID token payload. */
+export function getUserEmail(): string {
+  const tokens = getStoredTokens();
+  if (!tokens?.idToken) return "";
+  try {
+    const parts = tokens.idToken.split(".");
+    if (parts.length !== 3) return "";
+    // Pad for valid base64
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4);
+    const decoded = JSON.parse(atob(padded)) as Record<string, unknown>;
+    return (decoded["email"] as string) ?? "";
+  } catch {
+    return "";
+  }
+}
+
 // ----------------------------------------------------------------
 // Auth operations
 // ----------------------------------------------------------------

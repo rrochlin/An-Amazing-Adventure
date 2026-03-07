@@ -61,7 +61,13 @@ func (c *Client) NarrateStream(
 	playerInput string,
 	onChunk func(string),
 ) (NarratorResult, error) {
-	messages := toBedrockMessages(history)
+	// Trim history if it has grown too long to avoid context window exhaustion.
+	trimmed, err := c.TrimHistory(ctx, history)
+	if err != nil {
+		log.Printf("NarrateStream: TrimHistory error (proceeding with full history): %v", err)
+		trimmed = history
+	}
+	messages := toBedrockMessages(trimmed)
 
 	// Append the new player turn
 	messages = append(messages, types.Message{
@@ -208,6 +214,81 @@ type pendingToolUse struct {
 	id        string
 	name      string
 	inputJSON string
+}
+
+// ---- Context compression ----
+
+// maxHistoryMessages is the maximum number of NarrativeMessage entries to send
+// to Bedrock before trimming. Each player turn + assistant response = 2 messages,
+// so this allows ~20 full exchanges before compression kicks in.
+const maxHistoryMessages = 40
+
+// TrimHistory reduces the narrative history if it exceeds maxHistoryMessages.
+// It summarises the dropped messages into a single synthetic assistant turn so
+// the model retains the plot context without the full token cost.
+// The summary is generated using ModelSubAgent (fast/cheap).
+func (c *Client) TrimHistory(ctx context.Context, history []game.NarrativeMessage) ([]game.NarrativeMessage, error) {
+	if len(history) <= maxHistoryMessages {
+		return history, nil
+	}
+
+	// Keep the most recent maxHistoryMessages entries; summarise the rest.
+	cutoff := len(history) - maxHistoryMessages
+	toSummarise := history[:cutoff]
+	kept := history[cutoff:]
+
+	// Build a plain-text digest of the dropped messages
+	var sb strings.Builder
+	for _, m := range toSummarise {
+		for _, b := range m.Content {
+			if b.Type == "text" && b.Text != "" {
+				role := "Narrator"
+				if m.Role == "user" {
+					role = "Player"
+				}
+				sb.WriteString(role)
+				sb.WriteString(": ")
+				sb.WriteString(b.Text)
+				sb.WriteString("\n\n")
+			}
+		}
+	}
+
+	prompt := "Summarise the following adventure log in 3-5 concise paragraphs, " +
+		"preserving key plot points, character introductions, items found, and locations visited. " +
+		"Write in third person past tense.\n\n" + sb.String()
+
+	resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
+		ModelId: aws.String(ModelSubAgent),
+		Messages: []types.Message{{
+			Role: types.ConversationRoleUser,
+			Content: []types.ContentBlock{
+				&types.ContentBlockMemberText{Value: prompt},
+			},
+		}},
+		InferenceConfig: &types.InferenceConfiguration{
+			MaxTokens: aws.Int32(512),
+		},
+	})
+	if err != nil {
+		// Non-fatal: log and return history untrimmed rather than breaking the game
+		log.Printf("TrimHistory: summarisation failed (returning untrimmed): %v", err)
+		return history, nil
+	}
+
+	summary := extractText(resp.Output)
+	summaryMsg := game.NarrativeMessage{
+		Role: "assistant",
+		Content: []game.NarrativeBlock{{
+			Type: "text",
+			Text: "[Story so far] " + summary,
+		}},
+	}
+
+	log.Printf("TrimHistory: trimmed %d → %d messages (summary: %d chars)",
+		len(history), len(kept)+1, len(summary))
+
+	return append([]game.NarrativeMessage{summaryMsg}, kept...), nil
 }
 
 // ---- World Generation ----
