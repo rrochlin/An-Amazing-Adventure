@@ -1,17 +1,21 @@
 // world-gen is an async Lambda invoked by http-games after a new game is created.
 // It uses the Architect agent to produce a world blueprint in a single call,
 // then builds the world deterministically from that blueprint.
+// While running it emits world_gen_log frames over WebSocket so the client can
+// show a live terminal. A world_gen_ready frame is sent on completion.
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
 )
 
 type worldGenEvent struct {
@@ -28,7 +32,37 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 		return err
 	}
 
+	// Best-effort WebSocket push — if the client isn't connected we just log
+	// and skip the push rather than failing the whole job.
+	var sender *wsutil.Sender
+	var connID string
+	if ws, wsErr := wsutil.New(ctx); wsErr == nil {
+		conn, connErr := dbClient.GetConnectionByUserID(ctx, evt.UserID)
+		if connErr == nil {
+			sender = ws
+			connID = conn.ConnectionID
+			log.Printf("world-gen: will push progress to connection %s", connID)
+		} else {
+			log.Printf("world-gen: no active connection for user, skipping WS push: %v", connErr)
+		}
+	} else {
+		log.Printf("world-gen: WS sender unavailable (WEBSOCKET_API_ENDPOINT not set?): %v", wsErr)
+	}
+
+	// emit pushes a log line to the terminal (non-fatal on WS error).
+	emit := func(line string) {
+		log.Printf("world-gen: %s", line)
+		if sender != nil {
+			if err := sender.SendWorldGenLog(ctx, connID, line); err != nil {
+				log.Printf("world-gen: send log frame: %v", err)
+				// Stale connection — stop trying to push
+				sender = nil
+			}
+		}
+	}
+
 	// Load the stub game record created by http-games
+	emit("Loading game record...")
 	saveState, err := dbClient.GetGame(ctx, evt.SessionID)
 	if err != nil {
 		return err
@@ -44,28 +78,32 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	}
 
 	// Step 1: Generate the world blueprint
-	log.Printf("world-gen: generating blueprint...")
+	emit(fmt.Sprintf("Summoning the Architect for %q...", evt.PlayerName))
 	blueprint, rawJSON, err := aiClient.GenerateBlueprint(ctx, evt.PlayerName, "")
 	if err != nil {
+		emit(fmt.Sprintf("ERROR: blueprint generation failed: %v", err))
 		log.Printf("world-gen: blueprint error: %v\nraw: %s", err, rawJSON)
 		return err
 	}
-	log.Printf("world-gen: blueprint has %d rooms, %d items, %d characters",
-		len(blueprint.Rooms), len(blueprint.Items), len(blueprint.Characters))
+	emit(fmt.Sprintf("Blueprint ready: %q — %d rooms, %d items, %d characters",
+		blueprint.Title, len(blueprint.Rooms), len(blueprint.Items), len(blueprint.Characters)))
+	emit(fmt.Sprintf("Theme: %s", blueprint.Theme))
+	emit(fmt.Sprintf("Quest: %s", blueprint.QuestGoal))
 
-	// Step 2: Execute blueprint deterministically — no AI loop, no surprises
+	// Step 2: Build world deterministically
+	emit("Constructing world...")
 	if err := ai.BuildWorldFromBlueprint(g, blueprint); err != nil {
+		emit(fmt.Sprintf("ERROR: world build failed: %v", err))
 		log.Printf("world-gen: build error: %v", err)
 		return err
 	}
+	emit(fmt.Sprintf("World built — %d rooms placed", len(g.Rooms)))
 
-	// Step 3: Store opening narrative in chat history
+	// Step 3: Populate opening state
+	emit("Writing opening scene...")
 	openingHistory := []game.ChatMessage{
 		{Type: "narrative", Content: blueprint.OpeningScene},
 	}
-
-	// Step 4: Build a compact narrative context for the narrator
-	// (just the opening — narrator will grow this from here)
 	openingNarrative := []game.NarrativeMessage{
 		{
 			Role: "assistant",
@@ -75,19 +113,19 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 		},
 	}
 
-	// Step 5: Mark ready and persist
+	// Step 4: Persist and mark ready
+	emit("Sealing the world into the tome...")
 	g.Ready = true
 	g.Version++
 	saved := g.ToSaveState(openingNarrative, openingHistory)
 
-	// Retry loop for optimistic locking (unlikely to conflict here but safe)
 	for attempt := 0; attempt < 3; attempt++ {
 		if err := dbClient.PutGame(ctx, saved); err != nil {
 			log.Printf("world-gen: put game attempt %d: %v", attempt+1, err)
 			if attempt == 2 {
+				emit("ERROR: failed to save world")
 				return err
 			}
-			// Reload version and retry
 			if fresh, loadErr := dbClient.GetGame(ctx, evt.SessionID); loadErr == nil {
 				saved.Version = fresh.Version + 1
 			}
@@ -96,9 +134,17 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 		break
 	}
 
-	log.Printf("world-gen: complete for session %s — %d rooms created", evt.SessionID, len(g.Rooms))
+	emit("Your adventure awaits.")
+	log.Printf("world-gen: complete for session %s — %d rooms", evt.SessionID, len(g.Rooms))
 
-	// Debug: log the blueprint for visibility
+	// Signal the client to transition to the game
+	if sender != nil {
+		if err := sender.SendWorldGenReady(ctx, connID); err != nil {
+			log.Printf("world-gen: send world_ready frame: %v", err)
+		}
+	}
+
+	// Debug: log the blueprint
 	if b, err := json.MarshalIndent(blueprint, "", "  "); err == nil {
 		log.Printf("world-gen: blueprint:\n%s", string(b))
 	}

@@ -162,4 +162,28 @@ describe("gameStore", () => {
     useGameStore.getState().setWsError(null);
     expect(useGameStore.getState().wsError).toBeNull();
   });
+
+  it("appendWorldGenLog accumulates lines", () => {
+    useGameStore.getState().appendWorldGenLog("Loading game record...");
+    useGameStore.getState().appendWorldGenLog("Summoning the Architect...");
+    const { worldGenLog } = useGameStore.getState();
+    expect(worldGenLog).toHaveLength(2);
+    expect(worldGenLog[0]).toBe("Loading game record...");
+    expect(worldGenLog[1]).toBe("Summoning the Architect...");
+  });
+
+  it("setWorldGenReady sets worldGenReady to true", () => {
+    expect(useGameStore.getState().worldGenReady).toBe(false);
+    useGameStore.getState().setWorldGenReady();
+    expect(useGameStore.getState().worldGenReady).toBe(true);
+  });
+
+  it("reset clears worldGenLog and worldGenReady", () => {
+    useGameStore.getState().appendWorldGenLog("some line");
+    useGameStore.getState().setWorldGenReady();
+    useGameStore.getState().reset();
+    const s = useGameStore.getState();
+    expect(s.worldGenLog).toHaveLength(0);
+    expect(s.worldGenReady).toBe(false);
+  });
 });

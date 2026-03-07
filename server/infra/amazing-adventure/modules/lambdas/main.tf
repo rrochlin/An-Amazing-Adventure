@@ -379,9 +379,21 @@ resource "aws_iam_role_policy" "world_gen" {
         Resource = var.sessions_table_arn
       },
       {
+        # Read connections table to find the user's active WebSocket connection
+        Effect   = "Allow"
+        Action   = ["dynamodb:Query"]
+        Resource = var.connections_table_index_arn
+      },
+      {
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
         Resource = "*"
+      },
+      {
+        # Push progress frames to the connected client via API Gateway Management API
+        Effect   = "Allow"
+        Action   = ["execute-api:ManageConnections"]
+        Resource = "${var.websocket_api_execution_arn}/*"
       }
     ]
   })
@@ -403,8 +415,10 @@ resource "aws_lambda_function" "world_gen" {
   memory_size      = 256
   environment {
     variables = {
-      SESSIONS_TABLE = var.sessions_table_name
-      BEDROCK_REGION = "us-west-2"
+      SESSIONS_TABLE         = var.sessions_table_name
+      CONNECTIONS_TABLE      = var.connections_table_name
+      WEBSOCKET_API_ENDPOINT = local.ws_endpoint_full
+      BEDROCK_REGION         = "us-west-2"
     }
   }
   depends_on = [aws_cloudwatch_log_group.world_gen]

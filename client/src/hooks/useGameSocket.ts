@@ -6,7 +6,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useGameStore } from "../store/gameStore";
 import { getStoredTokens } from "../services/auth.service";
-import type { WsFrame, StateDelta, GameStateView, NarrativeChunkPayload } from "../types/types";
+import type { WsFrame, StateDelta, GameStateView, NarrativeChunkPayload, WorldGenLogPayload } from "../types/types";
 
 const WS_ENDPOINT = import.meta.env.VITE_WS_ENDPOINT as string | undefined;
 
@@ -37,6 +37,8 @@ export function useGameSocket({ sessionId, enabled = true }: UseGameSocketOption
     finalizeStreamingMessage,
     applyDelta,
     setGameState,
+    appendWorldGenLog,
+    setWorldGenReady,
   } = useGameStore();
 
   const handleMessage = useCallback((event: MessageEvent) => {
@@ -69,13 +71,21 @@ export function useGameSocket({ sessionId, enabled = true }: UseGameSocketOption
         // Server rejected message — user already informed by disabled input
         break;
 
+      case "world_gen_log":
+        appendWorldGenLog((frame.payload as WorldGenLogPayload).line ?? "");
+        break;
+
+      case "world_gen_ready":
+        setWorldGenReady();
+        break;
+
       case "error":
         setWsError(
           (frame.payload as { message: string })?.message ?? "Unknown error"
         );
         break;
     }
-  }, [appendStreamChunk, applyDelta, finalizeStreamingMessage, setGameState, setStreaming, setWsError]);
+  }, [appendStreamChunk, applyDelta, appendWorldGenLog, finalizeStreamingMessage, setGameState, setStreaming, setWsError, setWorldGenReady]);
 
   const connect = useCallback(() => {
     if (!isMounted.current || !enabled) return;

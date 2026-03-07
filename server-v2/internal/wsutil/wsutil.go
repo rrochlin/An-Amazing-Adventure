@@ -23,6 +23,10 @@ const (
 	FrameStateDelta       FrameType = "state_delta"
 	FrameError            FrameType = "error"
 	FrameStreamingBlocked FrameType = "streaming_blocked"
+	// World-generation progress frames — sent by the world-gen Lambda while
+	// it is running, before the game is marked ready.
+	FrameWorldGenLog   FrameType = "world_gen_log"
+	FrameWorldGenReady FrameType = "world_gen_ready"
 )
 
 // Frame is the JSON envelope sent to the client over WebSocket.
@@ -98,4 +102,19 @@ func (s *Sender) SendError(ctx context.Context, connectionID, message string) er
 // game_action mutations).
 func (s *Sender) SendFullState(ctx context.Context, connectionID string, state any) error {
 	return s.Send(ctx, connectionID, Frame{Type: FrameGameStateUpdate, Payload: state})
+}
+
+// SendWorldGenLog pushes a single line of world-generation progress text.
+// The client displays these in a terminal-style component while waiting.
+func (s *Sender) SendWorldGenLog(ctx context.Context, connectionID, line string) error {
+	return s.Send(ctx, connectionID, Frame{
+		Type:    FrameWorldGenLog,
+		Payload: map[string]string{"line": line},
+	})
+}
+
+// SendWorldGenReady signals that world generation completed successfully.
+// The client should transition from the terminal view to the game.
+func (s *Sender) SendWorldGenReady(ctx context.Context, connectionID string) error {
+	return s.Send(ctx, connectionID, Frame{Type: FrameWorldGenReady})
 }
