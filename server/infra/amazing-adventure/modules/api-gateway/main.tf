@@ -93,13 +93,6 @@ resource "aws_apigatewayv2_route" "delete_game" {
   authorizer_id      = local.jwt_auth.authorizer_id
   authorization_type = local.jwt_auth.authorization_type
 }
-resource "aws_apigatewayv2_route" "get_worldready" {
-  api_id             = aws_apigatewayv2_api.http.id
-  route_key          = "GET /api/worldready/{uuid}"
-  target             = local.games_target
-  authorizer_id      = local.jwt_auth.authorizer_id
-  authorization_type = local.jwt_auth.authorization_type
-}
 resource "aws_apigatewayv2_route" "post_users" {
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = "POST /api/users"
