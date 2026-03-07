@@ -24,9 +24,10 @@ type Client struct {
 }
 
 // New creates a Client from the current AWS environment.
-// SESSIONS_TABLE is required. CONNECTIONS_TABLE is optional at construction
-// time — it is only needed by WebSocket Lambdas; HTTP-only Lambdas omit it.
-// A panic is deferred until a connections method is actually called without it.
+// Both SESSIONS_TABLE and CONNECTIONS_TABLE are optional at construction time —
+// panics are deferred to the first method call that actually needs each table.
+// This allows Lambdas to omit env vars they don't use (e.g. ws-connect only
+// needs CONNECTIONS_TABLE; ws-chat needs both).
 func New(ctx context.Context) (*Client, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -34,17 +35,16 @@ func New(ctx context.Context) (*Client, error) {
 	}
 	return &Client{
 		ddb:              dynamodb.NewFromConfig(cfg),
-		sessionsTable:    mustEnv("SESSIONS_TABLE"),
-		connectionsTable: os.Getenv("CONNECTIONS_TABLE"), // optional; checked at use
+		sessionsTable:    os.Getenv("SESSIONS_TABLE"),    // checked at use
+		connectionsTable: os.Getenv("CONNECTIONS_TABLE"), // checked at use
 	}, nil
 }
 
-func mustEnv(key string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		panic(fmt.Sprintf("required env var %s is not set", key))
+// requireSessionsTable panics with a clear message if SESSIONS_TABLE was not set.
+func (c *Client) requireSessionsTable() {
+	if c.sessionsTable == "" {
+		panic("required env var SESSIONS_TABLE is not set")
 	}
-	return v
 }
 
 // requireConnectionsTable panics with a clear message if CONNECTIONS_TABLE was
@@ -111,6 +111,7 @@ func fromDBState(d saveStateDB) game.SaveState {
 // If the current version in the DB doesn't match state.Version, the write
 // is rejected with a ConditionalCheckFailedException — caller should retry.
 func (c *Client) PutGame(ctx context.Context, state game.SaveState) error {
+	c.requireSessionsTable()
 	item, err := attributevalue.MarshalMap(toDBState(state))
 	if err != nil {
 		return fmt.Errorf("marshal save state: %w", err)
@@ -141,6 +142,7 @@ func (c *Client) PutGame(ctx context.Context, state game.SaveState) error {
 
 // GetGame loads and deserialises a full SaveState by session UUID string.
 func (c *Client) GetGame(ctx context.Context, sessionID string) (game.SaveState, error) {
+	c.requireSessionsTable()
 	out, err := c.ddb.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(c.sessionsTable),
 		Key:       sessionKey(sessionID),
@@ -160,6 +162,7 @@ func (c *Client) GetGame(ctx context.Context, sessionID string) (game.SaveState,
 
 // GetGameReady does a projection-only read to check the ready flag cheaply.
 func (c *Client) GetGameReady(ctx context.Context, sessionID string) (bool, error) {
+	c.requireSessionsTable()
 	out, err := c.ddb.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName:            aws.String(c.sessionsTable),
 		Key:                  sessionKey(sessionID),
@@ -185,6 +188,7 @@ func (c *Client) GetGameReady(ctx context.Context, sessionID string) (bool, erro
 
 // ListGames returns all SaveState summaries for a given user ID.
 func (c *Client) ListGames(ctx context.Context, userID string) ([]game.SaveState, error) {
+	c.requireSessionsTable()
 	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(c.sessionsTable),
 		IndexName:              aws.String("user-sessions-index"),
@@ -209,6 +213,7 @@ func (c *Client) ListGames(ctx context.Context, userID string) ([]game.SaveState
 
 // DeleteGame removes a session record owned by userID.
 func (c *Client) DeleteGame(ctx context.Context, sessionID, userID string) error {
+	c.requireSessionsTable()
 	_, err := c.ddb.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName:           aws.String(c.sessionsTable),
 		Key:                 sessionKey(sessionID),

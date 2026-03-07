@@ -91,6 +91,7 @@ resource "aws_lambda_function" "ws_connect" {
   memory_size      = 128
   environment {
     variables = {
+      SESSIONS_TABLE    = var.sessions_table_name
       CONNECTIONS_TABLE = var.connections_table_name
       USER_POOL_ID      = var.user_pool_id
     }

@@ -2,10 +2,37 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
 )
+
+// assertPanicsWithEnvAbsent runs fn with the given env var unset and asserts
+// that it panics with a message containing the var name. This catches missing
+// env var configuration before deployment.
+func assertPanicsWithEnvAbsent(t *testing.T, envVar string, fn func()) {
+	t.Helper()
+	t.Setenv(envVar, "") // unset for this test; restored after
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Errorf("expected panic for missing %s, but handler did not panic", envVar)
+			return
+		}
+		msg := ""
+		switch v := r.(type) {
+		case string:
+			msg = v
+		case error:
+			msg = v.Error()
+		}
+		if !strings.Contains(msg, envVar) {
+			t.Errorf("panic message %q does not mention %s", msg, envVar)
+		}
+	}()
+	fn()
+}
 
 func makeWSReq(connID string, queryParams map[string]string) events.APIGatewayWebsocketProxyRequest {
 	return events.APIGatewayWebsocketProxyRequest{
@@ -73,6 +100,36 @@ func TestHandlerConnect_ValidTokenFormat_ReachesDB(t *testing.T) {
 	if resp.StatusCode == 401 {
 		t.Errorf("expected to pass JWT validation, got 401 — JWT parsing failed")
 	}
+}
+
+// ---- Required env var tests ----
+// ws-connect only touches the connections table — SESSIONS_TABLE is not required
+// at runtime (though Terraform sets it for consistency). CONNECTIONS_TABLE is required.
+
+func TestHandlerConnect_MissingCONNECTIONS_TABLE_Panics(t *testing.T) {
+	t.Setenv("SESSIONS_TABLE", "test-sessions")
+	t.Setenv("USER_POOL_ID", "us-west-2_test")
+	validToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLWFiYyIsImV4cCI6OTk5OTk5OTk5OX0.signature"
+	req := makeWSReq("conn-1", map[string]string{"token": validToken, "gameId": "g"})
+	assertPanicsWithEnvAbsent(t, "CONNECTIONS_TABLE", func() {
+		handler(context.Background(), req) //nolint:errcheck
+	})
+}
+
+func TestHandlerConnect_NoCONNECTIONS_TABLE_Panics_Without_SESSIONS_TABLE(t *testing.T) {
+	// Verify SESSIONS_TABLE absent does NOT cause a panic in ws-connect
+	// (it only writes connection records, never reads sessions).
+	t.Setenv("CONNECTIONS_TABLE", "test-connections")
+	t.Setenv("USER_POOL_ID", "us-west-2_test")
+	t.Setenv("SESSIONS_TABLE", "") // explicitly absent
+	validToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLWFiYyIsImV4cCI6OTk5OTk5OTk5OX0.signature"
+	req := makeWSReq("conn-1", map[string]string{"token": validToken, "gameId": "g"})
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("ws-connect panicked with SESSIONS_TABLE absent: %v", r)
+		}
+	}()
+	handler(context.Background(), req) //nolint:errcheck
 }
 
 // ---- validateCognitoToken unit tests ----
