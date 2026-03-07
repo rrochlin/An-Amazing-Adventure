@@ -59,11 +59,59 @@ func (c *Client) requireConnectionsTable() {
 // Game sessions
 // -------------------------------------------------------------------
 
+// saveStateDB is a DynamoDB-specific wrapper around game.SaveState that
+// overrides the key fields to marshal as Binary (B), matching the table schema.
+type saveStateDB struct {
+	SessionID     BinaryID                `dynamodbav:"session_id"`
+	UserID        BinaryID                `dynamodbav:"user_id"`
+	SchemaVersion int                     `dynamodbav:"schema_version"`
+	Version       int                     `dynamodbav:"version"`
+	Player        game.Character          `dynamodbav:"player"`
+	Rooms         []game.Area             `dynamodbav:"rooms"`
+	Items         []game.Item             `dynamodbav:"items"`
+	NPCs          []game.Character        `dynamodbav:"npcs"`
+	Narrative     []game.NarrativeMessage `dynamodbav:"narrative"`
+	ChatHistory   []game.ChatMessage      `dynamodbav:"chat_history"`
+	Ready         bool                    `dynamodbav:"ready"`
+}
+
+func toDBState(s game.SaveState) saveStateDB {
+	return saveStateDB{
+		SessionID:     BinaryID(s.SessionID),
+		UserID:        BinaryID(s.UserID),
+		SchemaVersion: s.SchemaVersion,
+		Version:       s.Version,
+		Player:        s.Player,
+		Rooms:         s.Rooms,
+		Items:         s.Items,
+		NPCs:          s.NPCs,
+		Narrative:     s.Narrative,
+		ChatHistory:   s.ChatHistory,
+		Ready:         s.Ready,
+	}
+}
+
+func fromDBState(d saveStateDB) game.SaveState {
+	return game.SaveState{
+		SessionID:     string(d.SessionID),
+		UserID:        string(d.UserID),
+		SchemaVersion: d.SchemaVersion,
+		Version:       d.Version,
+		Player:        d.Player,
+		Rooms:         d.Rooms,
+		Items:         d.Items,
+		NPCs:          d.NPCs,
+		Narrative:     d.Narrative,
+		ChatHistory:   d.ChatHistory,
+		Ready:         d.Ready,
+	}
+}
+
 // PutGame writes a SaveState to DynamoDB using optimistic locking.
 // If the current version in the DB doesn't match state.Version, the write
 // is rejected with a ConditionalCheckFailedException — caller should retry.
 func (c *Client) PutGame(ctx context.Context, state game.SaveState) error {
-	item, err := attributevalue.MarshalMap(state)
+	item, err := attributevalue.MarshalMap(toDBState(state))
 	if err != nil {
 		return fmt.Errorf("marshal save state: %w", err)
 	}
@@ -72,12 +120,10 @@ func (c *Client) PutGame(ctx context.Context, state game.SaveState) error {
 	var exprAttrVals map[string]types.AttributeValue
 
 	if state.Version > 0 {
-		// Optimistic lock: only write if the stored version matches
 		prevVersion, _ := attributevalue.Marshal(state.Version - 1)
 		condExpr = aws.String("version = :prev")
 		exprAttrVals = map[string]types.AttributeValue{":prev": prevVersion}
 	} else {
-		// First write: item must not exist yet
 		condExpr = aws.String("attribute_not_exists(session_id)")
 	}
 
@@ -95,13 +141,9 @@ func (c *Client) PutGame(ctx context.Context, state game.SaveState) error {
 
 // GetGame loads and deserialises a full SaveState by session UUID string.
 func (c *Client) GetGame(ctx context.Context, sessionID string) (game.SaveState, error) {
-	key, err := sessionKey(sessionID)
-	if err != nil {
-		return game.SaveState{}, err
-	}
 	out, err := c.ddb.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(c.sessionsTable),
-		Key:       key,
+		Key:       sessionKey(sessionID),
 	})
 	if err != nil {
 		return game.SaveState{}, fmt.Errorf("get game: %w", err)
@@ -109,22 +151,18 @@ func (c *Client) GetGame(ctx context.Context, sessionID string) (game.SaveState,
 	if out.Item == nil {
 		return game.SaveState{}, fmt.Errorf("game not found: %s", sessionID)
 	}
-	var state game.SaveState
-	if err := attributevalue.UnmarshalMap(out.Item, &state); err != nil {
+	var d saveStateDB
+	if err := attributevalue.UnmarshalMap(out.Item, &d); err != nil {
 		return game.SaveState{}, fmt.Errorf("unmarshal game: %w", err)
 	}
-	return state, nil
+	return fromDBState(d), nil
 }
 
 // GetGameReady does a projection-only read to check the ready flag cheaply.
 func (c *Client) GetGameReady(ctx context.Context, sessionID string) (bool, error) {
-	key, err := sessionKey(sessionID)
-	if err != nil {
-		return false, err
-	}
 	out, err := c.ddb.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName:            aws.String(c.sessionsTable),
-		Key:                  key,
+		Key:                  sessionKey(sessionID),
 		ProjectionExpression: aws.String("#r"),
 		ExpressionAttributeNames: map[string]string{
 			"#r": "ready",
@@ -147,42 +185,36 @@ func (c *Client) GetGameReady(ctx context.Context, sessionID string) (bool, erro
 
 // ListGames returns all SaveState summaries for a given user ID.
 func (c *Client) ListGames(ctx context.Context, userID string) ([]game.SaveState, error) {
-	keyEx := expression.Key("user_id").Equal(expression.Value(userID))
-	expr, err := expression.NewBuilder().WithKeyCondition(keyEx).Build()
-	if err != nil {
-		return nil, err
-	}
 	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
-		TableName:                 aws.String(c.sessionsTable),
-		IndexName:                 aws.String("user-sessions-index"),
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		KeyConditionExpression:    expr.KeyCondition(),
+		TableName:              aws.String(c.sessionsTable),
+		IndexName:              aws.String("user-sessions-index"),
+		KeyConditionExpression: aws.String("user_id = :uid"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":uid": binaryIDVal(userID),
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list games: %w", err)
 	}
-	var saves []game.SaveState
-	if err := attributevalue.UnmarshalListOfMaps(out.Items, &saves); err != nil {
-		return nil, err
+	saves := make([]game.SaveState, 0, len(out.Items))
+	for _, item := range out.Items {
+		var d saveStateDB
+		if err := attributevalue.UnmarshalMap(item, &d); err != nil {
+			return nil, fmt.Errorf("unmarshal game list item: %w", err)
+		}
+		saves = append(saves, fromDBState(d))
 	}
 	return saves, nil
 }
 
-// DeleteGame removes a session record. Caller must verify ownership first.
+// DeleteGame removes a session record owned by userID.
 func (c *Client) DeleteGame(ctx context.Context, sessionID, userID string) error {
-	key, err := sessionKey(sessionID)
-	if err != nil {
-		return err
-	}
-	// Condition: only delete if the user_id matches (ownership check)
-	userVal, _ := attributevalue.Marshal(userID)
-	_, err = c.ddb.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+	_, err := c.ddb.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName:           aws.String(c.sessionsTable),
-		Key:                 key,
+		Key:                 sessionKey(sessionID),
 		ConditionExpression: aws.String("user_id = :uid"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":uid": userVal,
+			":uid": binaryIDVal(userID),
 		},
 	})
 	if err != nil {
@@ -191,12 +223,8 @@ func (c *Client) DeleteGame(ctx context.Context, sessionID, userID string) error
 	return nil
 }
 
-func sessionKey(sessionID string) (map[string]types.AttributeValue, error) {
-	v, err := attributevalue.Marshal(sessionID)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]types.AttributeValue{"session_id": v}, nil
+func sessionKey(sessionID string) map[string]types.AttributeValue {
+	return map[string]types.AttributeValue{"session_id": binaryIDVal(sessionID)}
 }
 
 // -------------------------------------------------------------------
@@ -204,12 +232,13 @@ func sessionKey(sessionID string) (map[string]types.AttributeValue, error) {
 // -------------------------------------------------------------------
 
 // Connection represents a live WebSocket connection record.
+// UserID marshals as Binary to match the connections table GSI key type.
 type Connection struct {
-	ConnectionID string `dynamodbav:"connection_id"`
-	UserID       string `dynamodbav:"user_id"`
-	GameID       string `dynamodbav:"game_id"`
-	ExpiresAt    int64  `dynamodbav:"expires_at"` // Unix epoch seconds; TTL field
-	Streaming    bool   `dynamodbav:"streaming"`  // true while AI is generating
+	ConnectionID string   `dynamodbav:"connection_id"`
+	UserID       BinaryID `dynamodbav:"user_id"`
+	GameID       string   `dynamodbav:"game_id"`
+	ExpiresAt    int64    `dynamodbav:"expires_at"` // Unix epoch seconds; TTL field
+	Streaming    bool     `dynamodbav:"streaming"`  // true while AI is generating
 }
 
 // PutConnection writes or replaces a connection record.
@@ -263,18 +292,13 @@ func (c *Client) DeleteConnection(ctx context.Context, connectionID string) erro
 // Called on new $connect to enforce one-connection-per-user.
 func (c *Client) DeleteUserConnections(ctx context.Context, userID string) error {
 	c.requireConnectionsTable()
-	userVal, _ := attributevalue.Marshal(userID)
-	keyEx := expression.Key("user_id").Equal(expression.Value(userID))
-	expr, err := expression.NewBuilder().WithKeyCondition(keyEx).Build()
-	if err != nil {
-		return err
-	}
 	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
-		TableName:                 aws.String(c.connectionsTable),
-		IndexName:                 aws.String("user-connections-index"),
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		KeyConditionExpression:    expr.KeyCondition(),
+		TableName:              aws.String(c.connectionsTable),
+		IndexName:              aws.String("user-connections-index"),
+		KeyConditionExpression: aws.String("user_id = :uid"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":uid": binaryIDVal(userID),
+		},
 	})
 	if err != nil {
 		return err
@@ -294,7 +318,6 @@ func (c *Client) DeleteUserConnections(ctx context.Context, userID string) error
 			return err
 		}
 	}
-	_ = userVal
 	return nil
 }
 
