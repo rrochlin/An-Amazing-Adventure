@@ -30,7 +30,7 @@ function GamePage() {
   const { gameState, chatMessages, streamingMessage, isStreaming, wsError, wsStatus, addChatMessage, setGameState, reset } =
     useGameStore();
 
-  const { sendChat } = useGameSocket({ sessionId: sessionUUID, enabled: !!gameState });
+  const { sendChat, sendAction } = useGameSocket({ sessionId: sessionUUID, enabled: !!gameState });
 
   // Load game state on mount (poll world-ready then fetch full state)
   useEffect(() => {
@@ -152,7 +152,7 @@ function GamePage() {
           transition: "all 0.3s ease-in-out",
           "&:hover": { boxShadow: "0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)" },
         }}>
-          <GameInfo gameState={gameState} onItemClick={() => {}} />
+          <GameInfo gameState={gameState} sendAction={sendAction} />
         </Paper>
         <Box sx={{ width: "4px", backgroundColor: "#000", opacity: 0.5, borderRadius: "2px" }} />
       </Box>

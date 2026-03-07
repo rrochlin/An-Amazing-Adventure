@@ -25,6 +25,7 @@ const makeGameState = (overrides: Partial<GameStateView> = {}): GameStateView =>
     health: 100,
     friendly: true,
     inventory: [],
+    equipment: {},
   },
   rooms: {
     "room-1": {
@@ -113,6 +114,7 @@ describe("gameStore", () => {
         health: 80,
         friendly: true,
         inventory: [],
+        equipment: {},
       },
     };
 

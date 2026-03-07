@@ -19,7 +19,7 @@ function makeGameState(overrides: Partial<GameStateView> = {}): GameStateView {
         { id: "item-1", name: "Rusty Dagger", description: "Dull blade", weight: 1, equippable: false },
       ],
       occupants: [
-        { id: "npc-1", name: "Barkeep", description: "Tired man", alive: true, health: 100, friendly: true, inventory: [] },
+        { id: "npc-1", name: "Barkeep", description: "Tired man", alive: true, health: 100, friendly: true, inventory: [], equipment: {} },
       ],
     },
     player: {
@@ -32,6 +32,7 @@ function makeGameState(overrides: Partial<GameStateView> = {}): GameStateView {
       inventory: [
         { id: "item-2", name: "Health Potion", description: "Restores health", weight: 0.5, equippable: false },
       ],
+      equipment: {},
     },
     rooms: {},
     chat_history: [],
@@ -39,10 +40,10 @@ function makeGameState(overrides: Partial<GameStateView> = {}): GameStateView {
   };
 }
 
-function renderInfo(state: GameStateView | null, onItemClick = vi.fn()) {
+function renderInfo(state: GameStateView | null, sendAction = vi.fn()) {
   return render(
     <ThemeProvider theme={AppTheme}>
-      <GameInfo gameState={state} onItemClick={onItemClick} />
+      <GameInfo gameState={state} sendAction={sendAction} />
     </ThemeProvider>
   );
 }
@@ -73,7 +74,6 @@ describe("GameInfo", () => {
 
   it("shows player inventory on Inventory tab", async () => {
     renderInfo(makeGameState());
-    // Find and click the Inventory tab
     const inventoryTab = screen.getByRole("tab", { name: /inventory/i });
     await userEvent.click(inventoryTab);
     expect(screen.getByText("Health Potion")).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe("GameInfo", () => {
     state.player.inventory = [];
     renderInfo(state);
     await userEvent.click(screen.getByRole("tab", { name: /inventory/i }));
-    expect(screen.getByText(/your inventory is empty/i)).toBeInTheDocument();
+    expect(screen.getByText(/your pack is empty/i)).toBeInTheDocument();
   });
 
   it("shows empty room items message when no items", async () => {
@@ -101,5 +101,28 @@ describe("GameInfo", () => {
     renderInfo(state);
     await userEvent.click(screen.getByRole("tab", { name: /room/i }));
     expect(screen.getByText(/no occupants in this room/i)).toBeInTheDocument();
+  });
+
+  it("shows equipment slots on Equipment tab", async () => {
+    renderInfo(makeGameState());
+    await userEvent.click(screen.getByRole("tab", { name: /equipment/i }));
+    expect(screen.getByText(/head/i)).toBeInTheDocument();
+    expect(screen.getByText(/chest/i)).toBeInTheDocument();
+  });
+
+  it("calls sendAction with pick_up when pick up button clicked", async () => {
+    const sendAction = vi.fn();
+    renderInfo(makeGameState(), sendAction);
+    await userEvent.click(screen.getByRole("tab", { name: /room/i }));
+    await userEvent.click(screen.getByRole("button", { name: /pick up/i }));
+    expect(sendAction).toHaveBeenCalledWith("pick_up", "Rusty Dagger");
+  });
+
+  it("calls sendAction with drop when drop button clicked", async () => {
+    const sendAction = vi.fn();
+    renderInfo(makeGameState(), sendAction);
+    await userEvent.click(screen.getByRole("tab", { name: /inventory/i }));
+    await userEvent.click(screen.getByRole("button", { name: /drop/i }));
+    expect(sendAction).toHaveBeenCalledWith("drop", "Health Potion");
   });
 });

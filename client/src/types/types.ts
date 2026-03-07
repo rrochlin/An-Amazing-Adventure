@@ -15,6 +15,15 @@ export interface ItemView {
   slot?: "head" | "chest" | "legs" | "hands" | "feet" | "back";
 }
 
+export interface EquipmentView {
+  head?: ItemView;
+  chest?: ItemView;
+  legs?: ItemView;
+  hands?: ItemView;
+  feet?: ItemView;
+  back?: ItemView;
+}
+
 export interface CharacterView {
   id: string;
   name: string;
@@ -23,6 +32,7 @@ export interface CharacterView {
   health: number;
   friendly: boolean;
   inventory: ItemView[];
+  equipment: EquipmentView;
 }
 
 export interface RoomView {

@@ -24,7 +24,9 @@ type Client struct {
 }
 
 // New creates a Client from the current AWS environment.
-// Table names are read from SESSIONS_TABLE and CONNECTIONS_TABLE env vars.
+// SESSIONS_TABLE is required. CONNECTIONS_TABLE is optional at construction
+// time — it is only needed by WebSocket Lambdas; HTTP-only Lambdas omit it.
+// A panic is deferred until a connections method is actually called without it.
 func New(ctx context.Context) (*Client, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -33,7 +35,7 @@ func New(ctx context.Context) (*Client, error) {
 	return &Client{
 		ddb:              dynamodb.NewFromConfig(cfg),
 		sessionsTable:    mustEnv("SESSIONS_TABLE"),
-		connectionsTable: mustEnv("CONNECTIONS_TABLE"),
+		connectionsTable: os.Getenv("CONNECTIONS_TABLE"), // optional; checked at use
 	}, nil
 }
 
@@ -43,6 +45,14 @@ func mustEnv(key string) string {
 		panic(fmt.Sprintf("required env var %s is not set", key))
 	}
 	return v
+}
+
+// requireConnectionsTable panics with a clear message if CONNECTIONS_TABLE was
+// not set. Called at the top of every method that touches that table.
+func (c *Client) requireConnectionsTable() {
+	if c.connectionsTable == "" {
+		panic("required env var CONNECTIONS_TABLE is not set")
+	}
 }
 
 // -------------------------------------------------------------------
@@ -205,6 +215,7 @@ type Connection struct {
 // PutConnection writes or replaces a connection record.
 // ExpiresAt should be ~24h from now so DynamoDB TTL auto-cleans stale records.
 func (c *Client) PutConnection(ctx context.Context, conn Connection) error {
+	c.requireConnectionsTable()
 	item, err := attributevalue.MarshalMap(conn)
 	if err != nil {
 		return err
@@ -218,6 +229,7 @@ func (c *Client) PutConnection(ctx context.Context, conn Connection) error {
 
 // GetConnection retrieves a connection by its API Gateway connection ID.
 func (c *Client) GetConnection(ctx context.Context, connectionID string) (Connection, error) {
+	c.requireConnectionsTable()
 	v, _ := attributevalue.Marshal(connectionID)
 	out, err := c.ddb.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(c.connectionsTable),
@@ -238,6 +250,7 @@ func (c *Client) GetConnection(ctx context.Context, connectionID string) (Connec
 
 // DeleteConnection removes a connection record on disconnect.
 func (c *Client) DeleteConnection(ctx context.Context, connectionID string) error {
+	c.requireConnectionsTable()
 	v, _ := attributevalue.Marshal(connectionID)
 	_, err := c.ddb.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(c.connectionsTable),
@@ -249,6 +262,7 @@ func (c *Client) DeleteConnection(ctx context.Context, connectionID string) erro
 // DeleteUserConnections removes all connection records for a given user ID.
 // Called on new $connect to enforce one-connection-per-user.
 func (c *Client) DeleteUserConnections(ctx context.Context, userID string) error {
+	c.requireConnectionsTable()
 	userVal, _ := attributevalue.Marshal(userID)
 	keyEx := expression.Key("user_id").Equal(expression.Value(userID))
 	expr, err := expression.NewBuilder().WithKeyCondition(keyEx).Build()
@@ -286,6 +300,7 @@ func (c *Client) DeleteUserConnections(ctx context.Context, userID string) error
 
 // SetStreaming atomically sets the streaming flag on a connection record.
 func (c *Client) SetStreaming(ctx context.Context, connectionID string, streaming bool) error {
+	c.requireConnectionsTable()
 	v, _ := attributevalue.Marshal(connectionID)
 	sv, _ := attributevalue.Marshal(streaming)
 	update := expression.Set(expression.Name("streaming"), expression.Value(streaming))
