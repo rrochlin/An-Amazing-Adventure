@@ -495,15 +495,27 @@ type ItemView struct {
 	Slot        EquipmentSlot `json:"slot,omitempty"`
 }
 
+// EquipmentView is the client-facing representation of a character's equipment.
+// Each field is nil when the slot is empty.
+type EquipmentView struct {
+	Head  *ItemView `json:"head,omitempty"`
+	Chest *ItemView `json:"chest,omitempty"`
+	Legs  *ItemView `json:"legs,omitempty"`
+	Hands *ItemView `json:"hands,omitempty"`
+	Feet  *ItemView `json:"feet,omitempty"`
+	Back  *ItemView `json:"back,omitempty"`
+}
+
 // CharacterView is the client-facing representation of a character.
 type CharacterView struct {
-	ID          string     `json:"id"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	Alive       bool       `json:"alive"`
-	Health      int        `json:"health"`
-	Friendly    bool       `json:"friendly"`
-	Inventory   []ItemView `json:"inventory"`
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+	Alive       bool          `json:"alive"`
+	Health      int           `json:"health"`
+	Friendly    bool          `json:"friendly"`
+	Inventory   []ItemView    `json:"inventory"`
+	Equipment   EquipmentView `json:"equipment"`
 }
 
 // GameStateView is the full snapshot sent to the client on load or update.
@@ -551,6 +563,32 @@ func (g *Game) BuildGameStateView(history []ChatMessage) GameStateView {
 		}
 	}
 
+	resolveSlot := func(idPtr *string) *ItemView {
+		if idPtr == nil {
+			return nil
+		}
+		if item, ok := g.Items[*idPtr]; ok {
+			v := ItemView{
+				ID: item.ID, Name: item.Name,
+				Description: item.Description,
+				Weight:      item.Weight,
+				Equippable:  item.Equippable,
+				Slot:        item.Slot,
+			}
+			return &v
+		}
+		return nil
+	}
+
+	playerEquipment := EquipmentView{
+		Head:  resolveSlot(g.Player.Equipment.Head),
+		Chest: resolveSlot(g.Player.Equipment.Chest),
+		Legs:  resolveSlot(g.Player.Equipment.Legs),
+		Hands: resolveSlot(g.Player.Equipment.Hands),
+		Feet:  resolveSlot(g.Player.Equipment.Feet),
+		Back:  resolveSlot(g.Player.Equipment.Back),
+	}
+
 	playerView := CharacterView{
 		ID: g.Player.ID, Name: g.Player.Name,
 		Description: g.Player.Description,
@@ -558,6 +596,7 @@ func (g *Game) BuildGameStateView(history []ChatMessage) GameStateView {
 		Health:      g.Player.Health,
 		Friendly:    g.Player.Friendly,
 		Inventory:   resolveItems(g.Player.Inventory),
+		Equipment:   playerEquipment,
 	}
 
 	roomViews := make(map[string]RoomView, len(g.Rooms))

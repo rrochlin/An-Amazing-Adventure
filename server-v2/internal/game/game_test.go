@@ -450,6 +450,78 @@ func TestFromSaveStateSchemaVersionMismatch(t *testing.T) {
 	}
 }
 
+// ── Equipment ─────────────────────────────────────────────────────────────────
+
+func TestEquipItem_Success(t *testing.T) {
+	c := game.NewCharacter("Adventurer", "brave")
+	item := game.Item{
+		ID:         "item-1",
+		Name:       "Iron Helm",
+		Equippable: true,
+		Slot:       game.SlotHead,
+	}
+	c.Inventory = append(c.Inventory, item.ID)
+
+	if err := c.EquipItem(item); err != nil {
+		t.Fatalf("EquipItem: %v", err)
+	}
+	if c.Equipment.Head == nil || *c.Equipment.Head != item.ID {
+		t.Errorf("expected Head slot to be %q, got %v", item.ID, c.Equipment.Head)
+	}
+	// Item should still be in inventory
+	if !c.HasItem(item.ID) {
+		t.Error("expected item to remain in inventory after equip")
+	}
+}
+
+func TestEquipItem_NotInInventory(t *testing.T) {
+	c := game.NewCharacter("Adventurer", "brave")
+	item := game.Item{ID: "item-2", Name: "Chain Mail", Equippable: true, Slot: game.SlotChest}
+	if err := c.EquipItem(item); err == nil {
+		t.Error("expected error when item not in inventory")
+	}
+}
+
+func TestEquipItem_NotEquippable(t *testing.T) {
+	c := game.NewCharacter("Adventurer", "brave")
+	item := game.Item{ID: "item-3", Name: "Stick", Equippable: false, Slot: ""}
+	c.Inventory = append(c.Inventory, item.ID)
+	if err := c.EquipItem(item); err == nil {
+		t.Error("expected error when item is not equippable")
+	}
+}
+
+func TestUnequipItem_Success(t *testing.T) {
+	c := game.NewCharacter("Adventurer", "brave")
+	id := "item-4"
+	c.Equipment.Legs = &id
+
+	got, err := c.UnequipItem(game.SlotLegs)
+	if err != nil {
+		t.Fatalf("UnequipItem: %v", err)
+	}
+	if got != id {
+		t.Errorf("expected returned id %q, got %q", id, got)
+	}
+	if c.Equipment.Legs != nil {
+		t.Error("expected Legs slot to be nil after unequip")
+	}
+}
+
+func TestUnequipItem_EmptySlot(t *testing.T) {
+	c := game.NewCharacter("Adventurer", "brave")
+	if _, err := c.UnequipItem(game.SlotHands); err == nil {
+		t.Error("expected error when slot is already empty")
+	}
+}
+
+func TestUnequipItem_InvalidSlot(t *testing.T) {
+	c := game.NewCharacter("Adventurer", "brave")
+	if _, err := c.UnequipItem(game.EquipmentSlot("weapon")); err == nil {
+		t.Error("expected error for unknown slot")
+	}
+}
+
 // ── BuildGameStateView ────────────────────────────────────────────────────────
 
 func TestBuildGameStateView(t *testing.T) {

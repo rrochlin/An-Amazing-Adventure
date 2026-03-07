@@ -99,6 +99,17 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			break
 		}
 		actionErr = g.TakeItemFromPlayer(item.ID, room.ID)
+	case "equip":
+		item, findErr := g.GetItemByName(msg.Payload)
+		if findErr != nil {
+			actionErr = findErr
+			break
+		}
+		actionErr = g.Player.EquipItem(item)
+	case "unequip":
+		// Payload is the slot name (e.g. "head", "chest")
+		slot := game.EquipmentSlot(msg.Payload)
+		_, actionErr = g.Player.UnequipItem(slot)
 	default:
 		actionErr = fmt.Errorf("unknown sub_action: %s", msg.SubAction)
 	}

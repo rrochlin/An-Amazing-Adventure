@@ -101,3 +101,62 @@ func (c *Character) RemoveItemID(itemID string) error {
 func (c *Character) HasItem(itemID string) bool {
 	return slices.Contains(c.Inventory, itemID)
 }
+
+// EquipItem moves an item from inventory into the appropriate equipment slot.
+// The item must already be in the character's inventory and must be equippable
+// with a non-empty slot.  Returns an error otherwise.
+func (c *Character) EquipItem(item Item) error {
+	if item.Slot == "" || !item.Equippable {
+		return fmt.Errorf("item %q is not equippable", item.Name)
+	}
+	if !c.HasItem(item.ID) {
+		return fmt.Errorf("item %q is not in inventory", item.Name)
+	}
+	id := item.ID
+	switch item.Slot {
+	case SlotHead:
+		c.Equipment.Head = &id
+	case SlotChest:
+		c.Equipment.Chest = &id
+	case SlotLegs:
+		c.Equipment.Legs = &id
+	case SlotHands:
+		c.Equipment.Hands = &id
+	case SlotFeet:
+		c.Equipment.Feet = &id
+	case SlotBack:
+		c.Equipment.Back = &id
+	default:
+		return fmt.Errorf("unknown equipment slot: %s", item.Slot)
+	}
+	// Keep the item in inventory (equipped ≠ removed from pack in this design)
+	return nil
+}
+
+// UnequipItem clears the given equipment slot and returns the item ID that was
+// in the slot, or an error if the slot is already empty.
+func (c *Character) UnequipItem(slot EquipmentSlot) (string, error) {
+	var ptr **string
+	switch slot {
+	case SlotHead:
+		ptr = &c.Equipment.Head
+	case SlotChest:
+		ptr = &c.Equipment.Chest
+	case SlotLegs:
+		ptr = &c.Equipment.Legs
+	case SlotHands:
+		ptr = &c.Equipment.Hands
+	case SlotFeet:
+		ptr = &c.Equipment.Feet
+	case SlotBack:
+		ptr = &c.Equipment.Back
+	default:
+		return "", fmt.Errorf("unknown equipment slot: %s", slot)
+	}
+	if *ptr == nil {
+		return "", fmt.Errorf("slot %s is already empty", slot)
+	}
+	id := **ptr
+	*ptr = nil
+	return id, nil
+}

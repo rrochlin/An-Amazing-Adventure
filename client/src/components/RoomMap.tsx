@@ -14,8 +14,11 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
   const colors = ColorTokens[colorMode];
 
   // Room rendering constants
+  // Server stores coordinates with spacing=100 between adjacent rooms.
+  // We map those world-units to pixel positions: each 100-unit step =
+  // (roomSize + corridor gap) pixels on screen.
   const baseRoomSize = 50;
-  const baseSpacing = 2;
+  const worldUnitToPx = baseRoomSize + 20; // 70px per 100 world-units
 
   // Canvas dimensions - make responsive to container
   const [canvasSize, setCanvasSize] = useState({ width: 400, height: 400 });
@@ -77,15 +80,16 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
 
     Object.keys(gameState?.rooms).forEach((roomId) => {
       const room = gameState?.rooms![roomId];
+      // Convert world-units to pixels: 100 world-units = worldUnitToPx pixels
       positions[roomId] = {
-        x: centerX + room.coordinates.x * baseSpacing,
-        y: centerY + room.coordinates.y * baseSpacing,
+        x: centerX + (room.coordinates.x / 100) * worldUnitToPx,
+        y: centerY + (room.coordinates.y / 100) * worldUnitToPx,
         z: room.coordinates.z,
       };
     });
 
     return positions;
-  }, [gameState?.rooms, baseSpacing, canvasSize]);
+  }, [gameState?.rooms, worldUnitToPx, canvasSize]);
 
   // Filter rooms by selected layer
   const roomsOnLayer = useMemo(() => {
@@ -540,23 +544,16 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
                           shadowBlur={4}
                           shadowOpacity={0.7}
                         />
-                        <Text
-                          x={-45}
-                          y={4}
-                          text={roomId
-                            .split("_")
-                            .map(
-                              (word) =>
-                                word.charAt(0).toUpperCase() +
-                                word.slice(1).toLowerCase()
-                            )
-                            .join(" ")}
-                          fontSize={11}
-                          fill="#E8DCC4"
-                          fontFamily="Cinzel, Georgia, serif"
-                          width={90}
-                          align="center"
-                        />
+                         <Text
+                           x={-45}
+                           y={4}
+                           text={room.name}
+                           fontSize={11}
+                           fill="#E8DCC4"
+                           fontFamily="Cinzel, Georgia, serif"
+                           width={90}
+                           align="center"
+                         />
                       </Group>
                     )}
 
