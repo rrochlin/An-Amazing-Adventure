@@ -1,12 +1,40 @@
-import { Outlet, createRootRoute } from "@tanstack/react-router";
+import { Outlet, createRootRoute, useRouter } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanstackDevtools } from "@tanstack/react-devtools";
 import { Header } from "@/components/Header";
 import { ThemeProvider } from "@mui/material/styles";
-import { CssBaseline, GlobalStyles, Box } from "@mui/material";
+import { CssBaseline, GlobalStyles, Box, Typography, Button, Paper } from "@mui/material";
 import { AppTheme } from "@/theme/theme";
 
+function RootErrorFallback({ error }: { error: Error }) {
+  const router = useRouter();
+  return (
+    <ThemeProvider theme={AppTheme}>
+      <CssBaseline />
+      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", p: 4 }}>
+        <Paper sx={{ maxWidth: 480, width: "100%", p: 4, textAlign: "center" }}>
+          <Typography variant="h5" sx={{ mb: 2, fontFamily: '"Cinzel", serif', color: "error.main" }}>
+            Something went wrong
+          </Typography>
+          <Typography variant="body2" sx={{ mb: 3, color: "text.secondary", fontFamily: "monospace", wordBreak: "break-all" }}>
+            {error?.message ?? "An unexpected error occurred."}
+          </Typography>
+          <Box sx={{ display: "flex", gap: 2, justifyContent: "center" }}>
+            <Button variant="outlined" onClick={() => router.history.back()}>
+              Go Back
+            </Button>
+            <Button variant="contained" onClick={() => router.navigate({ to: "/" })}>
+              Home
+            </Button>
+          </Box>
+        </Paper>
+      </Box>
+    </ThemeProvider>
+  );
+}
+
 export const Route = createRootRoute({
+  errorComponent: ({ error }) => <RootErrorFallback error={error as Error} />,
   component: () => (
     <ThemeProvider theme={AppTheme}>
       <CssBaseline />

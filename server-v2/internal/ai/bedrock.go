@@ -16,10 +16,12 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
-// Model IDs
+// Model IDs — must be cross-region inference profile IDs, not bare model IDs.
+// Bare model IDs (without the "us." prefix) are rejected with ValidationException
+// "Invocation with on-demand throughput isn't supported".
 const (
-	ModelNarrator = "anthropic.claude-sonnet-4-6"              // heavy — narrator & architect
-	ModelSubAgent = "anthropic.claude-haiku-4-5-20251001-v1:0" // light — world-gen sub-agents
+	ModelNarrator = "us.anthropic.claude-sonnet-4-6"              // heavy — narrator & architect
+	ModelSubAgent = "us.anthropic.claude-haiku-4-5-20251001-v1:0" // light — world-gen sub-agents
 )
 
 // Client wraps the Bedrock runtime client.

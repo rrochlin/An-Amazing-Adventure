@@ -1,6 +1,6 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Alert, Box, CircularProgress, Paper, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Paper, Typography } from "@mui/material";
 import { RoomMap } from "../components/RoomMap";
 import { GameInfo } from "../components/GameInfo";
 import { Chat } from "../components/Chat";
@@ -11,8 +11,28 @@ import { useGameStore } from "../store/gameStore";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { AppTheme } from "@/theme/theme";
 
+function GameErrorFallback() {
+  const navigate = useNavigate();
+  return (
+    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "calc(100vh - 64px)", p: 4 }}>
+      <Paper sx={{ maxWidth: 480, width: "100%", p: 4, textAlign: "center" }}>
+        <Typography variant="h5" sx={{ mb: 2, fontFamily: '"Cinzel", serif' }}>
+          Adventure Unavailable
+        </Typography>
+        <Alert severity="error" sx={{ mb: 3, textAlign: "left" }}>
+          This adventure could not be loaded. It may have been deleted or the server encountered an error.
+        </Alert>
+        <Button variant="contained" onClick={() => navigate({ to: "/" })}>
+          Return to Adventures
+        </Button>
+      </Paper>
+    </Box>
+  );
+}
+
 export const Route = createFileRoute("/game-{$sessionUUID}")({
   component: GamePage,
+  errorComponent: GameErrorFallback,
   beforeLoad: async ({ location }) => {
     if (!isAuthenticated()) {
       throw redirect({ to: "/login", search: { redirect: location.href } });
