@@ -11,17 +11,34 @@ import (
 // rejected on load rather than silently corrupted.
 const SchemaVersion = 1
 
+// AdventureCreationParams holds the player-provided setup choices that were
+// used when the game was created. All fields are optional — the AI fills in
+// any blanks. These are persisted so they can be shown on the details page.
+type AdventureCreationParams struct {
+	PlayerDescription string   `json:"player_description,omitempty" dynamodbav:"player_description,omitempty"`
+	PlayerAge         string   `json:"player_age,omitempty" dynamodbav:"player_age,omitempty"`
+	PlayerBackstory   string   `json:"player_backstory,omitempty" dynamodbav:"player_backstory,omitempty"`
+	ThemeHint         string   `json:"theme_hint,omitempty" dynamodbav:"theme_hint,omitempty"`
+	Preferences       []string `json:"preferences,omitempty" dynamodbav:"preferences,omitempty"`
+}
+
 // Game is the in-memory representation of a live game session.
 // It is never stored directly; SaveState is the DynamoDB-serialisable form.
 type Game struct {
-	ID      string
-	UserID  string
-	Player  Character
-	Rooms   map[string]Area      // keyed by room ID
-	Items   map[string]Item      // keyed by item ID — global item registry
-	NPCs    map[string]Character // keyed by character ID
-	Ready   bool
-	Version int // optimistic locking counter, mirrors SaveState.Version
+	ID                string
+	UserID            string
+	Player            Character
+	Rooms             map[string]Area      // keyed by room ID
+	Items             map[string]Item      // keyed by item ID — global item registry
+	NPCs              map[string]Character // keyed by character ID
+	Ready             bool
+	Version           int                     // optimistic locking counter, mirrors SaveState.Version
+	Title             string                  // adventure title from blueprint
+	Theme             string                  // world theme from blueprint
+	QuestGoal         string                  // win condition from blueprint
+	TotalTokens       int                     // cumulative Bedrock tokens used
+	ConversationCount int                     // number of completed narrator turns
+	CreationParams    AdventureCreationParams // player-supplied setup choices
 }
 
 // NewGame creates a blank Game with server-generated IDs.
@@ -377,17 +394,23 @@ func (g *Game) PlacePlayer(roomID string) error {
 
 // SaveState is the DynamoDB-serialisable snapshot of a Game.
 type SaveState struct {
-	SessionID     string             `json:"session_id" dynamodbav:"session_id"`
-	UserID        string             `json:"user_id" dynamodbav:"user_id"`
-	SchemaVersion int                `json:"schema_version" dynamodbav:"schema_version"`
-	Version       int                `json:"version" dynamodbav:"version"` // optimistic lock
-	Player        Character          `json:"player" dynamodbav:"player"`
-	Rooms         []Area             `json:"rooms" dynamodbav:"rooms"`
-	Items         []Item             `json:"items" dynamodbav:"items"`
-	NPCs          []Character        `json:"npcs" dynamodbav:"npcs"`
-	Narrative     []NarrativeMessage `json:"narrative" dynamodbav:"narrative"`
-	ChatHistory   []ChatMessage      `json:"chat_history" dynamodbav:"chat_history"`
-	Ready         bool               `json:"ready" dynamodbav:"ready"`
+	SessionID         string                  `json:"session_id" dynamodbav:"session_id"`
+	UserID            string                  `json:"user_id" dynamodbav:"user_id"`
+	SchemaVersion     int                     `json:"schema_version" dynamodbav:"schema_version"`
+	Version           int                     `json:"version" dynamodbav:"version"` // optimistic lock
+	Player            Character               `json:"player" dynamodbav:"player"`
+	Rooms             []Area                  `json:"rooms" dynamodbav:"rooms"`
+	Items             []Item                  `json:"items" dynamodbav:"items"`
+	NPCs              []Character             `json:"npcs" dynamodbav:"npcs"`
+	Narrative         []NarrativeMessage      `json:"narrative" dynamodbav:"narrative"`
+	ChatHistory       []ChatMessage           `json:"chat_history" dynamodbav:"chat_history"`
+	Ready             bool                    `json:"ready" dynamodbav:"ready"`
+	Title             string                  `json:"title,omitempty" dynamodbav:"title,omitempty"`
+	Theme             string                  `json:"theme,omitempty" dynamodbav:"theme,omitempty"`
+	QuestGoal         string                  `json:"quest_goal,omitempty" dynamodbav:"quest_goal,omitempty"`
+	TotalTokens       int                     `json:"total_tokens,omitempty" dynamodbav:"total_tokens,omitempty"`
+	ConversationCount int                     `json:"conversation_count,omitempty" dynamodbav:"conversation_count,omitempty"`
+	CreationParams    AdventureCreationParams `json:"creation_params,omitempty" dynamodbav:"creation_params,omitempty"`
 }
 
 // NarrativeMessage stores a single turn of Bedrock conversation history.
@@ -423,17 +446,23 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 		npcs = append(npcs, n)
 	}
 	return SaveState{
-		SessionID:     g.ID,
-		UserID:        g.UserID,
-		SchemaVersion: SchemaVersion,
-		Version:       g.Version,
-		Player:        g.Player,
-		Rooms:         rooms,
-		Items:         items,
-		NPCs:          npcs,
-		Narrative:     narrative,
-		ChatHistory:   history,
-		Ready:         g.Ready,
+		SessionID:         g.ID,
+		UserID:            g.UserID,
+		SchemaVersion:     SchemaVersion,
+		Version:           g.Version,
+		Player:            g.Player,
+		Rooms:             rooms,
+		Items:             items,
+		NPCs:              npcs,
+		Narrative:         narrative,
+		ChatHistory:       history,
+		Ready:             g.Ready,
+		Title:             g.Title,
+		Theme:             g.Theme,
+		QuestGoal:         g.QuestGoal,
+		TotalTokens:       g.TotalTokens,
+		ConversationCount: g.ConversationCount,
+		CreationParams:    g.CreationParams,
 	}
 }
 
@@ -444,14 +473,20 @@ func FromSaveState(s SaveState) (*Game, error) {
 		return nil, fmt.Errorf("incompatible schema version %d (current: %d)", s.SchemaVersion, SchemaVersion)
 	}
 	g := &Game{
-		ID:      s.SessionID,
-		UserID:  s.UserID,
-		Player:  s.Player,
-		Ready:   s.Ready,
-		Version: s.Version,
-		Rooms:   make(map[string]Area, len(s.Rooms)),
-		Items:   make(map[string]Item, len(s.Items)),
-		NPCs:    make(map[string]Character, len(s.NPCs)),
+		ID:                s.SessionID,
+		UserID:            s.UserID,
+		Player:            s.Player,
+		Ready:             s.Ready,
+		Version:           s.Version,
+		Rooms:             make(map[string]Area, len(s.Rooms)),
+		Items:             make(map[string]Item, len(s.Items)),
+		NPCs:              make(map[string]Character, len(s.NPCs)),
+		Title:             s.Title,
+		Theme:             s.Theme,
+		QuestGoal:         s.QuestGoal,
+		TotalTokens:       s.TotalTokens,
+		ConversationCount: s.ConversationCount,
+		CreationParams:    s.CreationParams,
 	}
 	for _, r := range s.Rooms {
 		g.Rooms[r.ID] = r

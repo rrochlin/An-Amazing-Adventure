@@ -117,6 +117,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	history = append(history, game.ChatMessage{Type: "player", Content: msg.Content})
 	history = append(history, game.ChatMessage{Type: "narrative", Content: result.Narrative})
 
+	// Update stats
+	g.ConversationCount++
+	g.TotalTokens += result.Tokens.Total()
+
 	// Persist updated game state with optimistic locking retry
 	g.Version++
 	saved := g.ToSaveState(result.NewMessages, history)

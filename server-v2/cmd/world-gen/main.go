@@ -19,9 +19,14 @@ import (
 )
 
 type worldGenEvent struct {
-	SessionID  string `json:"session_id"`
-	UserID     string `json:"user_id"`
-	PlayerName string `json:"player_name"`
+	SessionID         string   `json:"session_id"`
+	UserID            string   `json:"user_id"`
+	PlayerName        string   `json:"player_name"`
+	PlayerDescription string   `json:"player_description,omitempty"`
+	PlayerAge         string   `json:"player_age,omitempty"`
+	PlayerBackstory   string   `json:"player_backstory,omitempty"`
+	ThemeHint         string   `json:"theme_hint,omitempty"`
+	Preferences       []string `json:"preferences,omitempty"`
 }
 
 func handler(ctx context.Context, evt worldGenEvent) error {
@@ -78,8 +83,19 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	}
 
 	// Step 1: Generate the world blueprint
-	emit(fmt.Sprintf("Summoning the Architect for %q...", evt.PlayerName))
-	blueprint, rawJSON, err := aiClient.GenerateBlueprint(ctx, evt.PlayerName, "")
+	nameLabel := evt.PlayerName
+	if nameLabel == "" {
+		nameLabel = "an unnamed adventurer"
+	}
+	emit(fmt.Sprintf("Summoning the Architect for %q...", nameLabel))
+	blueprint, rawJSON, blueprintTokens, err := aiClient.GenerateBlueprint(
+		ctx,
+		evt.PlayerName,
+		evt.PlayerDescription,
+		evt.PlayerBackstory,
+		evt.ThemeHint,
+		evt.Preferences,
+	)
 	if err != nil {
 		emit(fmt.Sprintf("ERROR: blueprint generation failed: %v", err))
 		log.Printf("world-gen: blueprint error: %v\nraw: %s", err, rawJSON)
@@ -89,6 +105,23 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 		blueprint.Title, len(blueprint.Rooms), len(blueprint.Items), len(blueprint.Characters)))
 	emit(fmt.Sprintf("Theme: %s", blueprint.Theme))
 	emit(fmt.Sprintf("Quest: %s", blueprint.QuestGoal))
+
+	// If the AI invented a player name (player left it blank), write it back
+	if evt.PlayerName == "" && blueprint.PlayerName != "" {
+		g.Player.Name = blueprint.PlayerName
+		emit(fmt.Sprintf("Character named: %q", blueprint.PlayerName))
+	}
+
+	// Apply player-supplied character details (may override stub values)
+	if evt.PlayerDescription != "" {
+		g.Player.Description = evt.PlayerDescription
+	}
+	if evt.PlayerAge != "" {
+		g.Player.Age = evt.PlayerAge
+	}
+	if evt.PlayerBackstory != "" {
+		g.Player.Backstory = evt.PlayerBackstory
+	}
 
 	// Step 2: Build world deterministically
 	emit("Constructing world...")
@@ -117,6 +150,18 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	emit("Sealing the world into the tome...")
 	g.Ready = true
 	g.Version++
+	// Populate metadata fields from the blueprint
+	g.Title = blueprint.Title
+	g.Theme = blueprint.Theme
+	g.QuestGoal = blueprint.QuestGoal
+	g.TotalTokens = blueprintTokens.Total()
+	g.CreationParams = game.AdventureCreationParams{
+		PlayerDescription: evt.PlayerDescription,
+		PlayerAge:         evt.PlayerAge,
+		PlayerBackstory:   evt.PlayerBackstory,
+		ThemeHint:         evt.ThemeHint,
+		Preferences:       evt.Preferences,
+	}
 	saved := g.ToSaveState(openingNarrative, openingHistory)
 
 	for attempt := 0; attempt < 3; attempt++ {

@@ -19,9 +19,14 @@ import (
 
 // worldGenPayload is passed to the world-gen Lambda as its event.
 type worldGenPayload struct {
-	SessionID  string `json:"session_id"`
-	UserID     string `json:"user_id"`
-	PlayerName string `json:"player_name"`
+	SessionID         string   `json:"session_id"`
+	UserID            string   `json:"user_id"`
+	PlayerName        string   `json:"player_name"`
+	PlayerDescription string   `json:"player_description,omitempty"`
+	PlayerAge         string   `json:"player_age,omitempty"`
+	PlayerBackstory   string   `json:"player_backstory,omitempty"`
+	ThemeHint         string   `json:"theme_hint,omitempty"`
+	Preferences       []string `json:"preferences,omitempty"`
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -43,8 +48,6 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		return handleGetGame(ctx, req, userID)
 	case method == "DELETE" && matchesGamePath(path):
 		return handleDeleteGame(ctx, req, userID)
-	case method == "GET" && matchesWorldReadyPath(path):
-		return handleWorldReady(ctx, req, userID)
 	default:
 		return jsonResponse(404, map[string]string{"error": "not found"}), nil
 	}
@@ -61,16 +64,26 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 		return serverError(), nil
 	}
 	type gameInfo struct {
-		SessionID  string `json:"session_id"`
-		PlayerName string `json:"player_name"`
-		Ready      bool   `json:"ready"`
+		SessionID         string `json:"session_id"`
+		PlayerName        string `json:"player_name"`
+		Ready             bool   `json:"ready"`
+		Title             string `json:"title,omitempty"`
+		Theme             string `json:"theme,omitempty"`
+		QuestGoal         string `json:"quest_goal,omitempty"`
+		ConversationCount int    `json:"conversation_count,omitempty"`
+		TotalTokens       int    `json:"total_tokens,omitempty"`
 	}
 	results := make([]gameInfo, 0, len(saves))
 	for _, s := range saves {
 		results = append(results, gameInfo{
-			SessionID:  s.SessionID,
-			PlayerName: s.Player.Name,
-			Ready:      s.Ready,
+			SessionID:         s.SessionID,
+			PlayerName:        s.Player.Name,
+			Ready:             s.Ready,
+			Title:             s.Title,
+			Theme:             s.Theme,
+			QuestGoal:         s.QuestGoal,
+			ConversationCount: s.ConversationCount,
+			TotalTokens:       s.TotalTokens,
 		})
 	}
 	return jsonResponse(200, results), nil
@@ -78,17 +91,36 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 
 func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
 	var body struct {
-		PlayerName string `json:"player_name"`
+		PlayerName        string   `json:"player_name"`
+		PlayerDescription string   `json:"player_description"`
+		PlayerAge         string   `json:"player_age"`
+		PlayerBackstory   string   `json:"player_backstory"`
+		ThemeHint         string   `json:"theme_hint"`
+		Preferences       []string `json:"preferences"`
 	}
-	if err := json.Unmarshal([]byte(req.Body), &body); err != nil || body.PlayerName == "" {
-		return jsonResponse(400, map[string]string{"error": "player_name is required"}), nil
+	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
+		return jsonResponse(400, map[string]string{"error": "invalid request body"}), nil
 	}
 
 	sessionID := game.NewSessionID()
-	player := game.NewCharacter(body.PlayerName, "The hero of the adventure")
+	// Player name may be blank — world-gen will invent one if so
+	playerName := body.PlayerName
+	if playerName == "" {
+		playerName = "Adventurer" // placeholder until world-gen writes back the AI name
+	}
+	player := game.NewCharacter(playerName, body.PlayerDescription)
+	player.Age = body.PlayerAge
+	player.Backstory = body.PlayerBackstory
 
 	g := game.NewGame(sessionID, userID)
 	g.Player = player
+	g.CreationParams = game.AdventureCreationParams{
+		PlayerDescription: body.PlayerDescription,
+		PlayerAge:         body.PlayerAge,
+		PlayerBackstory:   body.PlayerBackstory,
+		ThemeHint:         body.ThemeHint,
+		Preferences:       body.Preferences,
+	}
 
 	dbClient, err := db.New(ctx)
 	if err != nil {
@@ -104,9 +136,14 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 
 	// Kick off world generation asynchronously
 	payload, _ := json.Marshal(worldGenPayload{
-		SessionID:  sessionID,
-		UserID:     userID,
-		PlayerName: body.PlayerName,
+		SessionID:         sessionID,
+		UserID:            userID,
+		PlayerName:        body.PlayerName, // pass the original (possibly empty) name to world-gen
+		PlayerDescription: body.PlayerDescription,
+		PlayerAge:         body.PlayerAge,
+		PlayerBackstory:   body.PlayerBackstory,
+		ThemeHint:         body.ThemeHint,
+		Preferences:       body.Preferences,
 	})
 	if err := invokeWorldGen(ctx, payload); err != nil {
 		log.Printf("invoke world-gen: %v (game still created, world gen may be delayed)", err)
@@ -137,9 +174,15 @@ func handleGetGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, user
 	}
 	stateView := g.BuildGameStateView(saveState.ChatHistory)
 	return jsonResponse(200, map[string]any{
-		"session_id": sessionID,
-		"ready":      saveState.Ready,
-		"state":      stateView,
+		"session_id":         sessionID,
+		"ready":              saveState.Ready,
+		"state":              stateView,
+		"title":              saveState.Title,
+		"theme":              saveState.Theme,
+		"quest_goal":         saveState.QuestGoal,
+		"total_tokens":       saveState.TotalTokens,
+		"conversation_count": saveState.ConversationCount,
+		"creation_params":    saveState.CreationParams,
 	}), nil
 }
 
@@ -152,22 +195,6 @@ func handleDeleteGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	if err := dbClient.DeleteGame(ctx, sessionID, userID); err != nil {
 		log.Printf("delete game %s: %v", sessionID, err)
 		return jsonResponse(404, map[string]string{"error": "game not found or not owned by user"}), nil
-	}
-	return events.APIGatewayV2HTTPResponse{StatusCode: 204}, nil
-}
-
-func handleWorldReady(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
-	sessionID := req.PathParameters["uuid"]
-	dbClient, err := db.New(ctx)
-	if err != nil {
-		return serverError(), nil
-	}
-	ready, err := dbClient.GetGameReady(ctx, sessionID)
-	if err != nil {
-		return jsonResponse(404, map[string]string{"error": "game not found"}), nil
-	}
-	if ready {
-		return events.APIGatewayV2HTTPResponse{StatusCode: 200}, nil
 	}
 	return events.APIGatewayV2HTTPResponse{StatusCode: 204}, nil
 }
@@ -194,11 +221,6 @@ func invokeWorldGen(ctx context.Context, payload []byte) error {
 func matchesGamePath(path string) bool {
 	// matches /api/games/{uuid} — must have a non-empty segment after /api/games/
 	const prefix = "/api/games/"
-	return len(path) > len(prefix) && path[:len(prefix)] == prefix
-}
-
-func matchesWorldReadyPath(path string) bool {
-	const prefix = "/api/worldready/"
 	return len(path) > len(prefix) && path[:len(prefix)] == prefix
 }
 
