@@ -44,7 +44,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 	conn := db.Connection{
 		ConnectionID: req.RequestContext.ConnectionID,
-		UserID:       userID,
+		UserID:       db.BinaryID(userID),
 		GameID:       gameID,
 		ExpiresAt:    time.Now().Add(24 * time.Hour).Unix(),
 		Streaming:    false,
