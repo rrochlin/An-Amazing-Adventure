@@ -21,7 +21,6 @@ import {
   CreateGame,
   LoadGame,
   DeleteGame,
-  WorldReady,
 } from "@/services/api.game";
 
 const mockGet = apiService.GET as ReturnType<typeof vi.fn>;
@@ -46,15 +45,43 @@ describe("ListGames", () => {
 });
 
 describe("CreateGame", () => {
-  it("calls POST api/games with player_name and returns session data", async () => {
+  it("calls POST api/games with params object and returns session data", async () => {
     mockPost.mockResolvedValueOnce({
       data: { session_id: "sess-1", ready: false },
       status: 201,
     });
-    const result = await CreateGame("Legolas");
+    const result = await CreateGame({ player_name: "Legolas" });
     expect(mockPost).toHaveBeenCalledWith("api/games", { player_name: "Legolas" });
     expect(result.session_id).toBe("sess-1");
     expect(result.ready).toBe(false);
+  });
+
+  it("calls POST api/games with all creation params", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { session_id: "sess-2", ready: false },
+      status: 201,
+    });
+    const params = {
+      player_name: "Aria",
+      player_age: "mid 20s",
+      player_description: "A nimble rogue",
+      player_backstory: "Raised by thieves",
+      theme_hint: "gritty noir",
+      preferences: ["stealth", "mystery"],
+    };
+    const result = await CreateGame(params);
+    expect(mockPost).toHaveBeenCalledWith("api/games", params);
+    expect(result.session_id).toBe("sess-2");
+  });
+
+  it("calls POST api/games with empty params (AI generates everything)", async () => {
+    mockPost.mockResolvedValueOnce({
+      data: { session_id: "sess-3", ready: false },
+      status: 201,
+    });
+    const result = await CreateGame({});
+    expect(mockPost).toHaveBeenCalledWith("api/games", {});
+    expect(result.session_id).toBe("sess-3");
   });
 });
 
@@ -75,6 +102,33 @@ describe("LoadGame", () => {
     expect(result.session_id).toBe("sess-1");
     expect(result.ready).toBe(true);
   });
+
+  it("returns optional metadata fields when present", async () => {
+    const mockState = {
+      current_room: { id: "r1", name: "Tavern", description: "", connections: {}, coordinates: { x: 0, y: 0, z: 0 }, items: [], occupants: [] },
+      player: { id: "p1", name: "Hero", description: "", alive: true, health: 100, friendly: true, inventory: [] },
+      rooms: {},
+      chat_history: [],
+    };
+    mockGet.mockResolvedValueOnce({
+      data: {
+        session_id: "sess-1",
+        ready: true,
+        state: mockState,
+        title: "The Shattered Kingdom",
+        theme: "High fantasy",
+        quest_goal: "Defeat the dark lord",
+        total_tokens: 5000,
+        conversation_count: 10,
+        creation_params: { preferences: ["combat"] },
+      },
+      status: 200,
+    });
+    const result = await LoadGame("sess-1");
+    expect(result.title).toBe("The Shattered Kingdom");
+    expect(result.total_tokens).toBe(5000);
+    expect(result.creation_params?.preferences).toEqual(["combat"]);
+  });
 });
 
 describe("DeleteGame", () => {
@@ -82,25 +136,5 @@ describe("DeleteGame", () => {
     mockDelete.mockResolvedValueOnce({ data: null, status: 204 });
     await DeleteGame("sess-1");
     expect(mockDelete).toHaveBeenCalledWith("api/games/sess-1");
-  });
-});
-
-describe("WorldReady", () => {
-  it("returns ready:true on 200", async () => {
-    mockGet.mockResolvedValueOnce({ status: 200 });
-    const result = await WorldReady("sess-1");
-    expect(result.ready).toBe(true);
-  });
-
-  it("returns ready:false on 204", async () => {
-    mockGet.mockResolvedValueOnce({ status: 204 });
-    const result = await WorldReady("sess-1");
-    expect(result.ready).toBe(false);
-  });
-
-  it("returns ready:false on network error", async () => {
-    mockGet.mockRejectedValueOnce(new Error("timeout"));
-    const result = await WorldReady("sess-1");
-    expect(result.ready).toBe(false);
   });
 });
