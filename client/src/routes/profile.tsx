@@ -10,7 +10,7 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { useState } from "react";
-import { isAuthenticated, getUserSub, changePassword, signOut } from "@/services/auth.service";
+import { isAuthenticated, getUserEmail, changePassword, signOut } from "@/services/auth.service";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
@@ -23,7 +23,7 @@ export const Route = createFileRoute("/profile")({
 
 function ProfilePage() {
   const navigate = useNavigate();
-  const userSub = getUserSub();
+  const userEmail = getUserEmail();
 
   // Change password form
   const [currentPw, setCurrentPw] = useState("");
@@ -111,8 +111,8 @@ function ProfilePage() {
         {/* Account info */}
         <Paper sx={{ p: 3 }}>
           <SectionHeader>Account Details</SectionHeader>
-          <Typography variant="body2" sx={{ color: "text.secondary", fontFamily: "monospace", wordBreak: "break-all" }}>
-            User ID: {userSub || "—"}
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
+            Email: <strong>{userEmail || "—"}</strong>
           </Typography>
         </Paper>
 
