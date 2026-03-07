@@ -1,3 +1,0 @@
-setup:
-  - project: an-amazing-adventure-server
-    config: dev_personal
