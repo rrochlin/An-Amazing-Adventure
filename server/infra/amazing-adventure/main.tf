@@ -113,7 +113,6 @@ module "cloudfront" {
   app_bucket_regional_domain = module.s3.app_bucket_regional_domain
   app_bucket_id              = module.s3.app_bucket_id
   http_api_endpoint          = module.api_gateway.http_api_endpoint
-  websocket_api_endpoint     = module.api_gateway.websocket_api_endpoint
   providers = {
     aws           = aws
     aws.us_east_1 = aws.us_east_1
