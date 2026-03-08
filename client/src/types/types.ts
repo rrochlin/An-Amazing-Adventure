@@ -60,9 +60,15 @@ export interface GameStateView {
   chat_history: ChatMessage[];
 }
 
+export interface WorldEvent {
+  type: string; // "damage","heal","death","revive","item_gained","item_lost","item_appeared","character_arrived","character_departed"
+  message: string; // human-readable, player's perspective
+}
+
 export interface ChatMessage {
   type: "player" | "narrative";
   content: string;
+  events?: WorldEvent[]; // non-empty on narrative messages when world events occurred this turn
 }
 
 // WebSocket frame types sent from server to client
@@ -93,7 +99,8 @@ export interface StateDelta {
   current_room?: RoomView;
   player?: CharacterView;
   updated_rooms?: Record<string, RoomView>;
-  new_message?: ChatMessage;
+  events?: WorldEvent[]; // player-visible world events this turn
+  // new_message removed — narrative arrives via streaming frames, not state_delta
 }
 
 // Legacy — kept for backward compat during transition

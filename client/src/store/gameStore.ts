@@ -8,6 +8,7 @@ import type {
   GameStateView,
   ChatMessage,
   StateDelta,
+  WorldEvent,
 } from "../types/types";
 
 type WsStatus = "idle" | "connecting" | "connected" | "disconnected" | "error";
@@ -27,6 +28,7 @@ interface GameStore {
   // Actions
   setGameState: (state: GameStateView) => void;
   applyDelta: (delta: StateDelta) => void;
+  attachEventsToLastMessage: (events: WorldEvent[]) => void;
   appendStreamChunk: (chunk: string) => void;
   finalizeStreamingMessage: () => void;
   addChatMessage: (msg: ChatMessage) => void;
@@ -59,14 +61,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }),
 
   applyDelta: (delta) => {
-    const { gameState, chatMessages } = get();
+    const { gameState } = get();
     if (!gameState) return;
 
     const updated: GameStateView = { ...gameState };
 
     if (delta.current_room) {
       updated.current_room = delta.current_room;
-      // Also update in rooms map
+      // Also update in rooms map so it stays in sync
       updated.rooms = {
         ...updated.rooms,
         [delta.current_room.id]: delta.current_room,
@@ -79,11 +81,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
       updated.rooms = { ...updated.rooms, ...delta.updated_rooms };
     }
 
-    const newMessages = delta.new_message
-      ? [...chatMessages, delta.new_message]
-      : chatMessages;
+    // new_message intentionally not handled here — narrative text arrives via
+    // narrative_chunk / narrative_end streaming frames. Adding it here caused
+    // duplicate chat messages (UI-3 fix).
+    set({ gameState: updated });
+  },
 
-    set({ gameState: updated, chatMessages: newMessages });
+  attachEventsToLastMessage: (events) => {
+    if (!events.length) return;
+    const { chatMessages } = get();
+    if (!chatMessages.length) return;
+    const last = chatMessages[chatMessages.length - 1];
+    // Only attach to narrative messages (not player messages)
+    if (last.type !== "narrative") return;
+    const updated = [...chatMessages];
+    updated[updated.length - 1] = { ...last, events };
+    set({ chatMessages: updated });
   },
 
   appendStreamChunk: (chunk) =>

@@ -21,13 +21,13 @@ type Client struct {
 	ddb              *dynamodb.Client
 	sessionsTable    string
 	connectionsTable string
+	mutationsTable   string
 }
 
 // New creates a Client from the current AWS environment.
-// Both SESSIONS_TABLE and CONNECTIONS_TABLE are optional at construction time —
-// panics are deferred to the first method call that actually needs each table.
-// This allows Lambdas to omit env vars they don't use (e.g. ws-connect only
-// needs CONNECTIONS_TABLE; ws-chat needs both).
+// SESSIONS_TABLE, CONNECTIONS_TABLE, and MUTATIONS_TABLE are all optional at
+// construction time — panics are deferred to the first method call that needs
+// each table. This allows Lambdas to omit env vars they don't use.
 func New(ctx context.Context) (*Client, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -37,6 +37,7 @@ func New(ctx context.Context) (*Client, error) {
 		ddb:              dynamodb.NewFromConfig(cfg),
 		sessionsTable:    os.Getenv("SESSIONS_TABLE"),    // checked at use
 		connectionsTable: os.Getenv("CONNECTIONS_TABLE"), // checked at use
+		mutationsTable:   os.Getenv("MUTATIONS_TABLE"),   // checked at use
 	}, nil
 }
 
@@ -55,6 +56,13 @@ func (c *Client) requireConnectionsTable() {
 	}
 }
 
+// requireMutationsTable panics with a clear message if MUTATIONS_TABLE was not set.
+func (c *Client) requireMutationsTable() {
+	if c.mutationsTable == "" {
+		panic("required env var MUTATIONS_TABLE is not set")
+	}
+}
+
 // -------------------------------------------------------------------
 // Game sessions
 // -------------------------------------------------------------------
@@ -62,48 +70,66 @@ func (c *Client) requireConnectionsTable() {
 // saveStateDB is a DynamoDB-specific wrapper around game.SaveState that
 // overrides the key fields to marshal as Binary (B), matching the table schema.
 type saveStateDB struct {
-	SessionID     BinaryID                `dynamodbav:"session_id"`
-	UserID        BinaryID                `dynamodbav:"user_id"`
-	SchemaVersion int                     `dynamodbav:"schema_version"`
-	Version       int                     `dynamodbav:"version"`
-	Player        game.Character          `dynamodbav:"player"`
-	Rooms         []game.Area             `dynamodbav:"rooms"`
-	Items         []game.Item             `dynamodbav:"items"`
-	NPCs          []game.Character        `dynamodbav:"npcs"`
-	Narrative     []game.NarrativeMessage `dynamodbav:"narrative"`
-	ChatHistory   []game.ChatMessage      `dynamodbav:"chat_history"`
-	Ready         bool                    `dynamodbav:"ready"`
+	SessionID         BinaryID                     `dynamodbav:"session_id"`
+	UserID            BinaryID                     `dynamodbav:"user_id"`
+	SchemaVersion     int                          `dynamodbav:"schema_version"`
+	Version           int                          `dynamodbav:"version"`
+	Player            game.Character               `dynamodbav:"player"`
+	Rooms             []game.Area                  `dynamodbav:"rooms"`
+	Items             []game.Item                  `dynamodbav:"items"`
+	NPCs              []game.Character             `dynamodbav:"npcs"`
+	Narrative         []game.NarrativeMessage      `dynamodbav:"narrative"`
+	ChatHistory       []game.ChatMessage           `dynamodbav:"chat_history"`
+	Ready             bool                         `dynamodbav:"ready"`
+	Title             string                       `dynamodbav:"title,omitempty"`
+	Theme             string                       `dynamodbav:"theme,omitempty"`
+	QuestGoal         string                       `dynamodbav:"quest_goal,omitempty"`
+	TotalTokens       int                          `dynamodbav:"total_tokens,omitempty"`
+	ConversationCount int                          `dynamodbav:"conversation_count,omitempty"`
+	CreationParams    game.AdventureCreationParams `dynamodbav:"creation_params,omitempty"`
 }
 
 func toDBState(s game.SaveState) saveStateDB {
 	return saveStateDB{
-		SessionID:     BinaryID(s.SessionID),
-		UserID:        BinaryID(s.UserID),
-		SchemaVersion: s.SchemaVersion,
-		Version:       s.Version,
-		Player:        s.Player,
-		Rooms:         s.Rooms,
-		Items:         s.Items,
-		NPCs:          s.NPCs,
-		Narrative:     s.Narrative,
-		ChatHistory:   s.ChatHistory,
-		Ready:         s.Ready,
+		SessionID:         BinaryID(s.SessionID),
+		UserID:            BinaryID(s.UserID),
+		SchemaVersion:     s.SchemaVersion,
+		Version:           s.Version,
+		Player:            s.Player,
+		Rooms:             s.Rooms,
+		Items:             s.Items,
+		NPCs:              s.NPCs,
+		Narrative:         s.Narrative,
+		ChatHistory:       s.ChatHistory,
+		Ready:             s.Ready,
+		Title:             s.Title,
+		Theme:             s.Theme,
+		QuestGoal:         s.QuestGoal,
+		TotalTokens:       s.TotalTokens,
+		ConversationCount: s.ConversationCount,
+		CreationParams:    s.CreationParams,
 	}
 }
 
 func fromDBState(d saveStateDB) game.SaveState {
 	return game.SaveState{
-		SessionID:     string(d.SessionID),
-		UserID:        string(d.UserID),
-		SchemaVersion: d.SchemaVersion,
-		Version:       d.Version,
-		Player:        d.Player,
-		Rooms:         d.Rooms,
-		Items:         d.Items,
-		NPCs:          d.NPCs,
-		Narrative:     d.Narrative,
-		ChatHistory:   d.ChatHistory,
-		Ready:         d.Ready,
+		SessionID:         string(d.SessionID),
+		UserID:            string(d.UserID),
+		SchemaVersion:     d.SchemaVersion,
+		Version:           d.Version,
+		Player:            d.Player,
+		Rooms:             d.Rooms,
+		Items:             d.Items,
+		NPCs:              d.NPCs,
+		Narrative:         d.Narrative,
+		ChatHistory:       d.ChatHistory,
+		Ready:             d.Ready,
+		Title:             d.Title,
+		Theme:             d.Theme,
+		QuestGoal:         d.QuestGoal,
+		TotalTokens:       d.TotalTokens,
+		ConversationCount: d.ConversationCount,
+		CreationParams:    d.CreationParams,
 	}
 }
 
@@ -230,6 +256,49 @@ func (c *Client) DeleteGame(ctx context.Context, sessionID, userID string) error
 
 func sessionKey(sessionID string) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{"session_id": binaryIDVal(sessionID)}
+}
+
+// -------------------------------------------------------------------
+// Mutation log
+// -------------------------------------------------------------------
+
+// mutationEntryDB is the DynamoDB wire format for a MutationEntry.
+// SessionID must be Binary (B) to match the mutations table key schema.
+type mutationEntryDB struct {
+	SessionID string         `dynamodbav:"session_id"` // B via BinaryID marshal below
+	Ts        int64          `dynamodbav:"ts"`
+	Turn      int            `dynamodbav:"turn"`
+	Tool      string         `dynamodbav:"tool"`
+	Input     map[string]any `dynamodbav:"input"`
+	Result    string         `dynamodbav:"result"`
+}
+
+// PutMutation writes a single MutationEntry to the mutations table.
+// SessionID is marshaled as Binary (B) to match the table's key schema.
+func (c *Client) PutMutation(ctx context.Context, entry game.MutationEntry) error {
+	c.requireMutationsTable()
+	row := mutationEntryDB{
+		SessionID: entry.SessionID,
+		Ts:        entry.Ts,
+		Turn:      entry.Turn,
+		Tool:      entry.Tool,
+		Input:     entry.Input,
+		Result:    entry.Result,
+	}
+	item, err := attributevalue.MarshalMap(row)
+	if err != nil {
+		return fmt.Errorf("marshal mutation entry: %w", err)
+	}
+	// Override SessionID key attribute to Binary type
+	item["session_id"] = binaryIDVal(entry.SessionID)
+	_, err = c.ddb.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(c.mutationsTable),
+		Item:      item,
+	})
+	if err != nil {
+		return fmt.Errorf("put mutation: %w", err)
+	}
+	return nil
 }
 
 // -------------------------------------------------------------------

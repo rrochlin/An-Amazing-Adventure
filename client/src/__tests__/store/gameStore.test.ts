@@ -126,19 +126,57 @@ describe("gameStore", () => {
     expect(gameState?.rooms["room-2"]?.name).toBe("Alley");
   });
 
-  it("applyDelta appends new_message to chatMessages", () => {
+  it("applyDelta does NOT add to chatMessages (narrative arrives via streaming)", () => {
+    // new_message was removed from StateDelta to fix duplicate messages (UI-3).
+    // Narrative text reaches the client via narrative_chunk/narrative_end frames only.
     useGameStore.getState().setGameState(makeGameState());
     useGameStore.getState().applyDelta({
-      new_message: { type: "narrative", content: "You hear footsteps." },
+      player: {
+        id: "player-1", name: "Hero", description: "The player",
+        alive: true, health: 75, friendly: true, inventory: [], equipment: {},
+      },
     });
-    const { chatMessages } = useGameStore.getState();
-    expect(chatMessages).toHaveLength(1);
-    expect(chatMessages[0].content).toBe("You hear footsteps.");
+    const { chatMessages, gameState } = useGameStore.getState();
+    expect(chatMessages).toHaveLength(0); // no messages added by applyDelta
+    expect(gameState?.player.health).toBe(75); // state still updated
   });
 
   it("applyDelta does nothing if gameState is null", () => {
     // Should not throw
-    useGameStore.getState().applyDelta({ new_message: { type: "narrative", content: "test" } });
+    useGameStore.getState().applyDelta({ player: undefined });
+    expect(useGameStore.getState().chatMessages).toHaveLength(0);
+  });
+
+  it("attachEventsToLastMessage patches events onto last narrative message", () => {
+    useGameStore.getState().setGameState(makeGameState());
+    // Simulate streaming narrative committed by finalizeStreamingMessage
+    useGameStore.getState().appendStreamChunk("The goblin strikes!");
+    useGameStore.getState().finalizeStreamingMessage();
+    // Now attach events
+    useGameStore.getState().attachEventsToLastMessage([
+      { type: "damage", message: "You take 20 damage. ❤ 80" },
+    ]);
+    const { chatMessages } = useGameStore.getState();
+    expect(chatMessages).toHaveLength(1);
+    expect(chatMessages[0].type).toBe("narrative");
+    expect(chatMessages[0].events).toHaveLength(1);
+    expect(chatMessages[0].events![0].type).toBe("damage");
+  });
+
+  it("attachEventsToLastMessage does nothing if last message is a player message", () => {
+    useGameStore.getState().setGameState(makeGameState());
+    useGameStore.getState().addChatMessage({ type: "player", content: "Attack!" });
+    useGameStore.getState().attachEventsToLastMessage([
+      { type: "damage", message: "You take 5 damage." },
+    ]);
+    const { chatMessages } = useGameStore.getState();
+    // Events not attached to player messages
+    expect(chatMessages[0].events).toBeUndefined();
+  });
+
+  it("attachEventsToLastMessage does nothing if chatMessages is empty", () => {
+    // Should not throw
+    useGameStore.getState().attachEventsToLastMessage([{ type: "damage", message: "test" }]);
     expect(useGameStore.getState().chatMessages).toHaveLength(0);
   });
 

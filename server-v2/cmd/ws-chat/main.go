@@ -112,10 +112,18 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	// Signal streaming complete
 	_ = ws.SendNarrativeEnd(ctx, connID)
 
-	// Append chat history entries
+	// Persist mutation audit log entries (best-effort — failure is non-fatal)
+	for _, m := range result.Mutations {
+		if err := dbClient.PutMutation(ctx, m); err != nil {
+			log.Printf("ws-chat: put mutation (tool=%s): %v", m.Tool, err)
+		}
+	}
+
+	// Append chat history entries — attach world events to the narrative message
+	// so they survive reconnection/reload.
 	history := saveState.ChatHistory
 	history = append(history, game.ChatMessage{Type: "player", Content: msg.Content})
-	history = append(history, game.ChatMessage{Type: "narrative", Content: result.Narrative})
+	history = append(history, game.ChatMessage{Type: "narrative", Content: result.Narrative, Events: result.Events})
 
 	// Update stats
 	g.ConversationCount++
@@ -141,10 +149,12 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		break
 	}
 
-	// Send state delta — always include player and current room;
-	// include any rooms that changed (player moved or NPCs/items mutated)
+	// Send state delta — always include player and current room.
+	// NewMessage is intentionally omitted: the narrative already reached the client
+	// via narrative_chunk / narrative_end streaming frames. Including it here caused
+	// duplicate chat messages.
 	delta := game.StateDelta{
-		NewMessage: &game.ChatMessage{Type: "narrative", Content: result.Narrative},
+		Events: result.Events,
 	}
 	playerView := g.BuildGameStateView(nil).Player
 	delta.Player = &playerView

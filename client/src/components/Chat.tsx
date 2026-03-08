@@ -1,6 +1,18 @@
-import { Box, Button, CircularProgress, Paper, TextField, Typography, useColorScheme } from "@mui/material";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Box,
+  Button,
+  CircularProgress,
+  Paper,
+  TextField,
+  Typography,
+  useColorScheme,
+} from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { useEffect, useRef } from "react";
-import { type ChatMessageType } from "../types/types";
+import { type ChatMessageType, type WorldEvent } from "../types/types";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -227,6 +239,82 @@ const StreamingChatMessage = ({ content }: { content: string }) => {
   );
 };
 
+// WorldEventsAccordion renders a collapsible list of world events under a narrative bubble.
+// Collapsed by default so it doesn't clutter the chat log.
+const WorldEventsAccordion = ({ events }: { events: WorldEvent[] }) => {
+  const { mode } = useColorScheme();
+  const isDark = mode === "dark" || mode === "system" || !mode;
+
+  if (!events.length) return null;
+
+  return (
+    <Accordion
+      disableGutters
+      defaultExpanded={false}
+      sx={{
+        mt: 0.5,
+        backgroundColor: "transparent",
+        backgroundImage: "none",
+        boxShadow: "none",
+        border: isDark
+          ? "1px solid rgba(201, 169, 98, 0.2)"
+          : "1px solid rgba(160, 130, 109, 0.3)",
+        borderRadius: "4px !important",
+        "&:before": { display: "none" },
+        "&.Mui-expanded": { margin: "4px 0 0 0" },
+      }}
+    >
+      <AccordionSummary
+        expandIcon={
+          <ExpandMoreIcon
+            sx={{
+              fontSize: "0.9rem",
+              color: isDark ? "rgba(201, 169, 98, 0.6)" : "rgba(107, 86, 56, 0.6)",
+            }}
+          />
+        }
+        sx={{
+          minHeight: "28px",
+          px: 1.5,
+          py: 0,
+          "& .MuiAccordionSummary-content": { margin: "4px 0" },
+        }}
+      >
+        <Typography
+          sx={{
+            fontFamily: "Cinzel, Georgia, serif",
+            fontSize: "0.65rem",
+            fontWeight: 600,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            color: isDark ? "rgba(201, 169, 98, 0.6)" : "rgba(107, 86, 56, 0.6)",
+          }}
+        >
+          World Events ({events.length})
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails sx={{ px: 1.5, py: 0.5, pt: 0 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+          {events.map((ev, i) => (
+            <Typography
+              key={i}
+              sx={{
+                fontFamily: "Crimson Text, Georgia, serif",
+                fontSize: "0.85rem",
+                fontStyle: "italic",
+                color: isDark ? "rgba(201, 169, 98, 0.75)" : "rgba(107, 86, 56, 0.8)",
+                lineHeight: 1.5,
+              }}
+            >
+              {ev.message}
+            </Typography>
+          ))}
+        </Box>
+      </AccordionDetails>
+    </Accordion>
+  );
+};
+
 const ChatMessage = ({ message }: { message: ChatMessageType }) => {
   const isPlayer = message.type === "player";
   const { mode } = useColorScheme();
@@ -317,6 +405,9 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
       >
         <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
       </Paper>
+      {!isPlayer && message.events && message.events.length > 0 && (
+        <WorldEventsAccordion events={message.events} />
+      )}
     </Box>
   );
 };
