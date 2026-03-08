@@ -1,6 +1,6 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Box, Button, IconButton, Paper, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Button, IconButton, Paper, Snackbar, Tooltip, Typography } from "@mui/material";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { RoomMap } from "../components/RoomMap";
 import { GameInfo } from "../components/GameInfo";
@@ -11,6 +11,7 @@ import { useGameStore } from "../store/gameStore";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { WorldGenTerminal } from "../components/WorldGenTerminal";
 import { AppTheme } from "@/theme/theme";
+import type { RoomView } from "../types/types";
 
 function GameErrorFallback() {
   const navigate = useNavigate();
@@ -47,9 +48,15 @@ function GamePage() {
   const [command, setCommand] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingGame, setLoadingGame] = useState(true);
+  // UI-FUT-4: room focused via map hover/click; null = show current room
+  const [focusedRoom, setFocusedRoom] = useState<RoomView | null>(null);
+  // UI-FUT-8: reconnection toast — show when WS reconnects after a drop
+  const [reconnectToast, setReconnectToast] = useState(false);
 
   const { gameState, chatMessages, streamingMessage, isStreaming, wsError, wsStatus, worldGenLog, worldGenReady, addChatMessage, setGameState, reset } =
     useGameStore();
+
+  const prevWsStatus = useRef(wsStatus);
 
   // Load game state from the server. Called once on mount, and again when world_gen_ready fires.
   const loadGameRef = useRef(false);
@@ -87,6 +94,17 @@ function GamePage() {
     loadGame();
     return () => { /* cleanup handled in useGameSocket */ };
   }, [sessionUUID]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // UI-FUT-8: detect reconnection (disconnected/error → connected)
+  useEffect(() => {
+    if (
+      wsStatus === "connected" &&
+      (prevWsStatus.current === "disconnected" || prevWsStatus.current === "error")
+    ) {
+      setReconnectToast(true);
+    }
+    prevWsStatus.current = wsStatus;
+  }, [wsStatus]);
 
   const handleCommand = () => {
     if (!command.trim() || isStreaming) return;
@@ -221,7 +239,7 @@ function GamePage() {
             </Tooltip>
           </Box>
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
-            <RoomMap gameState={gameState} />
+            <RoomMap gameState={gameState} onRoomFocus={setFocusedRoom} />
           </Box>
         </Paper>
       </Box>
@@ -256,10 +274,27 @@ function GamePage() {
           transition: "all 0.3s ease-in-out",
           "&:hover": { boxShadow: "0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)" },
         }}>
-          <GameInfo gameState={gameState} sendAction={sendAction} />
+          <GameInfo gameState={gameState} sendAction={sendAction} focusedRoom={focusedRoom} />
         </Paper>
         <Box sx={{ width: "4px", backgroundColor: "#000", opacity: 0.5, borderRadius: "2px" }} />
       </Box>
+
+      {/* UI-FUT-8: Reconnection toast */}
+      <Snackbar
+        open={reconnectToast}
+        autoHideDuration={4000}
+        onClose={() => setReconnectToast(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setReconnectToast(false)}
+          severity="success"
+          variant="filled"
+          sx={{ fontFamily: "Crimson Text, Georgia, serif" }}
+        >
+          Reconnected to the adventure
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

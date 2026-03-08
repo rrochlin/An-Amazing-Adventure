@@ -315,6 +315,12 @@ const WorldEventsAccordion = ({ events }: { events: WorldEvent[] }) => {
   );
 };
 
+// Format a timestamp string for display
+const formatTimestamp = (iso: string): string => {
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+};
+
 const ChatMessage = ({ message }: { message: ChatMessageType }) => {
   const isPlayer = message.type === "player";
   const { mode } = useColorScheme();
@@ -324,7 +330,8 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
     <Box
       sx={{
         display: "flex",
-        justifyContent: isPlayer ? "flex-end" : "flex-start",
+        flexDirection: "column",
+        alignItems: isPlayer ? "flex-end" : "flex-start",
         mb: 2,
         animation: "fadeIn 0.3s ease-in",
         "@keyframes fadeIn": {
@@ -337,6 +344,9 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
             transform: "translateY(0)",
           },
         },
+        // Show timestamp on hover (UI-FUT-7)
+        "& .msg-timestamp": { opacity: 0, transition: "opacity 0.2s ease" },
+        "&:hover .msg-timestamp": { opacity: 1 },
       }}
     >
       <Paper
@@ -407,6 +417,22 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
       </Paper>
       {!isPlayer && message.events && message.events.length > 0 && (
         <WorldEventsAccordion events={message.events} />
+      )}
+      {/* UI-FUT-7: timestamp shown on hover */}
+      {message.timestamp && (
+        <Typography
+          className="msg-timestamp"
+          variant="caption"
+          sx={{
+            mt: 0.25,
+            fontSize: "0.65rem",
+            color: isDark ? "rgba(201, 169, 98, 0.4)" : "rgba(107, 86, 56, 0.5)",
+            fontFamily: "Crimson Text, Georgia, serif",
+            userSelect: "none",
+          }}
+        >
+          {formatTimestamp(message.timestamp)}
+        </Typography>
       )}
     </Box>
   );

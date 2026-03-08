@@ -10,7 +10,7 @@ import {
   Chip,
   LinearProgress,
 } from "@mui/material";
-import { type GameStateView, type ItemView } from "../types/types";
+import { type GameStateView, type ItemView, type RoomView } from "../types/types";
 import { useState } from "react";
 
 interface TabPanelProps {
@@ -48,10 +48,16 @@ const SLOT_ORDER = ["head", "chest", "legs", "hands", "feet", "back"] as const;
 interface GameInfoProps {
   gameState: GameStateView | null;
   sendAction: (subAction: string, payload: string) => void;
+  /** When non-null, the Location tab displays this room instead of the current room (UI-FUT-4). */
+  focusedRoom?: RoomView | null;
 }
 
-export const GameInfo = ({ gameState, sendAction }: GameInfoProps) => {
-  const currentRoom = gameState?.current_room;
+export const GameInfo = ({ gameState, sendAction, focusedRoom }: GameInfoProps) => {
+  // UI-FUT-4: show focusedRoom when hovering/clicking map, otherwise fall back to current room
+  const displayRoom = focusedRoom ?? gameState?.current_room;
+  const currentRoom = displayRoom;
+  const isFocusingOtherRoom =
+    focusedRoom != null && focusedRoom.id !== gameState?.current_room?.id;
   const [tabValue, setTabValue] = useState(0);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -187,12 +193,12 @@ export const GameInfo = ({ gameState, sendAction }: GameInfoProps) => {
           <Typography
             variant="h6"
             sx={{
-              mb: 1,
+              mb: 0.5,
               textAlign: "center",
               textTransform: "uppercase",
               letterSpacing: "0.1em",
               borderBottom: "2px solid",
-              borderColor: "primary.main",
+              borderColor: isFocusingOtherRoom ? "info.main" : "primary.main",
               pb: 1,
               wordWrap: "break-word",
               overflowWrap: "break-word",
@@ -200,6 +206,22 @@ export const GameInfo = ({ gameState, sendAction }: GameInfoProps) => {
           >
             {currentRoom?.name ?? "Unknown Location"}
           </Typography>
+          {isFocusingOtherRoom && (
+            <Typography
+              variant="caption"
+              sx={{
+                display: "block",
+                textAlign: "center",
+                color: "info.main",
+                fontFamily: "Crimson Text, Georgia, serif",
+                fontStyle: "italic",
+                mb: 1,
+                fontSize: "0.75rem",
+              }}
+            >
+              Viewing from map — not your current location
+            </Typography>
+          )}
 
           {/* Player health bar */}
           {gameState?.player && (

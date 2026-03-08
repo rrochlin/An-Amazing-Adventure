@@ -1,56 +1,72 @@
-import { useMemo, useState, useEffect } from "react";
-import { type GameStateView } from "../types/types";
-import { Stage, Layer, Rect, Text, Circle, Group, Line } from "react-konva";
-import { Box, IconButton, Typography, Chip, Stack, useColorScheme } from "@mui/material";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { type GameStateView, type RoomView } from "../types/types";
+import { Stage, Layer, Rect, Text, Circle as KonvaCircle, Group, Line } from "react-konva";
+import {
+  Box,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Typography,
+  Chip,
+  Stack,
+  useColorScheme,
+  Tooltip,
+} from "@mui/material";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import OpenInFullIcon from "@mui/icons-material/OpenInFull";
+import CloseIcon from "@mui/icons-material/Close";
 import { DungeonColors, ColorTokens } from "../theme/theme";
+import { useGameStore } from "../store/gameStore";
 
-export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
+interface RoomMapProps {
+  gameState: GameStateView | null;
+  /** Called when the user hovers or clicks a room node.
+   *  Pass null to clear the selection (restore current room). */
+  onRoomFocus?: (room: RoomView | null) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Inner canvas – shared between inline view and modal pop-out
+// ---------------------------------------------------------------------------
+interface MapCanvasProps {
+  gameState: GameStateView | null;
+  visitedRooms: Set<string>;
+  width: number;
+  height: number;
+  onRoomFocus?: (room: RoomView | null) => void;
+}
+
+const MapCanvas = ({
+  gameState,
+  visitedRooms,
+  width,
+  height,
+  onRoomFocus,
+}: MapCanvasProps) => {
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
-  const colorMode = mode === "system" || !mode ? "dark" : mode;
-  const colors = ColorTokens[colorMode];
 
-  // Room rendering constants
-  // Server stores coordinates with spacing=100 between adjacent rooms.
-  // We map those world-units to pixel positions: each 100-unit step =
-  // (roomSize + corridor gap) pixels on screen.
-  // Increasing worldUnitToPx relative to baseRoomSize widens the corridors.
   const baseRoomSize = 44;
   const worldUnitToPx = baseRoomSize + 66; // 110px per 100 world-units → 66px corridor gap
 
-  // Canvas dimensions - make responsive to container
-  const [canvasSize, setCanvasSize] = useState({ width: 400, height: 400 });
-
-  useEffect(() => {
-    const updateSize = () => {
-      const container = document.getElementById('map-container');
-      if (container) {
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-        setCanvasSize({ width, height });
-      }
-    };
-
-    updateSize();
-    window.addEventListener('resize', updateSize);
-    return () => window.removeEventListener('resize', updateSize);
-  }, []);
-
-  const [selectedLayer, setSelectedLayer] = useState(0);
   const [scale, setScale] = useState(1.0);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hoveredRoom, setHoveredRoom] = useState<string | null>(null);
   const [torchFlicker, setTorchFlicker] = useState(0);
+  const [selectedLayer, setSelectedLayer] = useState(0);
+
+  // Track the previous current_room id so we only auto-pan on actual moves
+  const prevRoomId = useRef<string | null>(null);
 
   // Torch flicker animation
   useEffect(() => {
     const interval = setInterval(() => {
-      setTorchFlicker(Math.random() * 0.3 + 0.85); // 0.85 to 1.15
+      setTorchFlicker(Math.random() * 0.3 + 0.85);
     }, 150);
     return () => clearInterval(interval);
   }, []);
@@ -59,128 +75,108 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
   const zLevels = useMemo(() => {
     if (!gameState?.rooms) return [0];
     const levels = new Set(
-      Object.values(gameState?.rooms).map((room) => room.coordinates.z)
+      Object.values(gameState.rooms).map((room) => room.coordinates.z)
     );
     return Array.from(levels).sort((a, b) => b - a);
   }, [gameState?.rooms]);
 
-  // Set initial layer to player's current layer
+  // Keep selected layer in sync with player's floor
   useEffect(() => {
     if (gameState?.current_room) {
-      setSelectedLayer(gameState?.current_room.coordinates.z);
+      setSelectedLayer(gameState.current_room.coordinates.z);
     }
   }, [gameState?.current_room]);
 
-  // Calculate room positions (before zoom/pan)
+  // Calculate room positions (world-units → canvas pixels, before zoom/pan)
   const roomPositions = useMemo(() => {
-    if (!gameState?.rooms) return {};
-
-    const positions: { [key: string]: { x: number; y: number; z: number } } = {};
-    const centerX = canvasSize.width / 2;
-    const centerY = canvasSize.height / 2;
-
-    Object.keys(gameState?.rooms).forEach((roomId) => {
-      const room = gameState?.rooms![roomId];
-      // Convert world-units to pixels: 100 world-units = worldUnitToPx pixels
+    if (!gameState?.rooms) return {} as Record<string, { x: number; y: number; z: number }>;
+    const positions: Record<string, { x: number; y: number; z: number }> = {};
+    const centerX = width / 2;
+    const centerY = height / 2;
+    Object.keys(gameState.rooms).forEach((roomId) => {
+      const room = gameState.rooms![roomId];
       positions[roomId] = {
         x: centerX + (room.coordinates.x / 100) * worldUnitToPx,
         y: centerY + (room.coordinates.y / 100) * worldUnitToPx,
         z: room.coordinates.z,
       };
     });
-
     return positions;
-  }, [gameState?.rooms, worldUnitToPx, canvasSize]);
+  }, [gameState?.rooms, worldUnitToPx, width, height]);
+
+  // UI-FUT-2: Auto-pan to current room whenever the player moves
+  useEffect(() => {
+    if (!gameState?.current_room) return;
+    const roomId = gameState.current_room.id;
+    if (roomId === prevRoomId.current) return;
+    prevRoomId.current = roomId;
+
+    const pos = roomPositions[roomId];
+    if (!pos) return;
+    // Center the current room: offset = canvasCenter - roomPos * scale
+    setPosition({
+      x: width / 2 - pos.x * scale,
+      y: height / 2 - pos.y * scale,
+    });
+  }, [gameState?.current_room?.id, roomPositions, width, height, scale]);
 
   // Filter rooms by selected layer
   const roomsOnLayer = useMemo(() => {
-    if (!gameState?.rooms) return [];
-    return Object.keys(gameState?.rooms).filter(
-      (roomId) => gameState?.rooms![roomId].coordinates.z === selectedLayer
+    if (!gameState?.rooms) return [] as string[];
+    return Object.keys(gameState.rooms).filter(
+      (roomId) => gameState.rooms![roomId].coordinates.z === selectedLayer
     );
   }, [gameState?.rooms, selectedLayer]);
 
-  // Track visited rooms
-  const visitedRooms = useMemo(() => {
-    const visited = new Set<string>();
-    if (!gameState?.rooms) return visited;
-
-    visited.add(gameState?.current_room.id);
-    Object.values(gameState?.current_room.connections).forEach((roomId) => {
-      visited.add(roomId);
-    });
-
-    return visited;
-  }, [gameState?.current_room, gameState?.rooms]);
-
-  // Zoom handlers
-  const handleZoomIn = () => {
-    setScale((s) => Math.min(s * 1.2, 3.0));
-  };
-
-  const handleZoomOut = () => {
-    setScale((s) => Math.max(s / 1.2, 0.5));
-  };
-
+  const handleZoomIn = () => setScale((s) => Math.min(s * 1.2, 3.0));
+  const handleZoomOut = () => setScale((s) => Math.max(s / 1.2, 0.5));
   const handleResetView = () => {
     setScale(1.0);
     setPosition({ x: 0, y: 0 });
+    prevRoomId.current = null; // force re-center on next render
   };
 
-  // Pan handlers
   const handleMouseDown = (e: any) => {
     const stage = e.target.getStage();
     const pointerPos = stage.getPointerPosition();
     setIsDragging(true);
-    setDragStart({
-      x: pointerPos.x - position.x,
-      y: pointerPos.y - position.y,
-    });
+    setDragStart({ x: pointerPos.x - position.x, y: pointerPos.y - position.y });
   };
-
   const handleMouseMove = (e: any) => {
     if (!isDragging) return;
     const stage = e.target.getStage();
     const pointerPos = stage.getPointerPosition();
-    setPosition({
-      x: pointerPos.x - dragStart.x,
-      y: pointerPos.y - dragStart.y,
-    });
+    setPosition({ x: pointerPos.x - dragStart.x, y: pointerPos.y - dragStart.y });
   };
+  const handleMouseUp = () => setIsDragging(false);
 
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  const handleRoomEnter = useCallback(
+    (roomId: string) => {
+      setHoveredRoom(roomId);
+      if (onRoomFocus && gameState?.rooms?.[roomId]) {
+        onRoomFocus(gameState.rooms[roomId]);
+      }
+    },
+    [onRoomFocus, gameState?.rooms]
+  );
 
-  // TODO(ui): Add a pop-out/modal expand button so the map can fill more screen
-  //   real estate when the user wants a better view of the dungeon layout.
-  //   (ref: Phase 5/UI.md — "Pop-out/modal expand button")
+  const handleRoomLeave = useCallback(() => {
+    setHoveredRoom(null);
+    if (onRoomFocus) onRoomFocus(null);
+  }, [onRoomFocus]);
 
-  // TODO(ui): Auto-zoom and center the canvas on the current room whenever
-  //   the player moves so the active area is always in view without manual pan.
-  //   (ref: Phase 5/UI.md — "auto-zoom to current room unreliable")
-
-  // TODO(ui): Highlight connected exits from the current room in a distinct
-  //   color (e.g. teal glow) so the player can see at a glance where they can
-  //   move next. (ref: Phase 5/UI.md — "highlight connected exits")
-
-  // TODO(ui): Correlate the Room Info panel on the right side with the map —
-  //   hovering/clicking a map node should update the room detail panel to show
-  //   that room's info, not just the current room.
-  //   (ref: Phase 5/UI.md — "correlate room panel to map node highlight")
-
-  // TODO(ui): Render character/NPC tokens on the map at their room positions
-  //   so the player can see where enemies and allies are relative to their
-  //   position. (ref: Loose Thoughts.md — "Characters displayed on the map")
-
-  // TODO(ui): Fix fog-of-war inconsistency — currently only the current room
-  //   and its direct connections are revealed. Consider persisting a "visited"
-  //   set in game state so rooms stay revealed after the player leaves them.
-  //   (ref: Phase 5/UI.md — "fog of war consistency")
+  const handleRoomClick = useCallback(
+    (roomId: string) => {
+      if (onRoomFocus && gameState?.rooms?.[roomId]) {
+        onRoomFocus(gameState.rooms[roomId]);
+      }
+    },
+    [onRoomFocus, gameState?.rooms]
+  );
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0, maxWidth: "100%" }}>
-      {/* Controls */}
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0 }}>
+      {/* Controls row */}
       <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center">
         {/* Layer Selector */}
         <Stack direction="row" spacing={0.5} flexWrap="wrap">
@@ -207,14 +203,7 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
                     />
                   ) : undefined
                 }
-                sx={{
-                  fontSize: "0.75rem",
-                  height: "24px",
-                  ...(selectedLayer !== level && {
-                    borderColor: colors.chipOutline,
-                    color: colors.chipText,
-                  }),
-                }}
+                sx={{ fontSize: "0.75rem", height: "24px" }}
               />
             );
           })}
@@ -222,29 +211,428 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
 
         {/* Zoom Controls */}
         <Stack direction="row" spacing={0}>
-          <IconButton size="small" onClick={handleZoomIn} sx={{ color: colors.icon }}>
+          <IconButton size="small" onClick={handleZoomIn}>
             <ZoomInIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={handleResetView} sx={{ color: colors.icon }}>
+          <IconButton size="small" onClick={handleResetView}>
             <RestartAltIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={handleZoomOut} sx={{ color: colors.icon }}>
+          <IconButton size="small" onClick={handleZoomOut}>
             <ZoomOutIcon fontSize="small" />
           </IconButton>
         </Stack>
       </Stack>
 
-      {/* Map Canvas */}
+      {/* Canvas */}
+      <Stage
+        width={width}
+        height={height}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        style={{ cursor: isDragging ? "grabbing" : "grab" }}
+      >
+        <Layer scaleX={scale} scaleY={scale} x={position.x} y={position.y}>
+          {/* Corridors */}
+          {gameState?.rooms &&
+            roomsOnLayer.map((roomId) => {
+              const room = gameState.rooms![roomId];
+              return Object.entries(room.connections).map(
+                ([direction, connectedRoomId]) => {
+                  if (direction === "up" || direction === "down") return null;
+                  if (!roomsOnLayer.includes(connectedRoomId)) return null;
+
+                  const start = roomPositions[roomId];
+                  const end = roomPositions[connectedRoomId];
+                  if (!start || !end) return null;
+
+                  const isActive =
+                    roomId === gameState.current_room.id ||
+                    connectedRoomId === gameState.current_room.id;
+                  // UI-FUT-3: teal highlight for corridors leading to connected exits
+                  const isExit =
+                    Object.values(gameState.current_room.connections).includes(connectedRoomId) ||
+                    Object.values(gameState.current_room.connections).includes(roomId);
+
+                  const dx = end.x - start.x;
+                  const dy = end.y - start.y;
+                  const length = Math.sqrt(dx * dx + dy * dy);
+                  const angle = Math.atan2(dy, dx);
+
+                  const corridorWidth = 16;
+                  const roomOffset = baseRoomSize / 2;
+                  const corridorLength = length - baseRoomSize;
+
+                  const startX = start.x + Math.cos(angle) * roomOffset;
+                  const startY = start.y + Math.sin(angle) * roomOffset;
+
+                  const corridorColors = isExit
+                    ? [0, "#1a5f5f", 0.5, "#26888a", 1, "#1a5f5f"]
+                    : isActive
+                    ? [0, "#4E342E", 0.5, "#6D4C41", 1, "#4E342E"]
+                    : [0, "#3E2723", 0.5, "#4E342E", 1, "#3E2723"];
+
+                  return (
+                    <Group
+                      key={`${roomId}-${direction}-${connectedRoomId}`}
+                      x={startX}
+                      y={startY}
+                      rotation={(angle * 180) / Math.PI}
+                    >
+                      <Rect
+                        x={0}
+                        y={-corridorWidth / 2}
+                        width={corridorLength}
+                        height={corridorWidth}
+                        fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                        fillLinearGradientEndPoint={{ x: 0, y: corridorWidth }}
+                        fillLinearGradientColorStops={corridorColors}
+                        shadowColor="black"
+                        shadowBlur={5}
+                        shadowOpacity={0.5}
+                      />
+                      <Line
+                        points={[0, -corridorWidth / 2, corridorLength, -corridorWidth / 2]}
+                        stroke={isExit ? "#26a0a4" : DungeonColors.wall}
+                        strokeWidth={isExit ? 1.5 : 2}
+                      />
+                      <Line
+                        points={[0, corridorWidth / 2, corridorLength, corridorWidth / 2]}
+                        stroke={isExit ? "#26a0a4" : DungeonColors.wall}
+                        strokeWidth={isExit ? 1.5 : 2}
+                      />
+                      <Rect
+                        x={-4}
+                        y={-corridorWidth / 2 - 2}
+                        width={8}
+                        height={corridorWidth + 4}
+                        fill={isExit ? "#26a0a4" : DungeonColors.door}
+                        stroke={isExit ? "#4dd0d4" : DungeonColors.wall}
+                        strokeWidth={2}
+                        cornerRadius={2}
+                      />
+                      <Rect
+                        x={corridorLength - 4}
+                        y={-corridorWidth / 2 - 2}
+                        width={8}
+                        height={corridorWidth + 4}
+                        fill={isExit ? "#26a0a4" : DungeonColors.door}
+                        stroke={isExit ? "#4dd0d4" : DungeonColors.wall}
+                        strokeWidth={2}
+                        cornerRadius={2}
+                      />
+                    </Group>
+                  );
+                }
+              );
+            })}
+
+          {/* Rooms */}
+          {gameState?.rooms &&
+            roomsOnLayer.map((roomId) => {
+              const pos = roomPositions[roomId];
+              const room = gameState.rooms![roomId];
+              if (!pos) return null;
+
+              const isCurrentRoom = roomId === gameState.current_room.id;
+              // UI-FUT-3: exits are rooms directly reachable from current room
+              const isExit =
+                Object.values(gameState.current_room.connections).includes(roomId);
+              const isConnected =
+                isExit ||
+                Object.values(room.connections).includes(gameState.current_room.id);
+              const isVisited = visitedRooms.has(roomId);
+              const isHovered = hoveredRoom === roomId;
+
+              const hasUpConnection = "up" in room.connections;
+              const hasDownConnection = "down" in room.connections;
+
+              let fillGradient = ["#2C1810", "#1a0a0a"];
+              let strokeColor = DungeonColors.wall;
+              let glowColor = "rgba(0, 0, 0, 0)";
+
+              if (isCurrentRoom) {
+                fillGradient = ["#C9A962", "#8B7355"];
+                strokeColor = "#FFD700";
+                glowColor = `rgba(255, 215, 0, ${0.6 * torchFlicker})`;
+              } else if (isExit) {
+                // UI-FUT-3: teal for reachable exits
+                fillGradient = ["#1a6b6e", "#0f4547"];
+                strokeColor = "#4dd0d4";
+                glowColor = "rgba(77, 208, 212, 0.3)";
+              } else if (isConnected) {
+                fillGradient = ["#6B4E9D", "#4a3570"];
+                strokeColor = "#9575CD";
+                glowColor = "rgba(149, 117, 205, 0.3)";
+              } else if (isVisited) {
+                fillGradient = ["#5D4037", "#3E2723"];
+                strokeColor = "#6D4C41";
+              }
+
+              const roomSize = baseRoomSize;
+
+              // UI-FUT-5: collect NPC tokens for this room
+              const npcs = room.occupants ?? [];
+              const isPlayerHere = isCurrentRoom;
+
+              return (
+                <Group
+                  key={roomId}
+                  x={pos.x}
+                  y={pos.y}
+                  onMouseEnter={() => handleRoomEnter(roomId)}
+                  onMouseLeave={handleRoomLeave}
+                  onClick={() => handleRoomClick(roomId)}
+                >
+                  {/* Outer glow */}
+                  {(isCurrentRoom || isExit) && (
+                    <Rect
+                      x={-roomSize / 2 - 6}
+                      y={-roomSize / 2 - 6}
+                      width={roomSize + 12}
+                      height={roomSize + 12}
+                      fill={glowColor}
+                      cornerRadius={8}
+                      shadowColor={glowColor}
+                      shadowBlur={isCurrentRoom ? 20 : 12}
+                      shadowOpacity={isCurrentRoom ? torchFlicker : 0.7}
+                      listening={false}
+                    />
+                  )}
+
+                  {/* Main room tile */}
+                  <Rect
+                    x={-roomSize / 2}
+                    y={-roomSize / 2}
+                    width={roomSize}
+                    height={roomSize}
+                    fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                    fillLinearGradientEndPoint={{ x: 0, y: roomSize }}
+                    fillLinearGradientColorStops={[0, fillGradient[0], 1, fillGradient[1]]}
+                    stroke={isHovered ? "#FFD700" : strokeColor}
+                    strokeWidth={isCurrentRoom || isHovered ? 3 : 2}
+                    cornerRadius={4}
+                    shadowColor="black"
+                    shadowBlur={isCurrentRoom ? 12 : 6}
+                    shadowOpacity={0.7}
+                    shadowOffsetY={2}
+                  />
+
+                  {/* Inner highlight */}
+                  <Rect
+                    x={-roomSize / 2 + 3}
+                    y={-roomSize / 2 + 3}
+                    width={roomSize - 6}
+                    height={roomSize - 6}
+                    stroke={strokeColor}
+                    strokeWidth={1}
+                    opacity={0.3}
+                    cornerRadius={2}
+                    listening={false}
+                  />
+
+                  {/* Stairs */}
+                  {hasUpConnection && (
+                    <Group x={roomSize / 4} y={-roomSize / 4} listening={false}>
+                      <Rect
+                        x={-8} y={-8} width={16} height={16}
+                        fill={DungeonColors.torch} stroke="#000" strokeWidth={2} cornerRadius={3}
+                        shadowColor="rgba(255, 167, 38, 0.8)"
+                        shadowBlur={8 * torchFlicker} shadowOpacity={torchFlicker}
+                      />
+                      <Text x={-6} y={-8} text="↑" fontSize={16} fill="#000" fontStyle="bold" />
+                    </Group>
+                  )}
+                  {hasDownConnection && (
+                    <Group x={-roomSize / 4} y={-roomSize / 4} listening={false}>
+                      <Rect
+                        x={-8} y={-8} width={16} height={16}
+                        fill={DungeonColors.torch} stroke="#000" strokeWidth={2} cornerRadius={3}
+                        shadowColor="rgba(255, 167, 38, 0.8)"
+                        shadowBlur={8 * torchFlicker} shadowOpacity={torchFlicker}
+                      />
+                      <Text x={-6} y={-8} text="↓" fontSize={16} fill="#000" fontStyle="bold" />
+                    </Group>
+                  )}
+
+                  {/* Player marker */}
+                  {isPlayerHere && (
+                    <>
+                      <KonvaCircle
+                        x={0} y={0} radius={10}
+                        fillRadialGradientStartPoint={{ x: 0, y: 0 }}
+                        fillRadialGradientEndPoint={{ x: 0, y: 0 }}
+                        fillRadialGradientStartRadius={0}
+                        fillRadialGradientEndRadius={10}
+                        fillRadialGradientColorStops={[0, "#FFD700", 0.7, "#FFA000", 1, "#FF6F00"]}
+                        stroke="#000" strokeWidth={2}
+                        shadowColor="rgba(255, 215, 0, 0.9)"
+                        shadowBlur={12 * torchFlicker}
+                        shadowOpacity={torchFlicker}
+                        listening={false}
+                      />
+                      <KonvaCircle x={0} y={0} radius={4} fill="#FFF" opacity={0.8} listening={false} />
+                    </>
+                  )}
+
+                  {/* UI-FUT-5: NPC/character tokens */}
+                  {npcs.length > 0 && (
+                    <Group listening={false}>
+                      {npcs.slice(0, 3).map((npc, idx) => {
+                        // Arrange up to 3 tokens in a small row near the bottom of the tile
+                        const total = Math.min(npcs.length, 3);
+                        const spacing = 12;
+                        const startX = -((total - 1) * spacing) / 2;
+                        const tx = startX + idx * spacing;
+                        const ty = roomSize / 2 - 10;
+                        const tokenColor = npc.friendly ? "#4CAF50" : "#F44336";
+                        const borderColor = npc.friendly ? "#81C784" : "#EF9A9A";
+                        return (
+                          <Group key={npc.id} x={tx} y={ty}>
+                            <KonvaCircle
+                              x={0} y={0} radius={5}
+                              fill={tokenColor}
+                              stroke={borderColor}
+                              strokeWidth={1.5}
+                              shadowColor={tokenColor}
+                              shadowBlur={4}
+                              shadowOpacity={0.6}
+                            />
+                            {/* skull for dead NPCs */}
+                            {!npc.alive && (
+                              <Text
+                                x={-4} y={-5}
+                                text="✕"
+                                fontSize={7}
+                                fill="#fff"
+                              />
+                            )}
+                          </Group>
+                        );
+                      })}
+                      {/* overflow indicator */}
+                      {npcs.length > 3 && (
+                        <Text
+                          x={-roomSize / 2 + 2}
+                          y={roomSize / 2 - 16}
+                          text={`+${npcs.length - 3}`}
+                          fontSize={8}
+                          fill="#ccc"
+                        />
+                      )}
+                    </Group>
+                  )}
+
+                  {/* Room label */}
+                  {(isCurrentRoom || isConnected || isHovered) && (
+                    <Group y={roomSize / 2 + 10} listening={false}>
+                      <Rect
+                        x={-50} y={0} width={100} height={20}
+                        fillLinearGradientStartPoint={{ x: 0, y: 0 }}
+                        fillLinearGradientEndPoint={{ x: 0, y: 20 }}
+                        fillLinearGradientColorStops={[
+                          0, "rgba(62, 44, 46, 0.95)",
+                          1, "rgba(26, 15, 30, 0.95)",
+                        ]}
+                        stroke={isHovered ? "#FFD700" : isExit ? "#4dd0d4" : DungeonColors.doorway}
+                        strokeWidth={1}
+                        cornerRadius={4}
+                        shadowColor="black" shadowBlur={4} shadowOpacity={0.7}
+                      />
+                      <Text
+                        x={-45} y={4}
+                        text={room.name}
+                        fontSize={11}
+                        fill="#E8DCC4"
+                        fontFamily="Cinzel, Georgia, serif"
+                        width={90}
+                        align="center"
+                      />
+                    </Group>
+                  )}
+
+                  {/* Fog of war — unexplored rooms */}
+                  {!isVisited && (
+                    <Rect
+                      x={-roomSize / 2} y={-roomSize / 2}
+                      width={roomSize} height={roomSize}
+                      fill="rgba(13, 5, 8, 0.7)"
+                      cornerRadius={4}
+                      listening={false}
+                    />
+                  )}
+                </Group>
+              );
+            })}
+        </Layer>
+
+        {/* UI overlay layer (empty, reserved) */}
+        <Layer />
+      </Stage>
+
+      {/* Compass Rose */}
+      <Box
+        sx={{
+          position: "absolute",
+          bottom: 16,
+          right: 16,
+          width: 90,
+          height: 90,
+          pointerEvents: "none",
+          filter: isDark
+            ? "drop-shadow(0 0 8px rgba(201, 169, 98, 0.5))"
+            : "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))",
+        }}
+      >
+        <svg viewBox="0 0 100 100" style={{ width: "100%", height: "100%" }}>
+          <circle cx="50" cy="50" r="48" fill="none" stroke={isDark ? "#C9A962" : "#8B6F47"} strokeWidth="2" />
+          <circle cx="50" cy="50" r="42" fill="none" stroke={isDark ? "#C9A962" : "#8B6F47"} strokeWidth="1" opacity="0.5" />
+          <circle cx="50" cy="50" r="8" fill={isDark ? "#3E2723" : "#D4C5A9"} stroke={isDark ? "#C9A962" : "#8B6F47"} strokeWidth="2" />
+          <text x="50" y="28" textAnchor="middle" fill={isDark ? "#FFD700" : "#6B5638"} fontSize="24" fontFamily="Cinzel, serif" fontWeight="bold">N</text>
+          <text x="50" y="82" textAnchor="middle" fill={isDark ? "#C9A962" : "#8B6F47"} fontSize="20" fontFamily="Cinzel, serif">S</text>
+          <text x="78" y="56" textAnchor="middle" fill={isDark ? "#C9A962" : "#8B6F47"} fontSize="20" fontFamily="Cinzel, serif">E</text>
+          <text x="22" y="56" textAnchor="middle" fill={isDark ? "#C9A962" : "#8B6F47"} fontSize="20" fontFamily="Cinzel, serif">W</text>
+        </svg>
+      </Box>
+    </Box>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Public component — inline map + optional modal pop-out (UI-FUT-1)
+// ---------------------------------------------------------------------------
+export const RoomMap = ({ gameState, onRoomFocus }: RoomMapProps) => {
+  const { mode } = useColorScheme();
+  const isDark = mode === "dark" || mode === "system" || !mode;
+  const colorMode = mode === "system" || !mode ? "dark" : mode;
+  const colors = ColorTokens[colorMode];
+
+  const visitedRooms = useGameStore((s) => s.visitedRooms);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [canvasSize, setCanvasSize] = useState({ width: 400, height: 400 });
+
+  useEffect(() => {
+    const updateSize = () => {
+      const container = document.getElementById("map-container");
+      if (container) {
+        setCanvasSize({ width: container.clientWidth, height: container.clientHeight });
+      }
+    };
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0, maxWidth: "100%" }}>
+      {/* Map canvas container */}
       <Box
         id="map-container"
         sx={{
-          border: isDark
-            ? `2px solid ${DungeonColors.wall}`
-            : "2px solid #8B6F47",
+          border: isDark ? `2px solid ${DungeonColors.wall}` : "2px solid #8B6F47",
           borderRadius: "4px",
-          backgroundColor: isDark
-            ? DungeonColors.fog
-            : "rgba(212, 197, 169, 0.5)",
+          backgroundColor: isDark ? DungeonColors.fog : "rgba(212, 197, 169, 0.5)",
           overflow: "hidden",
           boxShadow: isDark
             ? `inset 0 0 20px ${DungeonColors.fog}`
@@ -254,446 +642,36 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
           height: "400px",
         }}
       >
-        <Stage
+        {/* UI-FUT-1: Pop-out button */}
+        <Tooltip title="Expand map">
+          <IconButton
+            size="small"
+            onClick={() => setModalOpen(true)}
+            sx={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 10,
+              color: isDark ? "rgba(201, 169, 98, 0.7)" : "rgba(107, 86, 56, 0.7)",
+              backgroundColor: isDark ? "rgba(26, 15, 30, 0.7)" : "rgba(212, 197, 169, 0.7)",
+              backdropFilter: "blur(4px)",
+              "&:hover": {
+                color: isDark ? "#FFD700" : "#5D4037",
+                backgroundColor: isDark ? "rgba(26, 15, 30, 0.9)" : "rgba(212, 197, 169, 0.9)",
+              },
+            }}
+          >
+            <OpenInFullIcon sx={{ fontSize: "1rem" }} />
+          </IconButton>
+        </Tooltip>
+
+        <MapCanvas
+          gameState={gameState}
+          visitedRooms={visitedRooms}
           width={canvasSize.width}
           height={canvasSize.height}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          style={{ cursor: isDragging ? "grabbing" : "grab" }}
-        >
-          <Layer
-            scaleX={scale}
-            scaleY={scale}
-            x={position.x}
-            y={position.y}
-          >
-            {/* Draw connections/corridors */}
-            {gameState?.rooms &&
-              roomsOnLayer.map((roomId) => {
-                const room = gameState?.rooms![roomId];
-                return Object.entries(room.connections).map(
-                  ([direction, connectedRoomId]) => {
-                    if (direction === "up" || direction === "down") return null;
-                    if (!roomsOnLayer.includes(connectedRoomId)) return null;
-
-                    const start = roomPositions[roomId];
-                    const end = roomPositions[connectedRoomId];
-                    if (!start || !end) return null;
-
-                    const isActive =
-                      roomId === gameState?.current_room.id ||
-                      connectedRoomId === gameState?.current_room.id;
-
-                    const dx = end.x - start.x;
-                    const dy = end.y - start.y;
-                    const length = Math.sqrt(dx * dx + dy * dy);
-                    const angle = Math.atan2(dy, dx);
-
-                    const corridorWidth = 16;
-                    const roomOffset = baseRoomSize / 2;
-                    const corridorLength = length - baseRoomSize;
-
-                    const startX = start.x + Math.cos(angle) * roomOffset;
-                    const startY = start.y + Math.sin(angle) * roomOffset;
-
-                    return (
-                      <Group
-                        key={`${roomId}-${direction}-${connectedRoomId}`}
-                        x={startX}
-                        y={startY}
-                        rotation={(angle * 180) / Math.PI}
-                      >
-                        {/* Corridor floor */}
-                        <Rect
-                          x={0}
-                          y={-corridorWidth / 2}
-                          width={corridorLength}
-                          height={corridorWidth}
-                          fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-                          fillLinearGradientEndPoint={{ x: 0, y: corridorWidth }}
-                          fillLinearGradientColorStops={
-                            isActive
-                              ? [0, "#4E342E", 0.5, "#6D4C41", 1, "#4E342E"]
-                              : [0, "#3E2723", 0.5, "#4E342E", 1, "#3E2723"]
-                          }
-                          shadowColor="black"
-                          shadowBlur={5}
-                          shadowOpacity={0.5}
-                        />
-                        {/* Corridor walls */}
-                        <Line
-                          points={[0, -corridorWidth / 2, corridorLength, -corridorWidth / 2]}
-                          stroke={DungeonColors.wall}
-                          strokeWidth={2}
-                        />
-                        <Line
-                          points={[0, corridorWidth / 2, corridorLength, corridorWidth / 2]}
-                          stroke={DungeonColors.wall}
-                          strokeWidth={2}
-                        />
-                        {/* Doorway entrance */}
-                        <Rect
-                          x={-4}
-                          y={-corridorWidth / 2 - 2}
-                          width={8}
-                          height={corridorWidth + 4}
-                          fill={DungeonColors.door}
-                          stroke={DungeonColors.wall}
-                          strokeWidth={2}
-                          cornerRadius={2}
-                        />
-                        {/* Doorway exit */}
-                        <Rect
-                          x={corridorLength - 4}
-                          y={-corridorWidth / 2 - 2}
-                          width={8}
-                          height={corridorWidth + 4}
-                          fill={DungeonColors.door}
-                          stroke={DungeonColors.wall}
-                          strokeWidth={2}
-                          cornerRadius={2}
-                        />
-                      </Group>
-                    );
-                  }
-                );
-              })}
-
-            {/* Draw rooms */}
-            {gameState?.rooms &&
-              roomsOnLayer.map((roomId) => {
-                const pos = roomPositions[roomId];
-                const room = gameState?.rooms![roomId];
-                if (!pos) return null;
-
-                const isCurrentRoom = roomId === gameState?.current_room.id;
-                const isConnected =
-                  Object.values(gameState?.current_room.connections).includes(roomId) ||
-                  Object.values(room.connections).includes(gameState?.current_room.id);
-                const isVisited = visitedRooms.has(roomId);
-                const isHovered = hoveredRoom === roomId;
-
-                const hasUpConnection = "up" in room.connections;
-                const hasDownConnection = "down" in room.connections;
-
-                // Dynamic colors
-                let fillGradient = ["#2C1810", "#1a0a0a"]; // Unexplored
-                let strokeColor = DungeonColors.wall;
-                let glowColor = "rgba(0, 0, 0, 0)";
-
-                if (isCurrentRoom) {
-                  fillGradient = ["#C9A962", "#8B7355"];
-                  strokeColor = "#FFD700";
-                  glowColor = `rgba(255, 215, 0, ${0.6 * torchFlicker})`;
-                } else if (isConnected) {
-                  fillGradient = ["#6B4E9D", "#4a3570"];
-                  strokeColor = "#9575CD";
-                  glowColor = "rgba(149, 117, 205, 0.3)";
-                } else if (isVisited) {
-                  fillGradient = ["#5D4037", "#3E2723"];
-                  strokeColor = "#6D4C41";
-                }
-
-                const roomSize = baseRoomSize;
-
-                return (
-                  <Group
-                    key={roomId}
-                    x={pos.x}
-                    y={pos.y}
-                    onMouseEnter={() => setHoveredRoom(roomId)}
-                    onMouseLeave={() => setHoveredRoom(null)}
-                  >
-                    {/* Outer glow for current room */}
-                    {isCurrentRoom && (
-                      <Rect
-                        x={-roomSize / 2 - 6}
-                        y={-roomSize / 2 - 6}
-                        width={roomSize + 12}
-                        height={roomSize + 12}
-                        fill={glowColor}
-                        cornerRadius={8}
-                        shadowColor={glowColor}
-                        shadowBlur={20}
-                        shadowOpacity={torchFlicker}
-                        listening={false}
-                      />
-                    )}
-
-                    {/* Main room */}
-                    <Rect
-                      x={-roomSize / 2}
-                      y={-roomSize / 2}
-                      width={roomSize}
-                      height={roomSize}
-                      fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-                      fillLinearGradientEndPoint={{ x: 0, y: roomSize }}
-                      fillLinearGradientColorStops={[
-                        0,
-                        fillGradient[0],
-                        1,
-                        fillGradient[1],
-                      ]}
-                      stroke={strokeColor}
-                      strokeWidth={isCurrentRoom ? 3 : 2}
-                      cornerRadius={4}
-                      shadowColor="black"
-                      shadowBlur={isCurrentRoom ? 12 : 6}
-                      shadowOpacity={0.7}
-                      shadowOffsetY={2}
-                    />
-
-                    {/* Inner highlight for depth */}
-                    <Rect
-                      x={-roomSize / 2 + 3}
-                      y={-roomSize / 2 + 3}
-                      width={roomSize - 6}
-                      height={roomSize - 6}
-                      stroke={strokeColor}
-                      strokeWidth={1}
-                      opacity={0.3}
-                      cornerRadius={2}
-                      listening={false}
-                    />
-
-                    {/* Stairs indicators */}
-                    {hasUpConnection && (
-                      <Group x={roomSize / 4} y={-roomSize / 4} listening={false}>
-                        <Rect
-                          x={-8}
-                          y={-8}
-                          width={16}
-                          height={16}
-                          fill={DungeonColors.torch}
-                          stroke="#000"
-                          strokeWidth={2}
-                          cornerRadius={3}
-                          shadowColor="rgba(255, 167, 38, 0.8)"
-                          shadowBlur={8 * torchFlicker}
-                          shadowOpacity={torchFlicker}
-                        />
-                        <Text
-                          x={-6}
-                          y={-8}
-                          text="↑"
-                          fontSize={16}
-                          fill="#000"
-                          fontStyle="bold"
-                        />
-                      </Group>
-                    )}
-
-                    {hasDownConnection && (
-                      <Group x={-roomSize / 4} y={-roomSize / 4} listening={false}>
-                        <Rect
-                          x={-8}
-                          y={-8}
-                          width={16}
-                          height={16}
-                          fill={DungeonColors.torch}
-                          stroke="#000"
-                          strokeWidth={2}
-                          cornerRadius={3}
-                          shadowColor="rgba(255, 167, 38, 0.8)"
-                          shadowBlur={8 * torchFlicker}
-                          shadowOpacity={torchFlicker}
-                        />
-                        <Text
-                          x={-6}
-                          y={-8}
-                          text="↓"
-                          fontSize={16}
-                          fill="#000"
-                          fontStyle="bold"
-                        />
-                      </Group>
-                    )}
-
-                    {/* Player marker */}
-                    {isCurrentRoom && (
-                      <>
-                        <Circle
-                          x={0}
-                          y={0}
-                          radius={10}
-                          fillRadialGradientStartPoint={{ x: 0, y: 0 }}
-                          fillRadialGradientEndPoint={{ x: 0, y: 0 }}
-                          fillRadialGradientStartRadius={0}
-                          fillRadialGradientEndRadius={10}
-                          fillRadialGradientColorStops={[
-                            0,
-                            "#FFD700",
-                            0.7,
-                            "#FFA000",
-                            1,
-                            "#FF6F00",
-                          ]}
-                          stroke="#000"
-                          strokeWidth={2}
-                          shadowColor="rgba(255, 215, 0, 0.9)"
-                          shadowBlur={12 * torchFlicker}
-                          shadowOpacity={torchFlicker}
-                          listening={false}
-                        />
-                        <Circle
-                          x={0}
-                          y={0}
-                          radius={4}
-                          fill="#FFF"
-                          opacity={0.8}
-                          listening={false}
-                        />
-                      </>
-                    )}
-
-                    {/* Room label */}
-                    {(isCurrentRoom || isConnected || isHovered) && (
-                      <Group y={roomSize / 2 + 10} listening={false}>
-                        <Rect
-                          x={-50}
-                          y={0}
-                          width={100}
-                          height={20}
-                          fillLinearGradientStartPoint={{ x: 0, y: 0 }}
-                          fillLinearGradientEndPoint={{ x: 0, y: 20 }}
-                          fillLinearGradientColorStops={[
-                            0,
-                            "rgba(62, 44, 46, 0.95)",
-                            1,
-                            "rgba(26, 15, 30, 0.95)",
-                          ]}
-                          stroke={isHovered ? "#FFD700" : DungeonColors.doorway}
-                          strokeWidth={1}
-                          cornerRadius={4}
-                          shadowColor="black"
-                          shadowBlur={4}
-                          shadowOpacity={0.7}
-                        />
-                         <Text
-                           x={-45}
-                           y={4}
-                           text={room.name}
-                           fontSize={11}
-                           fill="#E8DCC4"
-                           fontFamily="Cinzel, Georgia, serif"
-                           width={90}
-                           align="center"
-                         />
-                      </Group>
-                    )}
-
-                    {/* Fog of war for unexplored */}
-                    {!isVisited && (
-                      <Rect
-                        x={-roomSize / 2}
-                        y={-roomSize / 2}
-                        width={roomSize}
-                        height={roomSize}
-                        fill="rgba(13, 5, 8, 0.7)"
-                        cornerRadius={4}
-                        listening={false}
-                      />
-                    )}
-                  </Group>
-                );
-              })}
-
-          </Layer>
-
-          {/* Empty second layer for UI overlay elements if needed */}
-          <Layer />
-        </Stage>
-
-        {/* Compass Rose SVG Overlay */}
-        <Box
-          sx={{
-            position: "absolute",
-            bottom: 16,
-            right: 16,
-            width: 90,
-            height: 90,
-            pointerEvents: "none",
-            filter: isDark ? "drop-shadow(0 0 8px rgba(201, 169, 98, 0.5))" : "drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))",
-          }}
-        >
-          <svg viewBox="0 0 100 100" style={{ width: "100%", height: "100%" }}>
-            {/* Outer circle */}
-            <circle
-              cx="50"
-              cy="50"
-              r="48"
-              fill="none"
-              stroke={isDark ? "#C9A962" : "#8B6F47"}
-              strokeWidth="2"
-            />
-
-            {/* Inner circle */}
-            <circle
-              cx="50"
-              cy="50"
-              r="42"
-              fill="none"
-              stroke={isDark ? "#C9A962" : "#8B6F47"}
-              strokeWidth="1"
-              opacity="0.5"
-            />
-
-            {/* Center circle */}
-            <circle
-              cx="50"
-              cy="50"
-              r="8"
-              fill={isDark ? "#3E2723" : "#D4C5A9"}
-              stroke={isDark ? "#C9A962" : "#8B6F47"}
-              strokeWidth="2"
-            />
-
-            {/* Cardinal direction labels */}
-            <text
-              x="50"
-              y="28"
-              textAnchor="middle"
-              fill={isDark ? "#FFD700" : "#6B5638"}
-              fontSize="24"
-              fontFamily="Cinzel, serif"
-              fontWeight="bold"
-            >
-              N
-            </text>
-            <text
-              x="50"
-              y="82"
-              textAnchor="middle"
-              fill={isDark ? "#C9A962" : "#8B6F47"}
-              fontSize="20"
-              fontFamily="Cinzel, serif"
-            >
-              S
-            </text>
-            <text
-              x="78"
-              y="56"
-              textAnchor="middle"
-              fill={isDark ? "#C9A962" : "#8B6F47"}
-              fontSize="20"
-              fontFamily="Cinzel, serif"
-            >
-              E
-            </text>
-            <text
-              x="22"
-              y="56"
-              textAnchor="middle"
-              fill={isDark ? "#C9A962" : "#8B6F47"}
-              fontSize="20"
-              fontFamily="Cinzel, serif"
-            >
-              W
-            </text>
-          </svg>
-        </Box>
+          onRoomFocus={onRoomFocus}
+        />
       </Box>
 
       {/* Legend */}
@@ -713,65 +691,107 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
         </Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Box
-              sx={{
-                width: 16,
-                height: 16,
-                background: "linear-gradient(180deg, #C9A962 0%, #8B7355 100%)",
-                border: "2px solid #FFD700",
-                borderRadius: "3px",
-                boxShadow: "0 0 8px rgba(255, 215, 0, 0.5)",
-              }}
-            />
-            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>
-              Current
-            </Typography>
+            <Box sx={{ width: 16, height: 16, background: "linear-gradient(180deg, #C9A962 0%, #8B7355 100%)", border: "2px solid #FFD700", borderRadius: "3px", boxShadow: "0 0 8px rgba(255, 215, 0, 0.5)" }} />
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>Current</Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Box
-              sx={{
-                width: 16,
-                height: 16,
-                background: "linear-gradient(180deg, #6B4E9D 0%, #4a3570 100%)",
-                border: "2px solid #9575CD",
-                borderRadius: "3px",
-              }}
-            />
-            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>
-              Adjacent
-            </Typography>
+            <Box sx={{ width: 16, height: 16, background: "linear-gradient(180deg, #1a6b6e 0%, #0f4547 100%)", border: "2px solid #4dd0d4", borderRadius: "3px" }} />
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>Exit</Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Box
-              sx={{
-                width: 16,
-                height: 16,
-                background: "linear-gradient(180deg, #5D4037 0%, #3E2723 100%)",
-                border: "2px solid #6D4C41",
-                borderRadius: "3px",
-              }}
-            />
-            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>
-              Explored
-            </Typography>
+            <Box sx={{ width: 16, height: 16, background: "linear-gradient(180deg, #6B4E9D 0%, #4a3570 100%)", border: "2px solid #9575CD", borderRadius: "3px" }} />
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>Adjacent</Typography>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <Typography
-              variant="caption"
-              sx={{
-                color: colors.accent,
-                fontWeight: "bold",
-                fontSize: "1rem",
-              }}
-            >
-              ↑↓
-            </Typography>
-            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>
-              Stairs
-            </Typography>
+            <Box sx={{ width: 16, height: 16, background: "linear-gradient(180deg, #5D4037 0%, #3E2723 100%)", border: "2px solid #6D4C41", borderRadius: "3px" }} />
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>Explored</Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <Typography variant="caption" sx={{ color: colors.accent, fontWeight: "bold", fontSize: "1rem" }}>↑↓</Typography>
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>Stairs</Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <DotCircle size={10} color="#4CAF50" />
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>Friendly</Typography>
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <DotCircle size={10} color="#F44336" />
+            <Typography variant="caption" sx={{ color: colors.text.secondary, fontFamily: "Crimson Text, Georgia, serif" }}>Hostile</Typography>
           </Box>
         </Stack>
       </Box>
+
+      {/* UI-FUT-1: Modal pop-out */}
+      <Dialog
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            width: "85vw",
+            height: "85vh",
+            maxWidth: "none",
+            backgroundColor: isDark ? "#0d0508" : "#f0e8d8",
+            border: isDark ? `2px solid ${DungeonColors.wall}` : "2px solid #8B6F47",
+            overflow: "hidden",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: `1px solid ${isDark ? DungeonColors.wall : "#8B6F47"}`,
+            py: 1,
+            px: 2,
+          }}
+        >
+          <Typography
+            sx={{
+              fontFamily: "Cinzel, Georgia, serif",
+              fontSize: "1rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+            }}
+          >
+            World Map
+          </Typography>
+          <IconButton size="small" onClick={() => setModalOpen(false)}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent
+          sx={{
+            p: 0,
+            overflow: "hidden",
+            position: "relative",
+            height: "100%",
+          }}
+        >
+          <MapCanvas
+            gameState={gameState}
+            visitedRooms={visitedRooms}
+            width={window.innerWidth * 0.85 - 4}
+            height={window.innerHeight * 0.85 - 60}
+            onRoomFocus={onRoomFocus}
+          />
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
+
+// Tiny helper so the legend can render colored dots without Konva
+const DotCircle = ({ size, color }: { size: number; color: string }) => (
+  <Box
+    sx={{
+      width: size,
+      height: size,
+      borderRadius: "50%",
+      backgroundColor: color,
+      border: `1.5px solid ${color === "#4CAF50" ? "#81C784" : "#EF9A9A"}`,
+      flexShrink: 0,
+    }}
+  />
+);
