@@ -42,3 +42,13 @@ output "connections_table_name" {
   description = "DynamoDB WebSocket connections table name"
   value       = module.dynamodb.connections_table_name
 }
+
+output "users_table_name" {
+  description = "DynamoDB users table name (RBAC + quota)"
+  value       = module.dynamodb.users_table_name
+}
+
+output "memberships_table_name" {
+  description = "DynamoDB memberships table name (user ↔ session join)"
+  value       = module.dynamodb.memberships_table_name
+}
