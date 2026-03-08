@@ -161,10 +161,22 @@ func (c *Client) NarrateStream(
 	}, nil
 }
 
+// engineerMaxRounds is the maximum number of agentic tool-call rounds the
+// Engineer is allowed before we stop regardless of stop reason. Each round is
+// one Converse call → dispatch tools → feed tool_results back. In practice
+// almost all turns complete in 1 round; the cap prevents infinite loops.
+const engineerMaxRounds = 5
+
 // EngineerScan reads the finished narrative and infers what world mutations it
 // implies, then executes them against g using the full tool set.
 // It runs synchronously after NarrateStream completes so the narrative stream
 // is not delayed. Uses ModelSubAgent (Haiku) — fast and cheap.
+//
+// The Engineer uses an agentic tool loop: after each Converse call it executes
+// the returned tool calls, sends tool_result blocks back to the model, and
+// continues until the model returns end_turn with no tools or the round cap is
+// reached. This gives Haiku visibility into tool failures so it can retry with
+// corrected arguments.
 func (c *Client) EngineerScan(
 	ctx context.Context,
 	g *game.Game,
@@ -173,48 +185,97 @@ func (c *Client) EngineerScan(
 	systemPrompt := engineerSystemPrompt()
 	userMsg := engineerUserMessage(g, narrative)
 
-	resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
-		ModelId: aws.String(ModelSubAgent),
-		System:  []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: systemPrompt}},
-		Messages: []types.Message{{
-			Role:    types.ConversationRoleUser,
-			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: userMsg}},
-		}},
-		ToolConfig: &types.ToolConfiguration{
-			Tools: NarratorTools(),
-		},
-		InferenceConfig: &types.InferenceConfiguration{
-			MaxTokens:   aws.Int32(2048),
-			Temperature: aws.Float32(0.1), // low temperature — structured extraction task
-		},
-	})
-	if err != nil {
-		return EngineerResult{}, fmt.Errorf("engineer scan: %w", err)
-	}
+	log.Printf("[engineer] START turn=%d narrativeLen=%d", g.ConversationCount, len(narrative))
+	log.Printf("[engineer] user message:\n%s", userMsg)
+
+	messages := []types.Message{{
+		Role:    types.ConversationRoleUser,
+		Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: userMsg}},
+	}}
 
 	var result EngineerResult
-	if resp.Usage != nil {
-		result.Tokens.InputTokens = int(aws.ToInt32(resp.Usage.InputTokens))
-		result.Tokens.OutputTokens = int(aws.ToInt32(resp.Usage.OutputTokens))
-	}
 
-	// Execute every tool call the Engineer made
-	if msg, ok := resp.Output.(*types.ConverseOutputMemberMessage); ok {
+	for round := 0; round < engineerMaxRounds; round++ {
+		resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
+			ModelId:  aws.String(ModelSubAgent),
+			System:   []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: systemPrompt}},
+			Messages: messages,
+			ToolConfig: &types.ToolConfiguration{
+				Tools: NarratorTools(),
+			},
+			InferenceConfig: &types.InferenceConfiguration{
+				MaxTokens:   aws.Int32(2048),
+				Temperature: aws.Float32(0.1), // low temperature — structured extraction task
+			},
+		})
+		if err != nil {
+			return result, fmt.Errorf("engineer scan round %d: %w", round, err)
+		}
+
+		if resp.Usage != nil {
+			result.Tokens.InputTokens += int(aws.ToInt32(resp.Usage.InputTokens))
+			result.Tokens.OutputTokens += int(aws.ToInt32(resp.Usage.OutputTokens))
+		}
+
+		msg, ok := resp.Output.(*types.ConverseOutputMemberMessage)
+		if !ok {
+			log.Printf("[engineer] round=%d no message in output, stopping", round)
+			break
+		}
+
+		// Log the full assistant message content
 		for _, block := range msg.Value.Content {
-			tu, ok := block.(*types.ContentBlockMemberToolUse)
-			if !ok {
-				continue
+			switch b := block.(type) {
+			case *types.ContentBlockMemberText:
+				if b.Value != "" {
+					log.Printf("[engineer] round=%d assistant text: %s", round, b.Value)
+				}
+			case *types.ContentBlockMemberToolUse:
+				rawInput, _ := json.Marshal(b.Value.Input)
+				log.Printf("[engineer] round=%d tool_use: name=%s input=%s",
+					round, aws.ToString(b.Value.Name), string(rawInput))
 			}
+		}
+
+		// Collect tool_use blocks from this response
+		var toolUseBlocks []*types.ContentBlockMemberToolUse
+		for _, block := range msg.Value.Content {
+			if tu, ok := block.(*types.ContentBlockMemberToolUse); ok {
+				toolUseBlocks = append(toolUseBlocks, tu)
+			}
+		}
+
+		stopReason := resp.StopReason
+		log.Printf("[engineer] round=%d stopReason=%v toolCalls=%d",
+			round, stopReason, len(toolUseBlocks))
+
+		// No tool calls → model is done
+		if len(toolUseBlocks) == 0 {
+			break
+		}
+
+		// Execute each tool and collect tool_result blocks to feed back
+		var toolResultBlocks []types.ContentBlock
+		succeeded, failed := 0, 0
+		for _, tu := range toolUseBlocks {
+			toolName := aws.ToString(tu.Value.Name)
+			toolID := aws.ToString(tu.Value.ToolUseId)
+
 			// Unmarshal the tool input from the lazy document
 			var input map[string]any
 			raw, _ := json.Marshal(tu.Value.Input)
 			_ = json.Unmarshal(raw, &input)
 
-			toolResult, event, dispatchErr := DispatchTool(g, aws.ToString(tu.Value.Name), input)
+			toolResult, event, dispatchErr := DispatchTool(g, toolName, input)
 			if dispatchErr != nil {
-				log.Printf("engineer tool %s error: %v", aws.ToString(tu.Value.Name), dispatchErr)
+				log.Printf("[engineer] round=%d tool=%s FAILED: %v", round, toolName, dispatchErr)
 				toolResult = fmt.Sprintf("error: %v", dispatchErr)
+				failed++
+			} else {
+				log.Printf("[engineer] round=%d tool=%s OK: %s", round, toolName, toolResult)
+				succeeded++
 			}
+
 			if event != nil {
 				result.Events = append(result.Events, *event)
 			}
@@ -222,12 +283,46 @@ func (c *Client) EngineerScan(
 				SessionID: g.ID,
 				Ts:        time.Now().UnixMilli(),
 				Turn:      g.ConversationCount,
-				Tool:      aws.ToString(tu.Value.Name),
+				Tool:      toolName,
 				Input:     input,
 				Result:    toolResult,
 			})
+
+			// Build tool_result block so the model can see success/failure and retry
+			toolResultBlocks = append(toolResultBlocks, &types.ContentBlockMemberToolResult{
+				Value: types.ToolResultBlock{
+					ToolUseId: aws.String(toolID),
+					Content: []types.ToolResultContentBlock{
+						&types.ToolResultContentBlockMemberText{Value: toolResult},
+					},
+				},
+			})
+		}
+
+		log.Printf("[engineer] round=%d dispatch results: succeeded=%d failed=%d",
+			round, succeeded, failed)
+
+		// Append assistant turn + user turn with tool results to the conversation
+		messages = append(messages,
+			types.Message{
+				Role:    types.ConversationRoleAssistant,
+				Content: msg.Value.Content,
+			},
+			types.Message{
+				Role:    types.ConversationRoleUser,
+				Content: toolResultBlocks,
+			},
+		)
+
+		// If the model signalled end_turn even with tools, stop after processing them
+		if stopReason == "end_turn" {
+			break
 		}
 	}
+
+	log.Printf("[engineer] DONE turn=%d mutations=%d events=%d tokens=in:%d+out:%d",
+		g.ConversationCount, len(result.Mutations), len(result.Events),
+		result.Tokens.InputTokens, result.Tokens.OutputTokens)
 
 	return result, nil
 }
