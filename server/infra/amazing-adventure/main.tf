@@ -36,9 +36,10 @@ module "dynamodb" {
 }
 
 module "cognito" {
-  source      = "./modules/cognito"
-  prefix      = local.prefix
-  common_tags = local.common_tags
+  source                  = "./modules/cognito"
+  prefix                  = local.prefix
+  common_tags             = local.common_tags
+  post_confirm_lambda_arn = module.lambdas.cognito_post_confirm_function_arn
 }
 
 module "s3" {
@@ -130,15 +131,6 @@ module "cloudfront" {
     aws           = aws
     aws.us_east_1 = aws.us_east_1
   }
-}
-
-# ── Cognito Lambda trigger ────────────────────────────────────────────────────
-# Placed in root (not the cognito module) to break the circular dependency:
-# cognito module would need the Lambda ARN, but lambdas module needs cognito
-# user_pool_id. Same pattern as aws_s3_bucket_policy above.
-resource "aws_cognito_user_pool_lambda_config" "triggers" {
-  user_pool_id      = module.cognito.user_pool_id
-  post_confirmation = module.lambdas.cognito_post_confirm_function_arn
 }
 
 # Allow Cognito to invoke the post-confirmation Lambda

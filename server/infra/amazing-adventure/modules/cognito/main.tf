@@ -1,5 +1,11 @@
 variable "prefix" { type = string }
 variable "common_tags" { type = map(string) }
+# ARN of the Lambda function to invoke after user email confirmation.
+# Pass "" (empty string) to disable the trigger.
+variable "post_confirm_lambda_arn" {
+  type    = string
+  default = ""
+}
 
 resource "aws_cognito_user_pool" "main" {
   name                     = var.prefix
@@ -55,6 +61,13 @@ resource "aws_cognito_user_pool" "main" {
     }
   }
 
+  dynamic "lambda_config" {
+    for_each = var.post_confirm_lambda_arn != "" ? [1] : []
+    content {
+      post_confirmation = var.post_confirm_lambda_arn
+    }
+  }
+
   tags = var.common_tags
 }
 
@@ -100,19 +113,19 @@ resource "aws_ssm_parameter" "user_pool_client_id" {
 # admin  (precedence 1)  — full admin panel access
 # user   (precedence 10) — approved players with AI access
 # restricted (precedence 100) — default for new signups; no AI access
-resource "aws_cognito_user_pool_group" "admin" {
+resource "aws_cognito_user_group" "admin" {
   name         = "admin"
   user_pool_id = aws_cognito_user_pool.main.id
   precedence   = 1
 }
 
-resource "aws_cognito_user_pool_group" "user" {
+resource "aws_cognito_user_group" "user" {
   name         = "user"
   user_pool_id = aws_cognito_user_pool.main.id
   precedence   = 10
 }
 
-resource "aws_cognito_user_pool_group" "restricted" {
+resource "aws_cognito_user_group" "restricted" {
   name         = "restricted"
   user_pool_id = aws_cognito_user_pool.main.id
   precedence   = 100
