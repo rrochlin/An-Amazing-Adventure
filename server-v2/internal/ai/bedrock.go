@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -62,6 +63,8 @@ type NarratorResult struct {
 	Narrative   string                  // accumulated text sent to the player
 	NewMessages []game.NarrativeMessage // updated history to persist
 	Tokens      TokenUsage              // token usage for this turn
+	Events      []game.WorldEvent       // player-visible world events from tool calls this turn
+	Mutations   []game.MutationEntry    // audit log entries for all tool calls this turn
 }
 
 // NarrateStream runs a single narrator turn with streaming.
@@ -94,6 +97,8 @@ func (c *Client) NarrateStream(
 	// Agentic loop: keep calling Bedrock until the model stops with tool use
 	var fullNarrative strings.Builder
 	var totalTokens TokenUsage
+	var allEvents []game.WorldEvent
+	var allMutations []game.MutationEntry
 	allMessages := messages
 
 	for {
@@ -201,11 +206,22 @@ func (c *Client) NarrateStream(
 		for _, ptu := range pendingToolUses {
 			var input map[string]any
 			_ = json.Unmarshal([]byte(ptu.inputJSON), &input)
-			result, err := DispatchTool(g, ptu.name, input)
-			if err != nil {
-				log.Printf("tool %s error: %v", ptu.name, err)
-				result = fmt.Sprintf("error: %v", err)
+			result, event, dispatchErr := DispatchTool(g, ptu.name, input)
+			if dispatchErr != nil {
+				log.Printf("tool %s error: %v", ptu.name, dispatchErr)
+				result = fmt.Sprintf("error: %v", dispatchErr)
 			}
+			if event != nil {
+				allEvents = append(allEvents, *event)
+			}
+			allMutations = append(allMutations, game.MutationEntry{
+				SessionID: g.ID,
+				Ts:        time.Now().UnixMilli(),
+				Turn:      g.ConversationCount,
+				Tool:      ptu.name,
+				Input:     input,
+				Result:    result,
+			})
 			toolResultBlocks = append(toolResultBlocks, &types.ContentBlockMemberToolResult{
 				Value: types.ToolResultBlock{
 					ToolUseId: aws.String(ptu.id),
@@ -228,6 +244,8 @@ func (c *Client) NarrateStream(
 		Narrative:   fullNarrative.String(),
 		NewMessages: newHistory,
 		Tokens:      totalTokens,
+		Events:      allEvents,
+		Mutations:   allMutations,
 	}, nil
 }
 

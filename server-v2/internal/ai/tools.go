@@ -129,113 +129,128 @@ func WorldBuilderTools() []types.Tool {
 
 // ---- Tool dispatch ----
 
-// DispatchTool executes a single tool call against the game and returns a
-// result string to feed back to the model as a tool_result block.
-func DispatchTool(g *game.Game, name string, input map[string]any) (string, error) {
+// DispatchTool executes a single tool call against the game.
+// Returns:
+//   - result: string to feed back to the model as a tool_result block
+//   - event: player-visible WorldEvent if the player can observe the mutation, otherwise nil
+//   - err: non-nil if the tool call failed
+func DispatchTool(g *game.Game, name string, input map[string]any) (result string, event *game.WorldEvent, err error) {
 	switch name {
 	case "create_room":
-		return execCreateRoom(g, input)
+		result, event, err = execCreateRoom(g, input)
 	case "update_room":
-		return execUpdateRoom(g, input)
+		result, event, err = execUpdateRoom(g, input)
 	case "create_item":
-		return execCreateItem(g, input)
+		result, event, err = execCreateItem(g, input)
 	case "create_character":
-		return execCreateCharacter(g, input)
+		result, event, err = execCreateCharacter(g, input)
 	case "move_character":
-		return execMoveCharacter(g, input)
+		result, event, err = execMoveCharacter(g, input)
 	case "give_item_to_player":
-		return execGiveItemToPlayer(g, input)
+		result, event, err = execGiveItemToPlayer(g, input)
 	case "take_item_from_player":
-		return execTakeItemFromPlayer(g, input)
+		result, event, err = execTakeItemFromPlayer(g, input)
 	case "place_item_in_room":
-		return execPlaceItemInRoom(g, input)
+		result, event, err = execPlaceItemInRoom(g, input)
 	case "damage_character":
-		return execDamageCharacter(g, input)
+		result, event, err = execDamageCharacter(g, input)
 	case "heal_character":
-		return execHealCharacter(g, input)
+		result, event, err = execHealCharacter(g, input)
 	case "set_character_alive":
-		return execSetCharacterAlive(g, input)
+		result, event, err = execSetCharacterAlive(g, input)
 	case "get_room_info":
-		return execGetRoomInfo(g, input)
+		result, event, err = execGetRoomInfo(g, input)
 	default:
-		return "", fmt.Errorf("unknown tool: %s", name)
+		err = fmt.Errorf("unknown tool: %s", name)
 	}
+	return
 }
 
 // ---- Implementations ----
+// Each exec* function returns (result, event, err).
+// event is non-nil only when the player can observe the mutation.
 
-func execCreateRoom(g *game.Game, in map[string]any) (string, error) {
+func execCreateRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	name := strArg(in, "name")
 	desc := strArg(in, "description")
 	connectTo := strArg(in, "connect_to_room_name")
 	direction := strArg(in, "direction")
 	if name == "" || desc == "" {
-		return "", fmt.Errorf("name and description are required")
+		return "", nil, fmt.Errorf("name and description are required")
 	}
 	room := game.NewArea(name, desc)
 	if err := g.AddRoom(room); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if connectTo != "" && direction != "" {
 		fromRoom, err := g.GetRoomByName(connectTo)
 		if err != nil {
-			return "", fmt.Errorf("connect_to_room_name: %w", err)
+			return "", nil, fmt.Errorf("connect_to_room_name: %w", err)
 		}
 		if err := g.ConnectRooms(fromRoom.ID, room.ID, direction); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
-	return fmt.Sprintf("Created room %q (ID: %s)", name, room.ID), nil
+	// create_room: player visibility — never (description visible in next narrative)
+	return fmt.Sprintf("Created room %q (ID: %s)", name, room.ID), nil, nil
 }
 
-func execUpdateRoom(g *game.Game, in map[string]any) (string, error) {
+func execUpdateRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	roomName := strArg(in, "room_name")
 	desc := strArg(in, "description")
 	room, err := g.GetRoomByName(roomName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	room.Description = desc
 	g.UpdateRoom(room)
-	return fmt.Sprintf("Updated room %q", roomName), nil
+	// update_room: player visibility — never (description change visible in next narrative)
+	return fmt.Sprintf("Updated room %q", roomName), nil, nil
 }
 
-func execCreateItem(g *game.Game, in map[string]any) (string, error) {
+func execCreateItem(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	name := strArg(in, "name")
 	desc := strArg(in, "description")
 	if name == "" {
-		return "", fmt.Errorf("name is required")
+		return "", nil, fmt.Errorf("name is required")
 	}
 	item := game.NewItem(name, desc)
 	if w, ok := in["weight"].(float64); ok {
 		item.Weight = w
 	}
 	if err := g.AddItem(item); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if roomName := strArg(in, "place_in_room"); roomName != "" {
 		room, err := g.GetRoomByName(roomName)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 		if err := g.PlaceItemInRoom(item.ID, room.ID); err != nil {
-			return "", err
+			return "", nil, err
 		}
-		return fmt.Sprintf("Created item %q and placed in %q", name, roomName), nil
+		// Visible if placed in player's current room
+		var ev *game.WorldEvent
+		if room.ID == g.Player.LocationID {
+			ev = &game.WorldEvent{Type: "item_appeared", Message: fmt.Sprintf("A %s appears nearby.", name)}
+		}
+		return fmt.Sprintf("Created item %q and placed in %q", name, roomName), ev, nil
 	}
 	if err := g.GiveItemToPlayer(item.ID); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return fmt.Sprintf("Created item %q and placed in player inventory", name), nil
+	// Placed in player inventory — always visible
+	ev := &game.WorldEvent{Type: "item_gained", Message: fmt.Sprintf("%s added to your inventory.", name)}
+	return fmt.Sprintf("Created item %q and placed in player inventory", name), ev, nil
 }
 
-func execCreateCharacter(g *game.Game, in map[string]any) (string, error) {
+func execCreateCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	name := strArg(in, "name")
 	desc := strArg(in, "description")
 	backstory := strArg(in, "backstory")
 	roomName := strArg(in, "room_name")
 	if name == "" || roomName == "" {
-		return "", fmt.Errorf("name and room_name are required")
+		return "", nil, fmt.Errorf("name and room_name are required")
 	}
 	c := game.NewCharacter(name, desc)
 	c.Backstory = backstory
@@ -246,146 +261,201 @@ func execCreateCharacter(g *game.Game, in map[string]any) (string, error) {
 		c.Health = int(health)
 	}
 	if err := g.AddNPC(c); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	room, err := g.GetRoomByName(roomName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := g.MoveNPC(c.ID, room.ID); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return fmt.Sprintf("Created character %q in room %q", name, roomName), nil
+	// Visible if placed in player's current room
+	var ev *game.WorldEvent
+	if room.ID == g.Player.LocationID {
+		ev = &game.WorldEvent{Type: "character_arrived", Message: fmt.Sprintf("%s appears.", name)}
+	}
+	return fmt.Sprintf("Created character %q in room %q", name, roomName), ev, nil
 }
 
-func execMoveCharacter(g *game.Game, in map[string]any) (string, error) {
+func execMoveCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	charName := strArg(in, "character_name")
 	roomName := strArg(in, "room_name")
 	c, err := g.GetNPCByName(charName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
+	fromRoomID := c.LocationID
 	room, err := g.GetRoomByName(roomName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := g.MoveNPC(c.ID, room.ID); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return fmt.Sprintf("Moved %q to %q", charName, roomName), nil
+	// Visible if NPC arrives at or departs from player's current room
+	var ev *game.WorldEvent
+	playerRoom := g.Player.LocationID
+	if room.ID == playerRoom {
+		ev = &game.WorldEvent{Type: "character_arrived", Message: fmt.Sprintf("%s arrives.", charName)}
+	} else if fromRoomID == playerRoom {
+		ev = &game.WorldEvent{Type: "character_departed", Message: fmt.Sprintf("%s leaves.", charName)}
+	}
+	return fmt.Sprintf("Moved %q to %q", charName, roomName), ev, nil
 }
 
-func execGiveItemToPlayer(g *game.Game, in map[string]any) (string, error) {
+func execGiveItemToPlayer(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	itemName := strArg(in, "item_name")
 	item, err := g.GetItemByName(itemName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := g.GiveItemToPlayer(item.ID); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return fmt.Sprintf("Gave %q to player", itemName), nil
+	// Always visible — player receives item
+	ev := &game.WorldEvent{Type: "item_gained", Message: fmt.Sprintf("%s added to your inventory.", itemName)}
+	return fmt.Sprintf("Gave %q to player", itemName), ev, nil
 }
 
-func execTakeItemFromPlayer(g *game.Game, in map[string]any) (string, error) {
+func execTakeItemFromPlayer(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	itemName := strArg(in, "item_name")
 	item, err := g.GetItemByName(itemName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	room, err := g.GetRoom(g.Player.LocationID)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := g.TakeItemFromPlayer(item.ID, room.ID); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return fmt.Sprintf("Took %q from player", itemName), nil
+	// Always visible — item removed from player
+	ev := &game.WorldEvent{Type: "item_lost", Message: fmt.Sprintf("%s removed from your inventory.", itemName)}
+	return fmt.Sprintf("Took %q from player", itemName), ev, nil
 }
 
-func execPlaceItemInRoom(g *game.Game, in map[string]any) (string, error) {
+func execPlaceItemInRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	itemName := strArg(in, "item_name")
 	roomName := strArg(in, "room_name")
 	item, err := g.GetItemByName(itemName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	room, err := g.GetRoomByName(roomName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := g.PlaceItemInRoom(item.ID, room.ID); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return fmt.Sprintf("Placed %q in %q", itemName, roomName), nil
+	// Visible only if placed in player's current room
+	var ev *game.WorldEvent
+	if room.ID == g.Player.LocationID {
+		ev = &game.WorldEvent{Type: "item_appeared", Message: fmt.Sprintf("A %s appears nearby.", itemName)}
+	}
+	return fmt.Sprintf("Placed %q in %q", itemName, roomName), ev, nil
 }
 
-func execDamageCharacter(g *game.Game, in map[string]any) (string, error) {
+func execDamageCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	charName := strArg(in, "character_name")
 	amount := int(numArg(in, "amount"))
 	if charName == "player" {
-		return fmt.Sprintf("Player health: %d", g.Player.Health-amount),
-			g.Player.TakeDamage(amount)
+		err := g.Player.TakeDamage(amount)
+		result := fmt.Sprintf("Player health: %d", g.Player.Health)
+		// Always visible
+		ev := &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. \u2764 %d", amount, g.Player.Health)}
+		return result, ev, err
 	}
 	c, err := g.GetNPCByName(charName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := c.TakeDamage(amount); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	g.NPCs[c.ID] = c
-	return fmt.Sprintf("%q health: %d", charName, c.Health), nil
+	result := fmt.Sprintf("%q health: %d", charName, c.Health)
+	// Visible only if NPC is in player's current room
+	var ev *game.WorldEvent
+	if c.LocationID == g.Player.LocationID {
+		ev = &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("%s takes %d damage. \u2764 %d", charName, amount, c.Health)}
+	}
+	return result, ev, nil
 }
 
-func execHealCharacter(g *game.Game, in map[string]any) (string, error) {
+func execHealCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	charName := strArg(in, "character_name")
 	amount := int(numArg(in, "amount"))
 	if charName == "player" {
-		return fmt.Sprintf("Player health: %d", g.Player.Health+amount),
-			g.Player.Heal(amount)
+		err := g.Player.Heal(amount)
+		result := fmt.Sprintf("Player health: %d", g.Player.Health)
+		// Always visible
+		ev := &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. \u2764 %d", amount, g.Player.Health)}
+		return result, ev, err
 	}
 	c, err := g.GetNPCByName(charName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := c.Heal(amount); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	g.NPCs[c.ID] = c
-	return fmt.Sprintf("%q health: %d", charName, c.Health), nil
+	result := fmt.Sprintf("%q health: %d", charName, c.Health)
+	// Visible only if NPC is in player's current room
+	var ev *game.WorldEvent
+	if c.LocationID == g.Player.LocationID {
+		ev = &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("%s recovers %d health.", charName, amount)}
+	}
+	return result, ev, nil
 }
 
-func execSetCharacterAlive(g *game.Game, in map[string]any) (string, error) {
+func execSetCharacterAlive(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	charName := strArg(in, "character_name")
 	alive, _ := in["alive"].(bool)
 	if charName == "player" {
 		if alive {
-			return "Player revived", g.Player.Revive(50)
+			err := g.Player.Revive(50)
+			ev := &game.WorldEvent{Type: "revive", Message: "You have been revived. \u2764 50"}
+			return "Player revived", ev, err
 		}
 		g.Player.Alive = false
 		g.Player.Health = 0
-		return "Player killed", nil
+		ev := &game.WorldEvent{Type: "death", Message: "You have been slain."}
+		return "Player killed", ev, nil
 	}
 	c, err := g.GetNPCByName(charName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
+	var reviveErr error
 	if alive {
-		err = c.Revive(50)
+		reviveErr = c.Revive(50)
 	} else {
 		c.Alive = false
 		c.Health = 0
 	}
 	g.NPCs[c.ID] = c
-	return fmt.Sprintf("%q alive=%v", charName, alive), err
+	result := fmt.Sprintf("%q alive=%v", charName, alive)
+	// Visible if NPC is in player's current room
+	var ev *game.WorldEvent
+	if c.LocationID == g.Player.LocationID {
+		if alive {
+			ev = &game.WorldEvent{Type: "revive", Message: fmt.Sprintf("%s stirs back to life.", charName)}
+		} else {
+			ev = &game.WorldEvent{Type: "death", Message: fmt.Sprintf("%s has been slain.", charName)}
+		}
+	}
+	return result, ev, reviveErr
 }
 
-func execGetRoomInfo(g *game.Game, in map[string]any) (string, error) {
+func execGetRoomInfo(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	roomName := strArg(in, "room_name")
 	room, err := g.GetRoomByName(roomName)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	info := map[string]any{
 		"name":        room.Name,
@@ -395,7 +465,8 @@ func execGetRoomInfo(g *game.Game, in map[string]any) (string, error) {
 		"occupants":   len(room.Occupants),
 	}
 	b, _ := json.Marshal(info)
-	return string(b), nil
+	// get_room_info: read-only, no player event
+	return string(b), nil, nil
 }
 
 // ---- helpers for building tool definitions ----
