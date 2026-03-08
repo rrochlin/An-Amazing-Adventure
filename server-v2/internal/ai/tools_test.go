@@ -30,7 +30,14 @@ func newTestGameWithRooms(t *testing.T) (*game.Game, string, string) {
 	return g, start.ID, north.ID
 }
 
+// dispatch is a helper that calls DispatchTool and discards the WorldEvent return.
 func dispatch(g *game.Game, name string, args map[string]any) (string, error) {
+	result, _, err := ai.DispatchTool(g, name, args)
+	return result, err
+}
+
+// dispatchWithEvent is a helper that returns the WorldEvent alongside result.
+func dispatchWithEvent(g *game.Game, name string, args map[string]any) (string, *game.WorldEvent, error) {
 	return ai.DispatchTool(g, name, args)
 }
 
@@ -326,5 +333,189 @@ func TestNarratorToolsDefined(t *testing.T) {
 		if tool == nil {
 			t.Error("got nil tool in NarratorTools")
 		}
+	}
+}
+
+// ---- Visibility tests ----
+
+func TestDamagePlayerAlwaysProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
+		"character_name": "player",
+		"amount":         float64(30),
+	})
+	if err != nil {
+		t.Fatalf("damage player: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent for player damage, got nil")
+	}
+	if ev.Type != "damage" {
+		t.Errorf("expected event type 'damage', got %q", ev.Type)
+	}
+}
+
+func TestDamageNPCInSameRoom_ProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, _ = dispatch(g, "create_character", map[string]any{
+		"name": "Goblin", "description": "", "backstory": "", "room_name": "Tavern",
+		"health": float64(50),
+	})
+	// Player is in Tavern; Goblin is in Tavern — should see event
+	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
+		"character_name": "Goblin",
+		"amount":         float64(10),
+	})
+	if err != nil {
+		t.Fatalf("damage NPC: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent for NPC damage in same room, got nil")
+	}
+}
+
+func TestDamageNPCInDifferentRoom_NoEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	// Create NPC in Alley; player is in Tavern
+	_, _ = dispatch(g, "create_character", map[string]any{
+		"name": "Shadow", "description": "", "backstory": "", "room_name": "Alley",
+		"health": float64(50),
+	})
+	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
+		"character_name": "Shadow",
+		"amount":         float64(10),
+	})
+	if err != nil {
+		t.Fatalf("damage NPC in different room: %v", err)
+	}
+	if ev != nil {
+		t.Errorf("expected nil WorldEvent for NPC damage in different room, got %+v", ev)
+	}
+}
+
+func TestGiveItemToPlayerAlwaysProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, _ = dispatch(g, "create_item", map[string]any{
+		"name": "Sword", "description": "Sharp",
+		"place_in_room": "Alley", // somewhere not the player
+	})
+	_, ev, err := dispatchWithEvent(g, "give_item_to_player", map[string]any{
+		"item_name": "Sword",
+	})
+	if err != nil {
+		t.Fatalf("give_item_to_player: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent for give_item_to_player, got nil")
+	}
+	if ev.Type != "item_gained" {
+		t.Errorf("expected type 'item_gained', got %q", ev.Type)
+	}
+}
+
+func TestPlaceItemInPlayerRoom_ProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	// Create item in Alley first, then move to Tavern (player's room)
+	_, _ = dispatch(g, "create_item", map[string]any{
+		"name": "Gem", "description": "Shiny",
+		"place_in_room": "Alley",
+	})
+	_, ev, err := dispatchWithEvent(g, "place_item_in_room", map[string]any{
+		"item_name": "Gem",
+		"room_name": "Tavern",
+	})
+	if err != nil {
+		t.Fatalf("place_item_in_room: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent when item placed in player's room, got nil")
+	}
+	if ev.Type != "item_appeared" {
+		t.Errorf("expected type 'item_appeared', got %q", ev.Type)
+	}
+}
+
+func TestPlaceItemInOtherRoom_NoEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, _ = dispatch(g, "create_item", map[string]any{
+		"name": "Rock", "description": "Heavy",
+		"place_in_room": "Tavern",
+	})
+	_, ev, err := dispatchWithEvent(g, "place_item_in_room", map[string]any{
+		"item_name": "Rock",
+		"room_name": "Alley",
+	})
+	if err != nil {
+		t.Fatalf("place_item_in_room other room: %v", err)
+	}
+	if ev != nil {
+		t.Errorf("expected nil event when placing item in different room, got %+v", ev)
+	}
+}
+
+func TestMoveCharacterArrivesAtPlayerRoom_ProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	// NPC starts in Alley; player is in Tavern
+	_, _ = dispatch(g, "create_character", map[string]any{
+		"name": "Messenger", "description": "", "backstory": "", "room_name": "Alley",
+	})
+	_, ev, err := dispatchWithEvent(g, "move_character", map[string]any{
+		"character_name": "Messenger",
+		"room_name":      "Tavern",
+	})
+	if err != nil {
+		t.Fatalf("move_character: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent when NPC arrives at player room, got nil")
+	}
+	if ev.Type != "character_arrived" {
+		t.Errorf("expected type 'character_arrived', got %q", ev.Type)
+	}
+}
+
+func TestMoveCharacterDepartsPlayerRoom_ProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	// NPC starts in Tavern (same as player); moves to Alley
+	_, _ = dispatch(g, "create_character", map[string]any{
+		"name": "Thief", "description": "", "backstory": "", "room_name": "Tavern",
+	})
+	_, ev, err := dispatchWithEvent(g, "move_character", map[string]any{
+		"character_name": "Thief",
+		"room_name":      "Alley",
+	})
+	if err != nil {
+		t.Fatalf("move_character departs: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent when NPC departs player room, got nil")
+	}
+	if ev.Type != "character_departed" {
+		t.Errorf("expected type 'character_departed', got %q", ev.Type)
+	}
+}
+
+func TestGetRoomInfo_NoEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, ev, err := dispatchWithEvent(g, "get_room_info", map[string]any{"room_name": "Tavern"})
+	if err != nil {
+		t.Fatalf("get_room_info: %v", err)
+	}
+	if ev != nil {
+		t.Errorf("expected nil event for read-only get_room_info, got %+v", ev)
+	}
+}
+
+func TestCreateRoom_NoEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, ev, err := dispatchWithEvent(g, "create_room", map[string]any{
+		"name":        "Dungeon",
+		"description": "Dark",
+	})
+	if err != nil {
+		t.Fatalf("create_room: %v", err)
+	}
+	if ev != nil {
+		t.Errorf("expected nil event for create_room, got %+v", ev)
 	}
 }
