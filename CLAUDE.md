@@ -91,7 +91,7 @@ doppler run --project terraform-personal-infra --config dev_personal -- terrafor
 
 ### Push Terraform changes to infra repo
 ```bash
-git subtree push --prefix server/infra git@github.com:rrochlin/terraform-infrastructure.git phase-5-restructure
+git subtree push --prefix server/infra git@github.com:rrochlin/terraform-infrastructure.git <branch-name>
 # Then open PR on rrochlin/terraform-infrastructure
 ```
 
@@ -173,7 +173,7 @@ Branch protection: all changes must go through PRs. Direct push to `main` is blo
 - **BinaryID**: sessions and connections tables have B-typed keys. See `internal/db/binaryid.go`.
 - **CONNECTIONS_TABLE**: `http-games` and `world-gen` don't need it at startup — `db.New()` defers the panic to actual connection methods via `requireConnectionsTable()`.
 - **Inference profiles**: Bedrock requires `us.` prefixed profile IDs, not bare model IDs.
-- **WebSocket endpoint**: `WEBSOCKET_API_ENDPOINT` env var contains `domain/stage/stage` (e.g. `ba2t50m7se.execute-api.us-west-2.amazonaws.com/prod/prod`) — this is intentional and matches what API Gateway Management API expects.
+- **WebSocket endpoint**: `WEBSOCKET_API_ENDPOINT` env var is `domain/stage` (e.g. `ba2t50m7se.execute-api.us-west-2.amazonaws.com/prod`). The api-gateway Terraform module output already includes the stage — do not append it again. `wsutil.New()` prepends `https://` at runtime.
 
 ## Testing Notes
 
