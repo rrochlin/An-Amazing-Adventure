@@ -9,7 +9,6 @@ variable "user_pool_id" { type = string }
 variable "user_pool_arn" { type = string }
 variable "websocket_api_execution_arn" { type = string }
 variable "websocket_api_endpoint" { type = string }
-variable "websocket_stage_name" { type = string }
 
 # ── Shared bootstrap placeholder ────────────────────────────────────────────
 # CI replaces function code after first deploy. We use a minimal bootstrap
@@ -48,8 +47,12 @@ resource "aws_iam_policy" "lambda_logs" {
 }
 
 # ── Helper locals ────────────────────────────────────────────────────────────
+# ws_endpoint_full is the value passed to WEBSOCKET_API_ENDPOINT on all Lambdas
+# that push frames to connected clients. The api-gateway module output already
+# includes the stage (e.g. "ba2t50m7se.execute-api.us-west-2.amazonaws.com/prod"),
+# so we use it directly. wsutil.New() prepends "https://" at runtime.
 locals {
-  ws_endpoint_full = "${var.websocket_api_endpoint}/${var.websocket_stage_name}"
+  ws_endpoint_full = var.websocket_api_endpoint
 }
 
 # ── ws-connect ───────────────────────────────────────────────────────────────
