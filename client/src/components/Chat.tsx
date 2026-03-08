@@ -1,4 +1,4 @@
-import { Box, Button, CircularProgress, Paper, TextField, useColorScheme } from "@mui/material";
+import { Box, Button, CircularProgress, Paper, TextField, Typography, useColorScheme } from "@mui/material";
 import { useEffect, useRef } from "react";
 import { type ChatMessageType } from "../types/types";
 import Markdown from "react-markdown";
@@ -109,6 +109,124 @@ const LoadingMessage = () => {
   );
 };
 
+// StreamingChatMessage renders an in-progress narrative bubble.
+// It shows a shimmering flavor-text header while the AI response streams in,
+// then displays the raw text content as chunks arrive. Once narrative_end fires,
+// the parent removes this component and commits a final ChatMessage rendered
+// via react-markdown.
+const streamingFlavorTexts = [
+  "The Dungeon Master speaks...",
+  "The tale unfolds...",
+  "Ancient words take form...",
+  "Fate weaves its story...",
+  "The shadows whisper...",
+  "Destiny writes itself...",
+  "The chronicle continues...",
+  "The oracle reveals...",
+];
+
+const StreamingChatMessage = ({ content }: { content: string }) => {
+  const { mode } = useColorScheme();
+  const isDark = mode === "dark" || mode === "system" || !mode;
+  const flavorText = useRef(
+    streamingFlavorTexts[Math.floor(Math.random() * streamingFlavorTexts.length)]
+  ).current;
+
+  const shimmerStyle = {
+    fontFamily: "Cinzel, Georgia, serif",
+    fontSize: "0.7rem",
+    fontWeight: 600,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase" as const,
+    position: "relative" as const,
+    background: isDark
+      ? "linear-gradient(90deg, #B8A588 0%, #FFD700 50%, #B8A588 100%)"
+      : "linear-gradient(90deg, #5D4037 0%, #8B6F47 50%, #5D4037 100%)",
+    backgroundSize: "200% 100%",
+    backgroundClip: "text",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    animation: "shimmer 2s linear infinite",
+    textShadow: "none",
+    "@keyframes shimmer": {
+      "0%": { backgroundPosition: "100% 0" },
+      "100%": { backgroundPosition: "-100% 0" },
+    },
+  };
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "flex-start",
+        mb: 2,
+        animation: "fadeIn 0.3s ease-in",
+        "@keyframes fadeIn": {
+          "0%": { opacity: 0, transform: "translateY(10px)" },
+          "100%": { opacity: 1, transform: "translateY(0)" },
+        },
+      }}
+    >
+      <Paper
+        sx={{
+          p: 2,
+          maxWidth: "min(600px, 85%)",
+          backgroundColor: isDark
+            ? "rgba(201, 169, 98, 0.1)"
+            : "rgba(160, 130, 109, 0.2)",
+          border: isDark
+            ? "1px solid rgba(201, 169, 98, 0.3)"
+            : "2px solid #A0826D",
+          borderRadius: 2,
+          boxShadow: isDark
+            ? "0 2px 8px rgba(0, 0, 0, 0.5)"
+            : "0 2px 4px rgba(107, 86, 56, 0.3)",
+          wordWrap: "break-word",
+          overflowWrap: "break-word",
+        }}
+      >
+        {/* Shimmering flavor header — always visible while streaming */}
+        <Box sx={{ mb: content ? 1.5 : 0, ...shimmerStyle }}>
+          {flavorText}
+        </Box>
+
+        {/* Streaming text — plain (no markdown) until narrative_end */}
+        {content && (
+          <Typography
+            component="div"
+            sx={{
+              fontFamily: "Crimson Text, Georgia, serif",
+              fontSize: "1.05rem",
+              lineHeight: 1.7,
+              color: isDark ? "rgba(220, 200, 160, 0.92)" : "text.primary",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {content}
+            {/* Blinking cursor to show active streaming */}
+            <Box
+              component="span"
+              sx={{
+                display: "inline-block",
+                width: "2px",
+                height: "1em",
+                backgroundColor: isDark ? "#FFD700" : "#8B6F47",
+                ml: "2px",
+                verticalAlign: "text-bottom",
+                animation: "blink 1s step-end infinite",
+                "@keyframes blink": {
+                  "0%, 100%": { opacity: 1 },
+                  "50%": { opacity: 0 },
+                },
+              }}
+            />
+          </Typography>
+        )}
+      </Paper>
+    </Box>
+  );
+};
+
 const ChatMessage = ({ message }: { message: ChatMessageType }) => {
   const isPlayer = message.type === "player";
   const { mode } = useColorScheme();
@@ -205,12 +323,16 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
 
 export const Chat = ({
   chatHistory,
+  streamingMessage,
   command,
   setCommand,
   handleCommand,
   isLoading,
 }: {
   chatHistory: ChatMessageType[];
+  /** Raw text chunks accumulating from the current AI stream. When non-empty,
+   *  a StreamingChatMessage bubble is shown instead of the LoadingMessage. */
+  streamingMessage?: string;
   command: string;
   setCommand: (cmd: string) => void;
   handleCommand: () => void;
@@ -226,7 +348,7 @@ export const Chat = ({
       chatContainerRef.current.scrollTop =
         chatContainerRef.current.scrollHeight;
     }
-  }, [chatHistory]);
+  }, [chatHistory, streamingMessage]);
 
   const handleSubmit = () => {
     handleCommand();
@@ -273,7 +395,12 @@ export const Chat = ({
         {chatHistory.map((msg, index) => (
           <ChatMessage key={index} message={msg} />
         ))}
-        {isLoading && <LoadingMessage />}
+        {/* Show streaming bubble when chunks are arriving; fall back to
+            the shimmer-only LoadingMessage while waiting for the first chunk */}
+        {isLoading && streamingMessage
+          ? <StreamingChatMessage content={streamingMessage} />
+          : isLoading && <LoadingMessage />
+        }
       </Box>
 
       <Box
