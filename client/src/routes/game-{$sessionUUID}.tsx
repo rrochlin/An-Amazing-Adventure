@@ -50,6 +50,8 @@ function GamePage() {
   const [loadingGame, setLoadingGame] = useState(true);
   // UI-FUT-4: room focused via map hover/click; null = show current room
   const [focusedRoom, setFocusedRoom] = useState<RoomView | null>(null);
+  // UI-FUT-1: map expanded — slides over chat column
+  const [mapExpanded, setMapExpanded] = useState(false);
   // UI-FUT-8: reconnection toast — show when WS reconnects after a drop
   const [reconnectToast, setReconnectToast] = useState(false);
 
@@ -215,8 +217,17 @@ function GamePage() {
         boxSizing: "border-box",
       }}
     >
-      {/* Left — Map (25%) */}
-      <Box sx={{ flex: "0 0 25%", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+      {/* Left — Map (25% normal → 75% expanded) */}
+      <Box
+        sx={{
+          flex: mapExpanded ? "0 0 75%" : "0 0 25%",
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 2,
+          transition: "flex-basis 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
+        }}
+      >
         <Paper sx={{
           flex: 1, p: 2, display: "flex", flexDirection: "column", overflow: "hidden",
           transition: "all 0.3s ease-in-out",
@@ -239,13 +250,29 @@ function GamePage() {
             </Tooltip>
           </Box>
           <Box sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
-            <RoomMap gameState={gameState} onRoomFocus={setFocusedRoom} />
+            <RoomMap
+              gameState={gameState}
+              onRoomFocus={setFocusedRoom}
+              onExpand={() => setMapExpanded((v) => !v)}
+              expanded={mapExpanded}
+            />
           </Box>
         </Paper>
       </Box>
 
-      {/* Center — Chat (50%) */}
-      <Box sx={{ flex: "0 0 50%", minWidth: 0, display: "flex", flexDirection: "column" }}>
+      {/* Center — Chat (50% normal → 0 expanded) */}
+      <Box
+        sx={{
+          flex: mapExpanded ? "0 0 0%" : "0 0 50%",
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          opacity: mapExpanded ? 0 : 1,
+          pointerEvents: mapExpanded ? "none" : "auto",
+          transition: "flex-basis 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease",
+        }}
+      >
         <Paper sx={{
           flex: 1, overflow: "hidden",
           transition: "all 0.3s ease-in-out",

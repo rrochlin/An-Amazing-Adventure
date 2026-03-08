@@ -11,7 +11,7 @@ import {
   useColorScheme,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { type ChatMessageType, type WorldEvent } from "../types/types";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -460,12 +460,6 @@ export const Chat = ({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop =
-        chatContainerRef.current.scrollHeight;
-    }
-  }, [chatHistory, streamingMessage]);
 
   const handleSubmit = () => {
     handleCommand();
