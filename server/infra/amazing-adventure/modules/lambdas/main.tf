@@ -2,9 +2,11 @@ variable "prefix" { type = string }
 variable "common_tags" { type = map(string) }
 variable "sessions_table_name" { type = string }
 variable "connections_table_name" { type = string }
+variable "mutations_table_name" { type = string }
 variable "sessions_table_arn" { type = string }
 variable "connections_table_arn" { type = string }
 variable "connections_table_index_arn" { type = string }
+variable "mutations_table_arn" { type = string }
 variable "user_pool_id" { type = string }
 variable "user_pool_arn" { type = string }
 variable "websocket_api_execution_arn" { type = string }
@@ -170,6 +172,11 @@ resource "aws_iam_role_policy" "ws_chat" {
       },
       {
         Effect   = "Allow"
+        Action   = ["dynamodb:PutItem"]
+        Resource = var.mutations_table_arn
+      },
+      {
+        Effect   = "Allow"
         Action   = ["bedrock:InvokeModelWithResponseStream", "bedrock:InvokeModel"]
         Resource = "*"
       },
@@ -200,6 +207,7 @@ resource "aws_lambda_function" "ws_chat" {
     variables = {
       SESSIONS_TABLE         = var.sessions_table_name
       CONNECTIONS_TABLE      = var.connections_table_name
+      MUTATIONS_TABLE        = var.mutations_table_name
       WEBSOCKET_API_ENDPOINT = local.ws_endpoint_full
       BEDROCK_REGION         = "us-west-2"
     }
@@ -436,9 +444,11 @@ output "ws_connect_invoke_arn" { value = aws_lambda_function.ws_connect.invoke_a
 output "ws_disconnect_invoke_arn" { value = aws_lambda_function.ws_disconnect.invoke_arn }
 output "ws_chat_invoke_arn" { value = aws_lambda_function.ws_chat.invoke_arn }
 output "ws_game_action_invoke_arn" { value = aws_lambda_function.ws_game_action.invoke_arn }
+output "world_gen_invoke_arn" { value = aws_lambda_function.world_gen.invoke_arn }
 output "http_games_function_name" { value = aws_lambda_function.http_games.function_name }
 output "http_users_function_name" { value = aws_lambda_function.http_users.function_name }
 output "ws_connect_function_name" { value = aws_lambda_function.ws_connect.function_name }
 output "ws_disconnect_function_name" { value = aws_lambda_function.ws_disconnect.function_name }
 output "ws_chat_function_name" { value = aws_lambda_function.ws_chat.function_name }
 output "ws_game_action_function_name" { value = aws_lambda_function.ws_game_action.function_name }
+output "world_gen_function_name" { value = aws_lambda_function.world_gen.function_name }

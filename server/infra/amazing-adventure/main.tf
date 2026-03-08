@@ -74,9 +74,11 @@ module "lambdas" {
   common_tags                 = local.common_tags
   sessions_table_name         = module.dynamodb.sessions_table_name
   connections_table_name      = module.dynamodb.connections_table_name
+  mutations_table_name        = module.dynamodb.mutations_table_name
   sessions_table_arn          = module.dynamodb.sessions_table_arn
   connections_table_arn       = module.dynamodb.connections_table_arn
   connections_table_index_arn = module.dynamodb.connections_table_index_arn
+  mutations_table_arn         = module.dynamodb.mutations_table_arn
   user_pool_id                = module.cognito.user_pool_id
   user_pool_arn               = module.cognito.user_pool_arn
   websocket_api_execution_arn = module.api_gateway.websocket_api_execution_arn
