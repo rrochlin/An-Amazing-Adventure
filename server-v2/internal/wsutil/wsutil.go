@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -41,11 +42,15 @@ type Sender struct {
 }
 
 // New creates a Sender using the WEBSOCKET_API_ENDPOINT env var.
-// Format: https://<api-id>.execute-api.<region>.amazonaws.com/<stage>
+// The env var is stored without a scheme (e.g. "ba2t50m7se.execute-api.us-west-2.amazonaws.com/prod/prod").
+// We prepend "https://" if no scheme is present so the SDK can construct valid URLs.
 func New(ctx context.Context) (*Sender, error) {
 	endpoint := os.Getenv("WEBSOCKET_API_ENDPOINT")
 	if endpoint == "" {
 		return nil, fmt.Errorf("WEBSOCKET_API_ENDPOINT not set")
+	}
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "https://" + endpoint
 	}
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
