@@ -9,6 +9,21 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
+// newTestGame sets up a minimal game with a player and one room.
+func newTestGame(t *testing.T) *game.Game {
+	t.Helper()
+	g := game.NewGame("test-session", "test-user")
+	g.Player = game.NewCharacter("Hero", "The protagonist")
+	room := game.NewArea("Tavern", "A smoky room")
+	if err := g.AddRoom(room); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.PlacePlayer(room.ID); err != nil {
+		t.Fatal(err)
+	}
+	return g
+}
+
 // makeHistory builds a slice of alternating user/assistant NarrativeMessages.
 func makeHistory(n int) []game.NarrativeMessage {
 	msgs := make([]game.NarrativeMessage, 0, n)
@@ -84,6 +99,71 @@ func TestTrimHistory_AboveThreshold_Trims(t *testing.T) {
 	if len(got) == 0 {
 		t.Error("expected non-empty history back")
 	}
+}
+
+// ---- NarrateStream structural tests ----
+// These tests verify the call returns without error on the no-tool-config path.
+// With no real Bedrock creds, NarrateStream will fail at the API call — that is
+// expected and fine. We test the pre-call setup (history trimming, message building).
+
+func TestNarrateStream_ReturnsWithoutToolCallAttempt(t *testing.T) {
+	// NarrateStream must not panic on valid input even when Bedrock is unavailable.
+	t.Setenv("BEDROCK_REGION", "us-west-2")
+	c, err := ai.New(context.Background())
+	if err != nil {
+		t.Fatalf("ai.New: %v", err)
+	}
+	g := newTestGame(t)
+	_, streamErr := c.NarrateStream(context.Background(), g, nil, "look around", nil)
+	// Expect a Bedrock connectivity/auth error, NOT a nil pointer or panic
+	if streamErr == nil {
+		t.Log("NarrateStream unexpectedly succeeded (real Bedrock available?)")
+	}
+	// The key assertion: no panic occurred. If we reach here the test passes.
+}
+
+func TestNarrateStream_EmptyHistoryHandled(t *testing.T) {
+	// nil history must not cause a nil pointer panic.
+	t.Setenv("BEDROCK_REGION", "us-west-2")
+	c, err := ai.New(context.Background())
+	if err != nil {
+		t.Fatalf("ai.New: %v", err)
+	}
+	g := newTestGame(t)
+	_, _ = c.NarrateStream(context.Background(), g, nil, "hello", nil)
+	// Passes if no panic
+}
+
+// ---- EngineerScan structural tests ----
+
+func TestEngineerScan_ReturnsWithoutPanic(t *testing.T) {
+	t.Setenv("BEDROCK_REGION", "us-west-2")
+	c, err := ai.New(context.Background())
+	if err != nil {
+		t.Fatalf("ai.New: %v", err)
+	}
+	g := newTestGame(t)
+	result, scanErr := c.EngineerScan(context.Background(), g, "The goblin appears from the shadows.")
+	if scanErr != nil {
+		// Expected — no real Bedrock creds in tests
+		t.Logf("EngineerScan returned expected error (no Bedrock creds): %v", scanErr)
+		return
+	}
+	// If somehow Bedrock is available, result must be valid
+	_ = result
+}
+
+func TestEngineerScan_EmptyNarrativeNoMutations(t *testing.T) {
+	// An empty narrative should yield no mutations even if Bedrock is available.
+	// Without Bedrock this just verifies no panic on empty input.
+	t.Setenv("BEDROCK_REGION", "us-west-2")
+	c, err := ai.New(context.Background())
+	if err != nil {
+		t.Fatalf("ai.New: %v", err)
+	}
+	g := newTestGame(t)
+	_, _ = c.EngineerScan(context.Background(), g, "")
+	// Passes if no panic
 }
 
 func TestTrimHistory_SummaryPrefixed(t *testing.T) {

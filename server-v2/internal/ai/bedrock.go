@@ -12,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
-	brDocument "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
@@ -59,18 +58,26 @@ func (u TokenUsage) Total() int {
 // ---- Narrator (streaming chat) ----
 
 // NarratorResult holds everything that comes back from a streaming narrator turn.
+// The Narrator produces only prose — world mutations are handled by EngineerScan
+// after the narrative stream completes.
 type NarratorResult struct {
 	Narrative   string                  // accumulated text sent to the player
 	NewMessages []game.NarrativeMessage // updated history to persist
 	Tokens      TokenUsage              // token usage for this turn
-	Events      []game.WorldEvent       // player-visible world events from tool calls this turn
-	Mutations   []game.MutationEntry    // audit log entries for all tool calls this turn
+}
+
+// EngineerResult holds the world mutations the Engineer inferred from the narrative.
+type EngineerResult struct {
+	Events    []game.WorldEvent    // player-visible world events
+	Mutations []game.MutationEntry // audit log entries
+	Tokens    TokenUsage           // token usage for the Engineer call
 }
 
 // NarrateStream runs a single narrator turn with streaming.
-// It calls onChunk for each text chunk so ws-chat can push frames immediately.
-// Tool calls are executed synchronously against g as they arrive; any state
-// mutations are reflected in g by the time the function returns.
+// The Narrator has NO tools — it produces pure immersive prose only.
+// World mutations are applied separately by EngineerScan after streaming completes.
+// onChunk is called for each text delta so ws-chat can push narrative_chunk frames
+// immediately without buffering.
 func (c *Client) NarrateStream(
 	ctx context.Context,
 	g *game.Game,
@@ -94,165 +101,233 @@ func (c *Client) NarrateStream(
 
 	systemPrompt := narratorSystemPrompt(g)
 
-	// Agentic loop: keep calling Bedrock until the model stops with tool use
-	var fullNarrative strings.Builder
-	var totalTokens TokenUsage
-	var allEvents []game.WorldEvent
-	var allMutations []game.MutationEntry
-	allMessages := messages
-
-	for {
-		resp, err := c.br.ConverseStream(ctx, &bedrockruntime.ConverseStreamInput{
-			ModelId:  aws.String(ModelNarrator),
-			System:   []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: systemPrompt}},
-			Messages: allMessages,
-			ToolConfig: &types.ToolConfiguration{
-				Tools: NarratorTools(),
-			},
-			InferenceConfig: &types.InferenceConfiguration{
-				MaxTokens:   aws.Int32(4096),
-				Temperature: aws.Float32(0.7),
-			},
-		})
-		if err != nil {
-			return NarratorResult{}, fmt.Errorf("converse stream: %w", err)
-		}
-
-		// Collect the assistant's response turn
-		var assistantBlocks []types.ContentBlock
-		var pendingToolUses []pendingToolUse
-		var currentText strings.Builder
-
-		stream := resp.GetStream()
-		for event := range stream.Events() {
-			switch e := event.(type) {
-			case *types.ConverseStreamOutputMemberContentBlockDelta:
-				switch d := e.Value.Delta.(type) {
-				case *types.ContentBlockDeltaMemberText:
-					currentText.WriteString(d.Value)
-					fullNarrative.WriteString(d.Value)
-					if onChunk != nil {
-						onChunk(d.Value)
-					}
-				case *types.ContentBlockDeltaMemberToolUse:
-					// Accumulate tool input JSON
-					if len(pendingToolUses) > 0 {
-						last := &pendingToolUses[len(pendingToolUses)-1]
-						last.inputJSON += aws.ToString(d.Value.Input)
-					}
-				}
-			case *types.ConverseStreamOutputMemberContentBlockStart:
-				if tu, ok := e.Value.Start.(*types.ContentBlockStartMemberToolUse); ok {
-					pendingToolUses = append(pendingToolUses, pendingToolUse{
-						id:   aws.ToString(tu.Value.ToolUseId),
-						name: aws.ToString(tu.Value.Name),
-					})
-				}
-				if currentText.Len() > 0 {
-					assistantBlocks = append(assistantBlocks, &types.ContentBlockMemberText{
-						Value: currentText.String(),
-					})
-					currentText.Reset()
-				}
-			case *types.ConverseStreamOutputMemberContentBlockStop:
-				if currentText.Len() > 0 {
-					assistantBlocks = append(assistantBlocks, &types.ContentBlockMemberText{
-						Value: currentText.String(),
-					})
-					currentText.Reset()
-				}
-			case *types.ConverseStreamOutputMemberMessageStop:
-				if currentText.Len() > 0 {
-					assistantBlocks = append(assistantBlocks, &types.ContentBlockMemberText{
-						Value: currentText.String(),
-					})
-				}
-			case *types.ConverseStreamOutputMemberMetadata:
-				if e.Value.Usage != nil {
-					totalTokens.InputTokens += int(aws.ToInt32(e.Value.Usage.InputTokens))
-					totalTokens.OutputTokens += int(aws.ToInt32(e.Value.Usage.OutputTokens))
-				}
-			}
-		}
-		if err := stream.Err(); err != nil {
-			return NarratorResult{}, fmt.Errorf("stream error: %w", err)
-		}
-
-		// Add tool use blocks to assistant message
-		for _, ptu := range pendingToolUses {
-			var input map[string]any
-			_ = json.Unmarshal([]byte(ptu.inputJSON), &input)
-			assistantBlocks = append(assistantBlocks, &types.ContentBlockMemberToolUse{
-				Value: types.ToolUseBlock{
-					ToolUseId: aws.String(ptu.id),
-					Name:      aws.String(ptu.name),
-					Input:     brDocument.NewLazyDocument(input),
-				},
-			})
-		}
-
-		// Append assistant turn
-		allMessages = append(allMessages, types.Message{
-			Role:    types.ConversationRoleAssistant,
-			Content: assistantBlocks,
-		})
-
-		// Execute all tool calls and build a tool_result turn
-		if len(pendingToolUses) == 0 {
-			break // model finished without tool calls — done
-		}
-
-		toolResultBlocks := make([]types.ContentBlock, 0, len(pendingToolUses))
-		for _, ptu := range pendingToolUses {
-			var input map[string]any
-			_ = json.Unmarshal([]byte(ptu.inputJSON), &input)
-			result, event, dispatchErr := DispatchTool(g, ptu.name, input)
-			if dispatchErr != nil {
-				log.Printf("tool %s error: %v", ptu.name, dispatchErr)
-				result = fmt.Sprintf("error: %v", dispatchErr)
-			}
-			if event != nil {
-				allEvents = append(allEvents, *event)
-			}
-			allMutations = append(allMutations, game.MutationEntry{
-				SessionID: g.ID,
-				Ts:        time.Now().UnixMilli(),
-				Turn:      g.ConversationCount,
-				Tool:      ptu.name,
-				Input:     input,
-				Result:    result,
-			})
-			toolResultBlocks = append(toolResultBlocks, &types.ContentBlockMemberToolResult{
-				Value: types.ToolResultBlock{
-					ToolUseId: aws.String(ptu.id),
-					Content: []types.ToolResultContentBlock{
-						&types.ToolResultContentBlockMemberText{Value: result},
-					},
-				},
-			})
-		}
-		allMessages = append(allMessages, types.Message{
-			Role:    types.ConversationRoleUser,
-			Content: toolResultBlocks,
-		})
+	// Single streaming call — Narrator never calls tools so there is no agentic loop.
+	resp, err := c.br.ConverseStream(ctx, &bedrockruntime.ConverseStreamInput{
+		ModelId:  aws.String(ModelNarrator),
+		System:   []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: systemPrompt}},
+		Messages: messages,
+		// No ToolConfig — Narrator is prose-only by construction.
+		InferenceConfig: &types.InferenceConfiguration{
+			MaxTokens:   aws.Int32(4096),
+			Temperature: aws.Float32(0.7),
+		},
+	})
+	if err != nil {
+		return NarratorResult{}, fmt.Errorf("converse stream: %w", err)
 	}
 
-	// Convert back to our storage format
-	newHistory := fromBedrockMessages(allMessages)
+	var fullNarrative strings.Builder
+	var assistantText strings.Builder
+	var totalTokens TokenUsage
+
+	stream := resp.GetStream()
+	for event := range stream.Events() {
+		switch e := event.(type) {
+		case *types.ConverseStreamOutputMemberContentBlockDelta:
+			if d, ok := e.Value.Delta.(*types.ContentBlockDeltaMemberText); ok {
+				fullNarrative.WriteString(d.Value)
+				assistantText.WriteString(d.Value)
+				if onChunk != nil {
+					onChunk(d.Value)
+				}
+			}
+		case *types.ConverseStreamOutputMemberMetadata:
+			if e.Value.Usage != nil {
+				totalTokens.InputTokens += int(aws.ToInt32(e.Value.Usage.InputTokens))
+				totalTokens.OutputTokens += int(aws.ToInt32(e.Value.Usage.OutputTokens))
+			}
+		}
+	}
+	if err := stream.Err(); err != nil {
+		return NarratorResult{}, fmt.Errorf("stream error: %w", err)
+	}
+
+	// Append this exchange to history (user turn + assistant text turn)
+	newHistory := append(trimmed,
+		game.NarrativeMessage{
+			Role:    "user",
+			Content: []game.NarrativeBlock{{Type: "text", Text: playerInput}},
+		},
+		game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: assistantText.String()}},
+		},
+	)
 
 	return NarratorResult{
 		Narrative:   fullNarrative.String(),
 		NewMessages: newHistory,
 		Tokens:      totalTokens,
-		Events:      allEvents,
-		Mutations:   allMutations,
 	}, nil
 }
 
-type pendingToolUse struct {
-	id        string
-	name      string
-	inputJSON string
+// EngineerScan reads the finished narrative and infers what world mutations it
+// implies, then executes them against g using the full tool set.
+// It runs synchronously after NarrateStream completes so the narrative stream
+// is not delayed. Uses ModelSubAgent (Haiku) — fast and cheap.
+func (c *Client) EngineerScan(
+	ctx context.Context,
+	g *game.Game,
+	narrative string,
+) (EngineerResult, error) {
+	systemPrompt := engineerSystemPrompt()
+	userMsg := engineerUserMessage(g, narrative)
+
+	resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
+		ModelId: aws.String(ModelSubAgent),
+		System:  []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: systemPrompt}},
+		Messages: []types.Message{{
+			Role:    types.ConversationRoleUser,
+			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: userMsg}},
+		}},
+		ToolConfig: &types.ToolConfiguration{
+			Tools: NarratorTools(),
+		},
+		InferenceConfig: &types.InferenceConfiguration{
+			MaxTokens:   aws.Int32(2048),
+			Temperature: aws.Float32(0.1), // low temperature — structured extraction task
+		},
+	})
+	if err != nil {
+		return EngineerResult{}, fmt.Errorf("engineer scan: %w", err)
+	}
+
+	var result EngineerResult
+	if resp.Usage != nil {
+		result.Tokens.InputTokens = int(aws.ToInt32(resp.Usage.InputTokens))
+		result.Tokens.OutputTokens = int(aws.ToInt32(resp.Usage.OutputTokens))
+	}
+
+	// Execute every tool call the Engineer made
+	if msg, ok := resp.Output.(*types.ConverseOutputMemberMessage); ok {
+		for _, block := range msg.Value.Content {
+			tu, ok := block.(*types.ContentBlockMemberToolUse)
+			if !ok {
+				continue
+			}
+			// Unmarshal the tool input from the lazy document
+			var input map[string]any
+			raw, _ := json.Marshal(tu.Value.Input)
+			_ = json.Unmarshal(raw, &input)
+
+			toolResult, event, dispatchErr := DispatchTool(g, aws.ToString(tu.Value.Name), input)
+			if dispatchErr != nil {
+				log.Printf("engineer tool %s error: %v", aws.ToString(tu.Value.Name), dispatchErr)
+				toolResult = fmt.Sprintf("error: %v", dispatchErr)
+			}
+			if event != nil {
+				result.Events = append(result.Events, *event)
+			}
+			result.Mutations = append(result.Mutations, game.MutationEntry{
+				SessionID: g.ID,
+				Ts:        time.Now().UnixMilli(),
+				Turn:      g.ConversationCount,
+				Tool:      aws.ToString(tu.Value.Name),
+				Input:     input,
+				Result:    toolResult,
+			})
+		}
+	}
+
+	return result, nil
+}
+
+// engineerSystemPrompt returns the system instructions for the Engineer.
+func engineerSystemPrompt() string {
+	return `You are a game world engineer. Your job is to read a narrator's text and execute the world mutations it implies using the provided tools.
+
+Rules:
+- Call tools ONLY for mutations clearly and unambiguously implied by the narrative text.
+- Do NOT invent mutations not supported by the text.
+- Do NOT output any narrative text — only tool calls.
+- If the narrative implies no world changes, call no tools.
+- Prefer precision over completeness: it is better to miss a subtle mutation than to invent one.
+
+Examples of what to look for:
+- "The goblin slashes you for 15 damage" → damage_character(player, 15)
+- "You find a rusty key on the floor" → give_item_to_player(rusty key) or place_item_in_room
+- "The merchant gives you a healing potion" → give_item_to_player(healing potion)
+- "The orc falls dead" → set_character_alive(orc, false)
+- "The bridge collapses, blocking the northern passage" → update_room(current room, updated description)
+- "A cloaked figure emerges from the shadows" → move_character or create_character if not yet present`
+}
+
+// engineerUserMessage builds the user-turn message for the Engineer.
+// It includes the narrative text plus a compact game state snapshot so the
+// Engineer knows what entities exist to reference by name.
+func engineerUserMessage(g *game.Game, narrative string) string {
+	var sb strings.Builder
+	sb.WriteString("## Narrative\n\n")
+	sb.WriteString(narrative)
+	sb.WriteString("\n\n## Current Game State\n\n")
+
+	// Player
+	sb.WriteString(fmt.Sprintf("Player: %s (health %d, alive %v)\n", g.Player.Name, g.Player.Health, g.Player.Alive))
+	sb.WriteString("Player inventory: ")
+	if len(g.Player.Inventory) == 0 {
+		sb.WriteString("empty")
+	} else {
+		names := make([]string, 0, len(g.Player.Inventory))
+		for _, id := range g.Player.Inventory {
+			if item, err := g.GetItem(id); err == nil {
+				names = append(names, item.Name)
+			}
+		}
+		sb.WriteString(strings.Join(names, ", "))
+	}
+	sb.WriteString("\n")
+
+	// Current room
+	if room, err := g.GetRoom(g.Player.LocationID); err == nil {
+		sb.WriteString(fmt.Sprintf("Current room: %s\n", room.Name))
+		sb.WriteString("Room items: ")
+		if len(room.Items) == 0 {
+			sb.WriteString("none")
+		} else {
+			names := make([]string, 0, len(room.Items))
+			for _, id := range room.Items {
+				if item, err := g.GetItem(id); err == nil {
+					names = append(names, item.Name)
+				}
+			}
+			sb.WriteString(strings.Join(names, ", "))
+		}
+		sb.WriteString("\n")
+
+		// NPCs in current room
+		sb.WriteString("Room occupants: ")
+		if len(room.Occupants) == 0 {
+			sb.WriteString("none")
+		} else {
+			parts := make([]string, 0, len(room.Occupants))
+			for _, id := range room.Occupants {
+				if npc, err := g.GetNPC(id); err == nil {
+					parts = append(parts, fmt.Sprintf("%s (health %d, alive %v)", npc.Name, npc.Health, npc.Alive))
+				}
+			}
+			sb.WriteString(strings.Join(parts, "; "))
+		}
+		sb.WriteString("\n")
+	}
+
+	// All NPCs (for cross-room mutations)
+	sb.WriteString("All NPCs: ")
+	npcParts := make([]string, 0, len(g.NPCs))
+	for _, npc := range g.NPCs {
+		roomName := ""
+		if r, err := g.GetRoom(npc.LocationID); err == nil {
+			roomName = r.Name
+		}
+		npcParts = append(npcParts, fmt.Sprintf("%s (health %d, alive %v, location: %s)", npc.Name, npc.Health, npc.Alive, roomName))
+	}
+	if len(npcParts) == 0 {
+		sb.WriteString("none")
+	} else {
+		sb.WriteString(strings.Join(npcParts, "; "))
+	}
+	sb.WriteString("\n\n")
+	sb.WriteString("Execute all world mutations clearly implied by the narrative above.")
+	return sb.String()
 }
 
 // ---- Context compression ----
@@ -630,21 +705,25 @@ func fromBedrockMessages(msgs []types.Message) []game.NarrativeMessage {
 }
 
 // narratorSystemPrompt returns the system instructions for the narrator.
+// The Narrator has NO tools — it must write pure prose only.
 func narratorSystemPrompt(g *game.Game) string {
 	room, _ := g.GetRoom(g.Player.LocationID)
-	return fmt.Sprintf(`You are an expert Dungeon Master running a text adventure game.
+	return fmt.Sprintf(`You are an expert Dungeon Master narrating a text adventure game.
 The player's name is %q and they are currently in %q.
 
-DM Philosophy:
-- Say Yes or Roll the Dice: if nothing is at stake, just say yes and move the story forward.
-- Fail Forward: failed attempts create complications and drama, never dead ends.
-- Intent and Task: encourage players to describe what they want to achieve and how.
-- Pacing: cut to the next interesting scene when things drag; slow down for dramatic moments.
-- Never list options for the player — they read the narrative and decide themselves.
+Your ONLY job is to write immersive, engaging narrative prose.
+Do NOT describe what you are about to do or what tools you might call.
+Do NOT say things like "I will now..." or "As the DM, I...".
+Write only what the player experiences — sights, sounds, dialogue, action.
 
-Use the provided tools to mutate the game world as the story demands.
-Respond with engaging prose. Call tools when the world should change.
-Keep narrative responses to 2-4 paragraphs unless the scene warrants more.`,
+DM Philosophy:
+- Say Yes or Roll the Dice: if nothing is at stake, say yes and move the story forward.
+- Fail Forward: failed attempts create complications and drama, never dead ends.
+- Pacing: cut to the next interesting scene when things drag; slow for dramatic moments.
+- Never list options — narrate the world and let the player decide what to do.
+- Be specific and sensory: name the smells, the sounds, the textures.
+
+Write 2-4 paragraphs of vivid prose. Do not break the fourth wall.`,
 		g.Player.Name, room.Name)
 }
 
