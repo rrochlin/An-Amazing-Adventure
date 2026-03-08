@@ -39,6 +39,7 @@ export function useGameSocket({ sessionId, onWorldReady }: UseGameSocketOptions)
     appendStreamChunk,
     finalizeStreamingMessage,
     applyDelta,
+    attachEventsToLastMessage,
     setGameState,
     appendWorldGenLog,
     setWorldGenReady,
@@ -66,9 +67,17 @@ export function useGameSocket({ sessionId, onWorldReady }: UseGameSocketOptions)
         setGameState(frame.payload as GameStateView);
         break;
 
-      case "state_delta":
-        applyDelta(frame.payload as StateDelta);
+      case "state_delta": {
+        const delta = frame.payload as StateDelta;
+        applyDelta(delta);
+        // narrative_end fires before state_delta, so finalizeStreamingMessage()
+        // has already committed the narrative message by the time we get here.
+        // Attach any world events to that last narrative message.
+        if (delta.events?.length) {
+          attachEventsToLastMessage(delta.events);
+        }
         break;
+      }
 
       case "streaming_blocked":
         // Server rejected message — user already informed by disabled input
@@ -89,7 +98,7 @@ export function useGameSocket({ sessionId, onWorldReady }: UseGameSocketOptions)
         );
         break;
     }
-  }, [appendStreamChunk, applyDelta, appendWorldGenLog, finalizeStreamingMessage, setGameState, setStreaming, setWsError, setWorldGenReady]);
+  }, [appendStreamChunk, applyDelta, attachEventsToLastMessage, appendWorldGenLog, finalizeStreamingMessage, setGameState, setStreaming, setWsError, setWorldGenReady]);
 
   const connect = useCallback(() => {
     if (!isMounted.current) return;
