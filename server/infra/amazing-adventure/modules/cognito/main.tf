@@ -96,6 +96,28 @@ resource "aws_ssm_parameter" "user_pool_client_id" {
   tags  = var.common_tags
 }
 
+# ── User Pool Groups ─────────────────────────────────────────────────────────
+# admin  (precedence 1)  — full admin panel access
+# user   (precedence 10) — approved players with AI access
+# restricted (precedence 100) — default for new signups; no AI access
+resource "aws_cognito_user_pool_group" "admin" {
+  name         = "admin"
+  user_pool_id = aws_cognito_user_pool.main.id
+  precedence   = 1
+}
+
+resource "aws_cognito_user_pool_group" "user" {
+  name         = "user"
+  user_pool_id = aws_cognito_user_pool.main.id
+  precedence   = 10
+}
+
+resource "aws_cognito_user_pool_group" "restricted" {
+  name         = "restricted"
+  user_pool_id = aws_cognito_user_pool.main.id
+  precedence   = 100
+}
+
 output "user_pool_id" { value = aws_cognito_user_pool.main.id }
 output "user_pool_arn" { value = aws_cognito_user_pool.main.arn }
 output "user_pool_client_id" { value = aws_cognito_user_pool_client.spa.id }
