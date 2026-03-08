@@ -69,6 +69,8 @@ export interface ChatMessage {
   type: "player" | "narrative";
   content: string;
   events?: WorldEvent[]; // non-empty on narrative messages when world events occurred this turn
+  /** ISO timestamp when the message was committed (client-side). Added on receive; absent for messages loaded from chat_history. */
+  timestamp?: string;
 }
 
 // WebSocket frame types sent from server to client

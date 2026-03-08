@@ -24,6 +24,8 @@ interface GameStore {
   // World-gen terminal
   worldGenLog: string[];
   worldGenReady: boolean;
+  // Fog-of-war: persists visited room IDs across moves (UI-FUT-6)
+  visitedRooms: Set<string>;
 
   // Actions
   setGameState: (state: GameStateView) => void;
@@ -49,19 +51,26 @@ const initialState = {
   wsError: null,
   worldGenLog: [] as string[],
   worldGenReady: false,
+  visitedRooms: new Set<string>(),
 };
 
 export const useGameStore = create<GameStore>((set, get) => ({
   ...initialState,
 
-  setGameState: (state) =>
+  setGameState: (state) => {
+    // Seed visited rooms from the starting room and its direct connections
+    const seeded = new Set<string>();
+    seeded.add(state.current_room.id);
+    Object.values(state.current_room.connections).forEach((id) => seeded.add(id));
     set({
       gameState: state,
       chatMessages: state.chat_history ?? [],
-    }),
+      visitedRooms: seeded,
+    });
+  },
 
   applyDelta: (delta) => {
-    const { gameState } = get();
+    const { gameState, visitedRooms } = get();
     if (!gameState) return;
 
     const updated: GameStateView = { ...gameState };
@@ -73,6 +82,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ...updated.rooms,
         [delta.current_room.id]: delta.current_room,
       };
+      // Expand fog-of-war: mark new room and its direct connections as visited
+      const newVisited = new Set(visitedRooms);
+      newVisited.add(delta.current_room.id);
+      Object.values(delta.current_room.connections).forEach((id) => newVisited.add(id));
+      set({ gameState: updated, visitedRooms: newVisited });
+      // Handle remaining delta fields below without re-reading gameState
+      if (delta.player) updated.player = delta.player;
+      if (delta.updated_rooms) updated.rooms = { ...updated.rooms, ...delta.updated_rooms };
+      set({ gameState: updated });
+      return;
     }
     if (delta.player) {
       updated.player = delta.player;
@@ -108,7 +127,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       chatMessages: [
         ...chatMessages,
-        { type: "narrative", content: streamingMessage },
+        { type: "narrative", content: streamingMessage, timestamp: new Date().toISOString() },
       ],
       streamingMessage: "",
       isStreaming: false,
@@ -116,7 +135,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
 
   addChatMessage: (msg) =>
-    set((s) => ({ chatMessages: [...s.chatMessages, msg] })),
+    set((s) => ({
+      chatMessages: [...s.chatMessages, { ...msg, timestamp: new Date().toISOString() }],
+    })),
 
   setStreaming: (v) => set({ isStreaming: v }),
 
