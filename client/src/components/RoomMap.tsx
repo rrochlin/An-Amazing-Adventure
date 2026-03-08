@@ -72,14 +72,18 @@ const MapCanvas = ({
     return () => clearInterval(interval);
   }, []);
 
-  // Get all unique Z-levels
+  // Get unique Z-levels that have at least one visited room (plus the player's
+  // current floor so the active chip is always present).
   const zLevels = useMemo(() => {
     if (!gameState?.rooms) return [0];
-    const levels = new Set(
-      Object.values(gameState.rooms).map((room) => room.coordinates.z)
-    );
+    const levels = new Set<number>();
+    Object.entries(gameState.rooms).forEach(([roomId, room]) => {
+      if (visitedRooms.has(roomId)) levels.add(room.coordinates.z);
+    });
+    // Always include the player's current floor
+    levels.add(gameState.current_room.coordinates.z);
     return Array.from(levels).sort((a, b) => b - a);
-  }, [gameState?.rooms]);
+  }, [gameState?.rooms, gameState?.current_room, visitedRooms]);
 
   // Keep selected layer in sync with player's floor
   useEffect(() => {
@@ -131,6 +135,29 @@ const MapCanvas = ({
 
   const handleZoomIn = () => setScale((s) => Math.min(s * 1.2, 3.0));
   const handleZoomOut = () => setScale((s) => Math.max(s / 1.2, 0.5));
+
+  // Scroll-to-zoom centered on the mouse pointer position
+  const handleWheel = (e: any) => {
+    e.evt.preventDefault();
+    const stage = e.target.getStage();
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const zoomFactor = e.evt.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const newScale = Math.min(Math.max(scale * zoomFactor, 0.3), 4.0);
+
+    // Adjust position so the point under the mouse stays fixed:
+    // newPos = pointer - (pointer - oldPos) * (newScale / oldScale)
+    const mousePointTo = {
+      x: (pointer.x - position.x) / scale,
+      y: (pointer.y - position.y) / scale,
+    };
+    setPosition({
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    });
+    setScale(newScale);
+  };
   const handleResetView = () => {
     setScale(1.0);
     setPosition({ x: 0, y: 0 });
@@ -183,10 +210,16 @@ const MapCanvas = ({
         <Stack direction="row" spacing={0.5} flexWrap="wrap">
           {zLevels.map((level) => {
             const hasPlayer = gameState?.current_room.coordinates.z === level;
+            const levelLabel =
+              level === 0 ? "Ground"
+              : level === 1 ? "Upper"
+              : level === -1 ? "Underground"
+              : level > 0 ? `Floor +${level}`
+              : `Floor ${level}`;
             return (
               <Chip
                 key={level}
-                label={level === 0 ? "Ground" : level > 0 ? `+${level}` : level}
+                label={levelLabel}
                 size="small"
                 onClick={() => setSelectedLayer(level)}
                 color={selectedLayer === level ? "primary" : "default"}
@@ -232,12 +265,15 @@ const MapCanvas = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
         style={{ cursor: isDragging ? "grabbing" : "grab" }}
       >
         <Layer scaleX={scale} scaleY={scale} x={position.x} y={position.y}>
-          {/* Corridors */}
+          {/* Corridors — only draw if the source room is visited */}
           {gameState?.rooms &&
             roomsOnLayer.map((roomId) => {
+              // Never draw corridors from unvisited rooms
+              if (!visitedRooms.has(roomId)) return null;
               const room = gameState.rooms![roomId];
               return Object.entries(room.connections).map(
                 ([direction, connectedRoomId]) => {
@@ -345,6 +381,36 @@ const MapCanvas = ({
                 Object.values(room.connections).includes(gameState.current_room.id);
               const isVisited = visitedRooms.has(roomId);
               const isHovered = hoveredRoom === roomId;
+
+              // Fog of war: unvisited rooms that aren't exits are fully hidden
+              if (!isVisited && !isExit) return null;
+
+              // Exits that haven't been visited yet: render as a dim "?" silhouette
+              if (!isVisited && isExit) {
+                const roomSize = baseRoomSize;
+                return (
+                  <Group key={roomId} x={pos.x} y={pos.y} opacity={0.45} listening={false}>
+                    <Rect
+                      x={-roomSize / 2} y={-roomSize / 2}
+                      width={roomSize} height={roomSize}
+                      fill="#1a0f1a"
+                      stroke="#4dd0d4"
+                      strokeWidth={1}
+                      cornerRadius={4}
+                      dash={[4, 4]}
+                    />
+                    <Text
+                      x={-roomSize / 2} y={-10}
+                      width={roomSize}
+                      text="?"
+                      fontSize={20}
+                      fill="#4dd0d4"
+                      align="center"
+                      listening={false}
+                    />
+                  </Group>
+                );
+              }
 
               const hasUpConnection = "up" in room.connections;
               const hasDownConnection = "down" in room.connections;
@@ -555,16 +621,7 @@ const MapCanvas = ({
                     </Group>
                   )}
 
-                  {/* Fog of war — unexplored rooms */}
-                  {!isVisited && (
-                    <Rect
-                      x={-roomSize / 2} y={-roomSize / 2}
-                      width={roomSize} height={roomSize}
-                      fill="rgba(13, 5, 8, 0.7)"
-                      cornerRadius={4}
-                      listening={false}
-                    />
-                  )}
+
                 </Group>
               );
             })}

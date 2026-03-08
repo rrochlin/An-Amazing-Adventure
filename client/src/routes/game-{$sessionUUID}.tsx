@@ -217,15 +217,15 @@ function GamePage() {
         boxSizing: "border-box",
       }}
     >
-      {/* Left — Map (25% normal → 100% expanded) */}
+      {/* Left — Map (25% normal → 75% expanded, covering Chat only) */}
       <Box
         sx={{
-          flex: mapExpanded ? "1 1 100%" : "0 0 25%",
+          flex: mapExpanded ? "0 0 75%" : "0 0 25%",
           minWidth: 0,
           display: "flex",
           flexDirection: "column",
           gap: 2,
-          transition: "flex 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
+          transition: "flex-basis 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
         <Paper sx={{
@@ -295,19 +295,8 @@ function GamePage() {
         )}
       </Box>
 
-      {/* Right — Game Info (25%, hidden when expanded) */}
-      <Box
-        sx={{
-          flex: mapExpanded ? "0 0 0%" : "0 0 25%",
-          minWidth: 0,
-          display: "flex",
-          gap: 2,
-          overflow: "hidden",
-          opacity: mapExpanded ? 0 : 1,
-          pointerEvents: mapExpanded ? "none" : "auto",
-          transition: "flex-basis 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease",
-        }}
-      >
+      {/* Right — Game Info (25%, always visible) */}
+      <Box sx={{ flex: "0 0 25%", minWidth: 0, display: "flex", gap: 2 }}>
         <Paper sx={{
           flex: 1, overflow: "hidden", display: "flex", flexDirection: "column",
           transition: "all 0.3s ease-in-out",
