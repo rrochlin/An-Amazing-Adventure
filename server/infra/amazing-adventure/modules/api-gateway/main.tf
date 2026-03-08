@@ -5,12 +5,16 @@ variable "user_pool_id" { type = string }
 variable "user_pool_client_id" { type = string }
 variable "http_games_invoke_arn" { type = string }
 variable "http_users_invoke_arn" { type = string }
+variable "http_admin_invoke_arn" { type = string }
+variable "http_invites_invoke_arn" { type = string }
 variable "ws_connect_invoke_arn" { type = string }
 variable "ws_disconnect_invoke_arn" { type = string }
 variable "ws_chat_invoke_arn" { type = string }
 variable "ws_game_action_invoke_arn" { type = string }
 variable "http_games_function_name" { type = string }
 variable "http_users_function_name" { type = string }
+variable "http_admin_function_name" { type = string }
+variable "http_invites_function_name" { type = string }
 variable "ws_connect_function_name" { type = string }
 variable "ws_disconnect_function_name" { type = string }
 variable "ws_chat_function_name" { type = string }
@@ -56,13 +60,29 @@ resource "aws_apigatewayv2_integration" "http_users" {
   payload_format_version = "2.0"
 }
 
+resource "aws_apigatewayv2_integration" "http_admin" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = var.http_admin_invoke_arn
+  payload_format_version = "2.0"
+}
+
+resource "aws_apigatewayv2_integration" "http_invites" {
+  api_id                 = aws_apigatewayv2_api.http.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = var.http_invites_invoke_arn
+  payload_format_version = "2.0"
+}
+
 locals {
   jwt_auth = {
     authorizer_id      = aws_apigatewayv2_authorizer.cognito.id
     authorization_type = "JWT"
   }
-  games_target = "integrations/${aws_apigatewayv2_integration.http_games.id}"
-  users_target = "integrations/${aws_apigatewayv2_integration.http_users.id}"
+  games_target   = "integrations/${aws_apigatewayv2_integration.http_games.id}"
+  users_target   = "integrations/${aws_apigatewayv2_integration.http_users.id}"
+  admin_target   = "integrations/${aws_apigatewayv2_integration.http_admin.id}"
+  invites_target = "integrations/${aws_apigatewayv2_integration.http_invites.id}"
 }
 
 resource "aws_apigatewayv2_route" "get_games" {
@@ -107,6 +127,52 @@ resource "aws_apigatewayv2_route" "put_users" {
   authorization_type = local.jwt_auth.authorization_type
 }
 
+# ── Admin routes (JWT auth + Lambda-level admin group check) ─────────────────
+resource "aws_apigatewayv2_route" "get_admin_users" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "GET /api/admin/users"
+  target             = local.admin_target
+  authorizer_id      = local.jwt_auth.authorizer_id
+  authorization_type = local.jwt_auth.authorization_type
+}
+resource "aws_apigatewayv2_route" "put_admin_user" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "PUT /api/admin/users/{userId}"
+  target             = local.admin_target
+  authorizer_id      = local.jwt_auth.authorizer_id
+  authorization_type = local.jwt_auth.authorization_type
+}
+resource "aws_apigatewayv2_route" "get_admin_stats" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "GET /api/admin/stats"
+  target             = local.admin_target
+  authorizer_id      = local.jwt_auth.authorizer_id
+  authorization_type = local.jwt_auth.authorization_type
+}
+
+# ── Invite routes ─────────────────────────────────────────────────────────────
+resource "aws_apigatewayv2_route" "post_invites" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "POST /api/invites"
+  target             = local.invites_target
+  authorizer_id      = local.jwt_auth.authorizer_id
+  authorization_type = local.jwt_auth.authorization_type
+}
+resource "aws_apigatewayv2_route" "get_invite" {
+  # No auth — anyone (including unauthenticated users) can preview an invite
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "GET /api/invites/{code}"
+  target             = local.invites_target
+  authorization_type = "NONE"
+}
+resource "aws_apigatewayv2_route" "post_invite_join" {
+  api_id             = aws_apigatewayv2_api.http.id
+  route_key          = "POST /api/invites/{code}/join"
+  target             = local.invites_target
+  authorizer_id      = local.jwt_auth.authorizer_id
+  authorization_type = local.jwt_auth.authorization_type
+}
+
 resource "aws_apigatewayv2_stage" "http" {
   api_id      = aws_apigatewayv2_api.http.id
   name        = "$default"
@@ -125,6 +191,20 @@ resource "aws_lambda_permission" "http_users" {
   statement_id  = "AllowAPIGatewayInvoke"
   action        = "lambda:InvokeFunction"
   function_name = var.http_users_function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+resource "aws_lambda_permission" "http_admin" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = var.http_admin_function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
+}
+resource "aws_lambda_permission" "http_invites" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = var.http_invites_function_name
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_apigatewayv2_api.http.execution_arn}/*/*"
 }
