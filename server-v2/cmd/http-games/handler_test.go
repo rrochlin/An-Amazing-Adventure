@@ -89,6 +89,7 @@ func TestHandlerUnknownRoute_404(t *testing.T) {
 func TestHandlerListGames_EmptyList(t *testing.T) {
 	t.Setenv("SESSIONS_TABLE", "test-table")
 	t.Setenv("CONNECTIONS_TABLE", "test-connections")
+	t.Setenv("USERS_TABLE", "test-users")
 	t.Setenv("WORLD_GEN_ARN", "")
 	// Without a real DynamoDB table this will error at the DB layer —
 	// we assert the handler routes correctly and returns a structured error.
@@ -113,6 +114,7 @@ func TestHandlerListGames_EmptyList(t *testing.T) {
 func TestHandlerCreateGame_EmptyBody_AcceptsAIGenerated(t *testing.T) {
 	// player_name is now optional — empty body should reach the DB layer (not 400)
 	t.Setenv("SESSIONS_TABLE", "test-table")
+	t.Setenv("USERS_TABLE", "test-users")
 	t.Setenv("WORLD_GEN_ARN", "")
 	req := makeHTTPReq("POST", "/api/games", `{}`, "user-123", nil)
 	resp, err := handler(context.Background(), req)
@@ -128,6 +130,7 @@ func TestHandlerCreateGame_EmptyBody_AcceptsAIGenerated(t *testing.T) {
 func TestHandlerCreateGame_WithAllParams(t *testing.T) {
 	// Verify the handler accepts all new optional creation params
 	t.Setenv("SESSIONS_TABLE", "test-table")
+	t.Setenv("USERS_TABLE", "test-users")
 	t.Setenv("WORLD_GEN_ARN", "")
 	body := `{
 		"player_name": "Aria",
@@ -150,6 +153,7 @@ func TestHandlerCreateGame_WithAllParams(t *testing.T) {
 
 func TestHandlerCreateGame_InvalidJSON(t *testing.T) {
 	t.Setenv("SESSIONS_TABLE", "test-table")
+	t.Setenv("USERS_TABLE", "test-users")
 	t.Setenv("WORLD_GEN_ARN", "")
 	req := makeHTTPReq("POST", "/api/games", `not-json`, "user-123", nil)
 	resp, err := handler(context.Background(), req)
@@ -226,7 +230,7 @@ func TestMatchesGamePath(t *testing.T) {
 }
 
 // ---- Required env var tests ----
-// http-games requires: SESSIONS_TABLE
+// http-games requires: SESSIONS_TABLE, USERS_TABLE
 // (CONNECTIONS_TABLE is NOT required — http-games never touches connections)
 
 func TestHandlerGames_MissingSESSIONS_TABLE_Panics(t *testing.T) {

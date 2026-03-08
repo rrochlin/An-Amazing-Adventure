@@ -2,6 +2,7 @@ import { createFileRoute, redirect, useNavigate, useRouter } from "@tanstack/rea
 import {
   Button,
   Box,
+  LinearProgress,
   Paper,
   Typography,
   useColorScheme,
@@ -14,7 +15,13 @@ import {
 } from "@mui/material";
 import z from "zod";
 import { isAuthenticated } from "@/services/auth.service";
-import { ListGames, DeleteGame, type GameListItem } from "@/services/api.game";
+import {
+  ListGames,
+  DeleteGame,
+  type GameListItem,
+  type ListGamesResponse,
+  type UserQuotaInfo,
+} from "@/services/api.game";
 import AddIcon from "@mui/icons-material/Add";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -54,15 +61,16 @@ export const Route = createFileRoute("/")({
       });
     }
   },
-  loader: async () => {
-    const games = await ListGames();
-    return games;
+  loader: async (): Promise<ListGamesResponse> => {
+    return await ListGames();
   },
 });
 
 function RouteComponent() {
-  const [games, setGames] = useState<GameListItem[]>(
-    Route.useLoaderData() as GameListItem[],
+  const data = Route.useLoaderData() as ListGamesResponse;
+  const [games, setGames] = useState<GameListItem[]>(data.games ?? []);
+  const [quota] = useState<UserQuotaInfo>(
+    data.user_quota ?? { tokens_used: 0, token_limit: 0, ai_enabled: true, role: "user" },
   );
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -130,6 +138,39 @@ function RouteComponent() {
         >
           Select a character to continue your quest, or forge a new path
         </Typography>
+
+        {/* Token quota bar — only shown when AI is enabled and a limit is set */}
+        {quota.ai_enabled && quota.token_limit > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Token usage
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {quota.tokens_used.toLocaleString()} / {quota.token_limit.toLocaleString()}
+              </Typography>
+            </Box>
+            <LinearProgress
+              variant="determinate"
+              value={Math.min(100, (quota.tokens_used / quota.token_limit) * 100)}
+              color={
+                quota.tokens_used / quota.token_limit > 0.9
+                  ? "error"
+                  : quota.tokens_used / quota.token_limit > 0.7
+                    ? "warning"
+                    : "primary"
+              }
+            />
+          </Box>
+        )}
+
+        {/* Restricted notice — no AI access */}
+        {!quota.ai_enabled && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <strong>Preview Mode</strong> — AI narration is not yet enabled for your account.
+            Contact the admin to request access.
+          </Alert>
+        )}
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {games.map((game: GameListItem) => (
