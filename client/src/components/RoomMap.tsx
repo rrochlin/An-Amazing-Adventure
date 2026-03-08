@@ -613,23 +613,32 @@ export const RoomMap = ({ gameState, onRoomFocus, onExpand, expanded = false }: 
 
   const visitedRooms = useGameStore((s) => s.visitedRooms);
   const [canvasSize, setCanvasSize] = useState({ width: 400, height: 400 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
+  // Use ResizeObserver so the canvas tracks both window resize and the
+  // expand/collapse animation (which changes the container's width and height
+  // as the flex-basis transitions from 25% → 100%).
   useEffect(() => {
-    const updateSize = () => {
-      const container = document.getElementById("map-container");
-      if (container) {
-        setCanvasSize({ width: container.clientWidth, height: container.clientHeight });
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setCanvasSize({ width, height });
+        }
       }
-    };
-    updateSize();
-    window.addEventListener("resize", updateSize);
-    return () => window.removeEventListener("resize", updateSize);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0, maxWidth: "100%" }}>
-      {/* Map canvas container */}
+    // Stretch to fill all available vertical space in the parent flex column
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", flex: 1, minHeight: 0 }}>
+      {/* Map canvas container — fills remaining height, no hardcoded px */}
       <Box
+        ref={containerRef}
         id="map-container"
         sx={{
           border: isDark ? `2px solid ${DungeonColors.wall}` : "2px solid #8B6F47",
@@ -641,7 +650,8 @@ export const RoomMap = ({ gameState, onRoomFocus, onExpand, expanded = false }: 
             : "inset 0 0 15px rgba(139, 111, 71, 0.2)",
           position: "relative",
           width: "100%",
-          height: "400px",
+          flex: 1,
+          minHeight: 0,
         }}
       >
         {/* UI-FUT-1: Expand/collapse toggle */}
