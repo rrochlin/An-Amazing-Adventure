@@ -3,21 +3,18 @@ import { type GameStateView, type RoomView } from "../types/types";
 import { Stage, Layer, Rect, Text, Circle as KonvaCircle, Group, Line } from "react-konva";
 import {
   Box,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Typography,
   Chip,
+  IconButton,
   Stack,
-  useColorScheme,
   Tooltip,
+  Typography,
+  useColorScheme,
 } from "@mui/material";
 import ZoomInIcon from "@mui/icons-material/ZoomIn";
 import ZoomOutIcon from "@mui/icons-material/ZoomOut";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
-import OpenInFullIcon from "@mui/icons-material/OpenInFull";
-import CloseIcon from "@mui/icons-material/Close";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import { DungeonColors, ColorTokens } from "../theme/theme";
 import { useGameStore } from "../store/gameStore";
 
@@ -26,6 +23,10 @@ interface RoomMapProps {
   /** Called when the user hovers or clicks a room node.
    *  Pass null to clear the selection (restore current room). */
   onRoomFocus?: (room: RoomView | null) => void;
+  /** Called when the user clicks the expand/collapse toggle button. */
+  onExpand?: () => void;
+  /** Whether the map is currently in expanded (full-width) mode. */
+  expanded?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -528,7 +529,7 @@ const MapCanvas = ({
                   {(isCurrentRoom || isConnected || isHovered) && (
                     <Group y={roomSize / 2 + 10} listening={false}>
                       <Rect
-                        x={-50} y={0} width={100} height={20}
+                        x={-56} y={0} width={112} height={20}
                         fillLinearGradientStartPoint={{ x: 0, y: 0 }}
                         fillLinearGradientEndPoint={{ x: 0, y: 20 }}
                         fillLinearGradientColorStops={[
@@ -541,13 +542,15 @@ const MapCanvas = ({
                         shadowColor="black" shadowBlur={4} shadowOpacity={0.7}
                       />
                       <Text
-                        x={-45} y={4}
+                        x={-52} y={4}
                         text={room.name}
                         fontSize={11}
                         fill="#E8DCC4"
                         fontFamily="Cinzel, Georgia, serif"
-                        width={90}
+                        width={104}
                         align="center"
+                        wrap="none"
+                        ellipsis={true}
                       />
                     </Group>
                   )}
@@ -600,16 +603,15 @@ const MapCanvas = ({
 };
 
 // ---------------------------------------------------------------------------
-// Public component — inline map + optional modal pop-out (UI-FUT-1)
+// Public component — inline map with slide-expand support (UI-FUT-1)
 // ---------------------------------------------------------------------------
-export const RoomMap = ({ gameState, onRoomFocus }: RoomMapProps) => {
+export const RoomMap = ({ gameState, onRoomFocus, onExpand, expanded = false }: RoomMapProps) => {
   const { mode } = useColorScheme();
   const isDark = mode === "dark" || mode === "system" || !mode;
   const colorMode = mode === "system" || !mode ? "dark" : mode;
   const colors = ColorTokens[colorMode];
 
   const visitedRooms = useGameStore((s) => s.visitedRooms);
-  const [modalOpen, setModalOpen] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 400, height: 400 });
 
   useEffect(() => {
@@ -642,28 +644,33 @@ export const RoomMap = ({ gameState, onRoomFocus }: RoomMapProps) => {
           height: "400px",
         }}
       >
-        {/* UI-FUT-1: Pop-out button */}
-        <Tooltip title="Expand map">
-          <IconButton
-            size="small"
-            onClick={() => setModalOpen(true)}
-            sx={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              zIndex: 10,
-              color: isDark ? "rgba(201, 169, 98, 0.7)" : "rgba(107, 86, 56, 0.7)",
-              backgroundColor: isDark ? "rgba(26, 15, 30, 0.7)" : "rgba(212, 197, 169, 0.7)",
-              backdropFilter: "blur(4px)",
-              "&:hover": {
-                color: isDark ? "#FFD700" : "#5D4037",
-                backgroundColor: isDark ? "rgba(26, 15, 30, 0.9)" : "rgba(212, 197, 169, 0.9)",
-              },
-            }}
-          >
-            <OpenInFullIcon sx={{ fontSize: "1rem" }} />
-          </IconButton>
-        </Tooltip>
+        {/* UI-FUT-1: Expand/collapse toggle */}
+        {onExpand && (
+          <Tooltip title={expanded ? "Collapse map" : "Expand map"}>
+            <IconButton
+              size="small"
+              onClick={onExpand}
+              sx={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                zIndex: 10,
+                color: isDark ? "rgba(201, 169, 98, 0.7)" : "rgba(107, 86, 56, 0.7)",
+                backgroundColor: isDark ? "rgba(26, 15, 30, 0.7)" : "rgba(212, 197, 169, 0.7)",
+                backdropFilter: "blur(4px)",
+                "&:hover": {
+                  color: isDark ? "#FFD700" : "#5D4037",
+                  backgroundColor: isDark ? "rgba(26, 15, 30, 0.9)" : "rgba(212, 197, 169, 0.9)",
+                },
+              }}
+            >
+              {expanded
+                ? <ChevronLeftIcon sx={{ fontSize: "1.1rem" }} />
+                : <ChevronRightIcon sx={{ fontSize: "1.1rem" }} />
+              }
+            </IconButton>
+          </Tooltip>
+        )}
 
         <MapCanvas
           gameState={gameState}
@@ -721,63 +728,6 @@ export const RoomMap = ({ gameState, onRoomFocus }: RoomMapProps) => {
         </Stack>
       </Box>
 
-      {/* UI-FUT-1: Modal pop-out */}
-      <Dialog
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        maxWidth={false}
-        PaperProps={{
-          sx: {
-            width: "85vw",
-            height: "85vh",
-            maxWidth: "none",
-            backgroundColor: isDark ? "#0d0508" : "#f0e8d8",
-            border: isDark ? `2px solid ${DungeonColors.wall}` : "2px solid #8B6F47",
-            overflow: "hidden",
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            borderBottom: `1px solid ${isDark ? DungeonColors.wall : "#8B6F47"}`,
-            py: 1,
-            px: 2,
-          }}
-        >
-          <Typography
-            sx={{
-              fontFamily: "Cinzel, Georgia, serif",
-              fontSize: "1rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-            }}
-          >
-            World Map
-          </Typography>
-          <IconButton size="small" onClick={() => setModalOpen(false)}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent
-          sx={{
-            p: 0,
-            overflow: "hidden",
-            position: "relative",
-            height: "100%",
-          }}
-        >
-          <MapCanvas
-            gameState={gameState}
-            visitedRooms={visitedRooms}
-            width={window.innerWidth * 0.85 - 4}
-            height={window.innerHeight * 0.85 - 60}
-            onRoomFocus={onRoomFocus}
-          />
-        </DialogContent>
-      </Dialog>
     </Box>
   );
 };
