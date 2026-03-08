@@ -425,10 +425,30 @@ type NarrativeBlock struct {
 	Text string `json:"text,omitempty" dynamodbav:"text,omitempty"`
 }
 
+// WorldEvent is a player-visible description of a game state mutation that
+// occurred during a narrator turn. Events are only produced when the player
+// can observe the change (see visibility table in docs/TODO.md).
+type WorldEvent struct {
+	Type    string `json:"type" dynamodbav:"type"`       // "damage","heal","death","revive","item_gained","item_lost","item_appeared","character_arrived","character_departed"
+	Message string `json:"message" dynamodbav:"message"` // human-readable, player's perspective
+}
+
+// MutationEntry is a durable audit log record written to the mutations table
+// for every DispatchTool call, regardless of player visibility.
+type MutationEntry struct {
+	SessionID string         `json:"session_id" dynamodbav:"session_id"`
+	Ts        int64          `json:"ts" dynamodbav:"ts"`     // unix milliseconds — sort key
+	Turn      int            `json:"turn" dynamodbav:"turn"` // g.ConversationCount at dispatch time
+	Tool      string         `json:"tool" dynamodbav:"tool"`
+	Input     map[string]any `json:"input" dynamodbav:"input"`
+	Result    string         `json:"result" dynamodbav:"result"`
+}
+
 // ChatMessage is the player-facing chat log entry shown in the UI.
 type ChatMessage struct {
-	Type    string `json:"type" dynamodbav:"type"` // "player" | "narrative"
-	Content string `json:"content" dynamodbav:"content"`
+	Type    string       `json:"type" dynamodbav:"type"` // "player" | "narrative"
+	Content string       `json:"content" dynamodbav:"content"`
+	Events  []WorldEvent `json:"events,omitempty" dynamodbav:"events,omitempty"` // non-nil on narrative messages when world events occurred
 }
 
 // ToSaveState serialises the Game to a DynamoDB-ready SaveState.
@@ -654,9 +674,12 @@ func (g *Game) BuildGameStateView(history []ChatMessage) GameStateView {
 
 // StateDelta holds only what changed between two game states.
 // Fields are nil/empty when unchanged.
+// NewMessage was removed — narrative text reaches the client via streaming
+// (narrative_chunk / narrative_end frames), so including it in state_delta
+// caused duplicate messages in the chat log.
 type StateDelta struct {
 	CurrentRoom  *RoomView           `json:"current_room,omitempty"`
 	Player       *CharacterView      `json:"player,omitempty"`
 	UpdatedRooms map[string]RoomView `json:"updated_rooms,omitempty"`
-	NewMessage   *ChatMessage        `json:"new_message,omitempty"`
+	Events       []WorldEvent        `json:"events,omitempty"` // player-visible world events this turn
 }
