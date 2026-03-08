@@ -1,7 +1,12 @@
 // ws-chat handles the WebSocket "chat" route.
-// It streams the narrator's response back to the client chunk-by-chunk,
-// executes any tool calls the AI makes against the game state,
-// then persists the updated game state and sends a state delta.
+//
+// Turn flow (Phase 8 — Narrator + Engineer split):
+//  1. NarrateStream  — streams pure narrative prose (no tools) to the client
+//  2. narrative_end  — signals streaming is complete
+//  3. EngineerScan   — infers world mutations from the narrative, executes them
+//  4. PutMutation    — persists audit log entries (best-effort)
+//  5. PutGame        — persists updated game state + chat history
+//  6. SendDelta      — sends state delta (player, room, world events)
 package main
 
 import (
@@ -94,8 +99,8 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	// Capture pre-turn state for delta calculation
 	preTurnPlayerLoc := g.Player.LocationID
 
-	// Stream narrator response
-	result, err := aiClient.NarrateStream(
+	// Step 1: Stream narrator prose — no tools, pure narrative.
+	narratorResult, err := aiClient.NarrateStream(
 		ctx, g, saveState.Narrative, msg.Content,
 		func(chunk string) {
 			if sendErr := ws.SendNarrativeChunk(ctx, connID, chunk); sendErr != nil {
@@ -109,29 +114,42 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
-	// Signal streaming complete
+	// Step 2: Signal streaming complete (client commits the narrative bubble).
 	_ = ws.SendNarrativeEnd(ctx, connID)
 
-	// Persist mutation audit log entries (best-effort — failure is non-fatal)
-	for _, m := range result.Mutations {
+	// Step 3: Engineer infers world mutations from the narrative and executes them.
+	// Runs after narrative_end so the client never waits on the Engineer for prose.
+	engineerResult, err := aiClient.EngineerScan(ctx, g, narratorResult.Narrative)
+	if err != nil {
+		// Non-fatal: log the error but continue — game state may be partially mutated,
+		// but the narrative has already been delivered successfully.
+		log.Printf("ws-chat: engineer scan error: %v", err)
+	}
+
+	// Step 4: Persist mutation audit log entries (best-effort — failure is non-fatal).
+	for _, m := range engineerResult.Mutations {
 		if err := dbClient.PutMutation(ctx, m); err != nil {
 			log.Printf("ws-chat: put mutation (tool=%s): %v", m.Tool, err)
 		}
 	}
 
-	// Append chat history entries — attach world events to the narrative message
-	// so they survive reconnection/reload.
+	// Append chat history — attach world events to the narrative message so they
+	// survive reconnection/reload.
 	history := saveState.ChatHistory
 	history = append(history, game.ChatMessage{Type: "player", Content: msg.Content})
-	history = append(history, game.ChatMessage{Type: "narrative", Content: result.Narrative, Events: result.Events})
+	history = append(history, game.ChatMessage{
+		Type:    "narrative",
+		Content: narratorResult.Narrative,
+		Events:  engineerResult.Events,
+	})
 
-	// Update stats
+	// Update stats (include both Narrator and Engineer token usage).
 	g.ConversationCount++
-	g.TotalTokens += result.Tokens.Total()
+	g.TotalTokens += narratorResult.Tokens.Total() + engineerResult.Tokens.Total()
 
-	// Persist updated game state with optimistic locking retry
+	// Step 5: Persist updated game state with optimistic locking retry.
 	g.Version++
-	saved := g.ToSaveState(result.NewMessages, history)
+	saved := g.ToSaveState(narratorResult.NewMessages, history)
 	for attempt := 0; attempt < 3; attempt++ {
 		if err := dbClient.PutGame(ctx, saved); err != nil {
 			log.Printf("ws-chat: put game attempt %d: %v", attempt+1, err)
@@ -149,16 +167,12 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		break
 	}
 
-	// Send state delta — always include player and current room.
-	// NewMessage is intentionally omitted: the narrative already reached the client
-	// via narrative_chunk / narrative_end streaming frames. Including it here caused
-	// duplicate chat messages.
+	// Step 6: Send state delta — player, current room, and any world events.
 	delta := game.StateDelta{
-		Events: result.Events,
+		Events: engineerResult.Events,
 	}
 	playerView := g.BuildGameStateView(nil).Player
 	delta.Player = &playerView
-
 	if g.Player.LocationID != preTurnPlayerLoc || true { // always send current room
 		roomView := g.BuildGameStateView(nil).CurrentRoom
 		delta.CurrentRoom = &roomView
