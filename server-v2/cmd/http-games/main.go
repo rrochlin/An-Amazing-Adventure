@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 
@@ -53,6 +54,24 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	}
 }
 
+type gameListItem struct {
+	SessionID         string `json:"session_id"`
+	PlayerName        string `json:"player_name"`
+	Ready             bool   `json:"ready"`
+	Title             string `json:"title,omitempty"`
+	Theme             string `json:"theme,omitempty"`
+	QuestGoal         string `json:"quest_goal,omitempty"`
+	ConversationCount int    `json:"conversation_count,omitempty"`
+	TotalTokens       int    `json:"total_tokens,omitempty"`
+}
+
+type userQuotaInfo struct {
+	TokensUsed int    `json:"tokens_used"`
+	TokenLimit int    `json:"token_limit"` // 0 = unlimited
+	AIEnabled  bool   `json:"ai_enabled"`
+	Role       string `json:"role"`
+}
+
 func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTTPResponse, error) {
 	dbClient, err := db.New(ctx)
 	if err != nil {
@@ -63,19 +82,10 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 		log.Printf("list games: %v", err)
 		return serverError(), nil
 	}
-	type gameInfo struct {
-		SessionID         string `json:"session_id"`
-		PlayerName        string `json:"player_name"`
-		Ready             bool   `json:"ready"`
-		Title             string `json:"title,omitempty"`
-		Theme             string `json:"theme,omitempty"`
-		QuestGoal         string `json:"quest_goal,omitempty"`
-		ConversationCount int    `json:"conversation_count,omitempty"`
-		TotalTokens       int    `json:"total_tokens,omitempty"`
-	}
-	results := make([]gameInfo, 0, len(saves))
+
+	results := make([]gameListItem, 0, len(saves))
 	for _, s := range saves {
-		results = append(results, gameInfo{
+		results = append(results, gameListItem{
 			SessionID:         s.SessionID,
 			PlayerName:        s.Player.Name,
 			Ready:             s.Ready,
@@ -86,7 +96,22 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 			TotalTokens:       s.TotalTokens,
 		})
 	}
-	return jsonResponse(200, results), nil
+
+	// Include user quota info so the frontend can display usage bar
+	quota := userQuotaInfo{Role: "restricted"}
+	if ur, err := dbClient.GetUser(ctx, userID); err == nil && ur != nil {
+		quota = userQuotaInfo{
+			TokensUsed: ur.TokensUsed,
+			TokenLimit: ur.TokenLimit,
+			AIEnabled:  ur.AIEnabled,
+			Role:       ur.Role,
+		}
+	}
+
+	return jsonResponse(200, map[string]any{
+		"games":      results,
+		"user_quota": quota,
+	}), nil
 }
 
 func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
@@ -101,6 +126,34 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
 		return jsonResponse(400, map[string]string{"error": "invalid request body"}), nil
 	}
+
+	dbClient, err := db.New(ctx)
+	if err != nil {
+		return serverError(), nil
+	}
+
+	// Load user record to enforce game limit and determine preview mode.
+	// On error or missing record, default to restricted (safe fallback).
+	userRecord, err := dbClient.GetUser(ctx, userID)
+	if err != nil {
+		log.Printf("http-games POST: GetUser error (treating as restricted): %v", err)
+	}
+	if userRecord == nil {
+		userRecord = &db.UserRecord{Role: "restricted", AIEnabled: false, GamesLimit: 1}
+	}
+
+	// Enforce games limit
+	if userRecord.GamesLimit > 0 {
+		count, countErr := dbClient.CountUserGames(ctx, userID)
+		if countErr == nil && count >= userRecord.GamesLimit {
+			return jsonResponse(403, map[string]string{
+				"error":   "games_limit_reached",
+				"message": fmt.Sprintf("Game limit of %d reached", userRecord.GamesLimit),
+			}), nil
+		}
+	}
+
+	previewMode := !userRecord.AIEnabled
 
 	sessionID := game.NewSessionID()
 	// Player name may be blank — world-gen will invent one if so
@@ -122,11 +175,6 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		Preferences:       body.Preferences,
 	}
 
-	dbClient, err := db.New(ctx)
-	if err != nil {
-		return serverError(), nil
-	}
-
 	// Save the initial (not-ready) game record
 	saved := g.ToSaveState(nil, nil)
 	if err := dbClient.PutGame(ctx, saved); err != nil {
@@ -134,24 +182,27 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		return serverError(), nil
 	}
 
-	// Kick off world generation asynchronously
-	payload, _ := json.Marshal(worldGenPayload{
-		SessionID:         sessionID,
-		UserID:            userID,
-		PlayerName:        body.PlayerName, // pass the original (possibly empty) name to world-gen
-		PlayerDescription: body.PlayerDescription,
-		PlayerAge:         body.PlayerAge,
-		PlayerBackstory:   body.PlayerBackstory,
-		ThemeHint:         body.ThemeHint,
-		Preferences:       body.Preferences,
-	})
-	if err := invokeWorldGen(ctx, payload); err != nil {
-		log.Printf("invoke world-gen: %v (game still created, world gen may be delayed)", err)
+	// Kick off world generation asynchronously (skipped in preview mode)
+	if !previewMode {
+		payload, _ := json.Marshal(worldGenPayload{
+			SessionID:         sessionID,
+			UserID:            userID,
+			PlayerName:        body.PlayerName, // pass original (possibly empty) name to world-gen
+			PlayerDescription: body.PlayerDescription,
+			PlayerAge:         body.PlayerAge,
+			PlayerBackstory:   body.PlayerBackstory,
+			ThemeHint:         body.ThemeHint,
+			Preferences:       body.Preferences,
+		})
+		if err := invokeWorldGen(ctx, payload); err != nil {
+			log.Printf("invoke world-gen: %v (game still created)", err)
+		}
 	}
 
 	return jsonResponse(201, map[string]any{
-		"session_id": sessionID,
-		"ready":      false,
+		"session_id":   sessionID,
+		"ready":        false,
+		"preview_mode": previewMode,
 	}), nil
 }
 

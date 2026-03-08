@@ -1,12 +1,14 @@
 // ws-chat handles the WebSocket "chat" route.
 //
-// Turn flow (Phase 8 — Narrator + Engineer split):
+// Turn flow:
+//  0. RBAC check     — verify AI access is enabled and token quota not exceeded
 //  1. NarrateStream  — streams pure narrative prose (no tools) to the client
 //  2. narrative_end  — signals streaming is complete
 //  3. EngineerScan   — infers world mutations from the narrative, executes them
 //  4. PutMutation    — persists audit log entries (best-effort)
 //  5. PutGame        — persists updated game state + chat history
-//  6. SendDelta      — sends state delta (player, room, world events)
+//  6. UpdateTokens   — increments per-user token counter (best-effort)
+//  7. SendDelta      — sends state delta (player, room, world events)
 package main
 
 import (
@@ -68,6 +70,28 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		_ = dbClient.SetStreaming(ctx, connID, false)
 	}()
 
+	// Set up WebSocket sender early so we can send error frames during RBAC check
+	ws, err := wsutil.New(ctx)
+	if err != nil {
+		log.Printf("ws-chat: ws sender init: %v", err)
+		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+	}
+
+	// RBAC + quota check — must pass before loading game or calling Bedrock
+	userID := string(conn.UserID)
+	userRecord, err := dbClient.GetUser(ctx, userID)
+	if err != nil {
+		log.Printf("ws-chat: GetUser error (treating as restricted): %v", err)
+	}
+	if userRecord == nil || !userRecord.AIEnabled {
+		_ = ws.SendError(ctx, connID, "ai_access_not_enabled")
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+	if userRecord.TokenLimit > 0 && userRecord.TokensUsed >= userRecord.TokenLimit {
+		_ = ws.SendError(ctx, connID, "quota_exceeded")
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+
 	// Load game state
 	saveState, err := dbClient.GetGame(ctx, conn.GameID)
 	if err != nil {
@@ -78,13 +102,6 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	g, err := game.FromSaveState(saveState)
 	if err != nil {
 		log.Printf("ws-chat: load game: %v", err)
-		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
-	}
-
-	// Set up WebSocket sender
-	ws, err := wsutil.New(ctx)
-	if err != nil {
-		log.Printf("ws-chat: ws sender init: %v", err)
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
@@ -167,7 +184,13 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		break
 	}
 
-	// Step 6: Send state delta — player, current room, and any world events.
+	// Step 6: Account for token usage — best-effort, non-fatal.
+	totalTokenDelta := narratorResult.Tokens.Total() + engineerResult.Tokens.Total()
+	if accountErr := dbClient.UpdateUserTokens(ctx, userID, totalTokenDelta); accountErr != nil {
+		log.Printf("ws-chat: UpdateUserTokens (non-fatal): %v", accountErr)
+	}
+
+	// Step 7: Send state delta — player, current room, and any world events.
 	delta := game.StateDelta{
 		Events: engineerResult.Events,
 	}
