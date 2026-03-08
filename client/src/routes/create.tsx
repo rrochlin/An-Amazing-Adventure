@@ -14,7 +14,6 @@ import {
 import { useState } from "react";
 import { isAuthenticated } from "@/services/auth.service";
 import { CreateGame } from "@/services/api.game";
-import { maxLength } from "zod";
 
 const PREFERENCE_OPTIONS = [
    { label: "Combat", value: "combat" },

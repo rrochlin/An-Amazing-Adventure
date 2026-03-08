@@ -176,10 +176,10 @@ function GamePage() {
     );
   }
 
-  // Combine committed messages with any in-flight streaming message
-  const displayMessages = streamingMessage
-    ? [...chatMessages, { type: "narrative" as const, content: streamingMessage }]
-    : chatMessages;
+  // displayMessages contains only committed (finalized) messages.
+  // The in-flight streamingMessage is passed separately to Chat so it can
+  // render a dedicated StreamingChatMessage bubble rather than a plain entry.
+  const displayMessages = chatMessages;
 
   return (
     <Box
@@ -235,6 +235,7 @@ function GamePage() {
         }}>
           <Chat
             chatHistory={displayMessages}
+            streamingMessage={streamingMessage || undefined}
             command={command}
             setCommand={setCommand}
             handleCommand={handleCommand}

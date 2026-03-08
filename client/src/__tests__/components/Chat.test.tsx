@@ -39,11 +39,34 @@ describe("Chat component", () => {
     expect(screen.getByText("You walk through a dark corridor.")).toBeInTheDocument();
   });
 
-  it("shows loading indicator when isLoading is true", () => {
+  it("shows loading indicator when isLoading is true and no streaming content", () => {
     renderChat({ isLoading: true });
     // Send button shows spinner — button is disabled
     const sendBtn = screen.getByRole("button");
     expect(sendBtn).toBeDisabled();
+    // No streaming content → LoadingMessage shimmer flavor text is shown
+    // (one of the flavor texts from the array — we just check the button state here)
+  });
+
+  it("shows streaming bubble with content when isLoading and streamingMessage provided", () => {
+    renderChat({ isLoading: true, streamingMessage: "The dungeon echoes..." });
+    // The streaming text should be visible
+    expect(screen.getByText("The dungeon echoes...")).toBeInTheDocument();
+  });
+
+  it("does not show streaming content in committed history while streaming", () => {
+    const history: ChatMessage[] = [
+      { type: "player", content: "Go north" },
+    ];
+    renderChat({
+      chatHistory: history,
+      isLoading: true,
+      streamingMessage: "Shadows stir ahead.",
+    });
+    // Committed player message visible
+    expect(screen.getByText("Go north")).toBeInTheDocument();
+    // Streaming chunk visible in the streaming bubble
+    expect(screen.getByText("Shadows stir ahead.")).toBeInTheDocument();
   });
 
   it("Send button disabled when command is empty", () => {

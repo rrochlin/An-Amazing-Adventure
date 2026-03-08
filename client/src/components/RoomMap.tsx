@@ -17,8 +17,9 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
   // Server stores coordinates with spacing=100 between adjacent rooms.
   // We map those world-units to pixel positions: each 100-unit step =
   // (roomSize + corridor gap) pixels on screen.
-  const baseRoomSize = 50;
-  const worldUnitToPx = baseRoomSize + 20; // 70px per 100 world-units
+  // Increasing worldUnitToPx relative to baseRoomSize widens the corridors.
+  const baseRoomSize = 44;
+  const worldUnitToPx = baseRoomSize + 66; // 110px per 100 world-units → 66px corridor gap
 
   // Canvas dimensions - make responsive to container
   const [canvasSize, setCanvasSize] = useState({ width: 400, height: 400 });
@@ -150,6 +151,32 @@ export const RoomMap = ({ gameState }: { gameState: GameStateView | null }) => {
   const handleMouseUp = () => {
     setIsDragging(false);
   };
+
+  // TODO(ui): Add a pop-out/modal expand button so the map can fill more screen
+  //   real estate when the user wants a better view of the dungeon layout.
+  //   (ref: Phase 5/UI.md — "Pop-out/modal expand button")
+
+  // TODO(ui): Auto-zoom and center the canvas on the current room whenever
+  //   the player moves so the active area is always in view without manual pan.
+  //   (ref: Phase 5/UI.md — "auto-zoom to current room unreliable")
+
+  // TODO(ui): Highlight connected exits from the current room in a distinct
+  //   color (e.g. teal glow) so the player can see at a glance where they can
+  //   move next. (ref: Phase 5/UI.md — "highlight connected exits")
+
+  // TODO(ui): Correlate the Room Info panel on the right side with the map —
+  //   hovering/clicking a map node should update the room detail panel to show
+  //   that room's info, not just the current room.
+  //   (ref: Phase 5/UI.md — "correlate room panel to map node highlight")
+
+  // TODO(ui): Render character/NPC tokens on the map at their room positions
+  //   so the player can see where enemies and allies are relative to their
+  //   position. (ref: Loose Thoughts.md — "Characters displayed on the map")
+
+  // TODO(ui): Fix fog-of-war inconsistency — currently only the current room
+  //   and its direct connections are revealed. Consider persisting a "visited"
+  //   set in game state so rooms stay revealed after the player leaves them.
+  //   (ref: Phase 5/UI.md — "fog of war consistency")
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1, width: "100%", minWidth: 0, maxWidth: "100%" }}>
