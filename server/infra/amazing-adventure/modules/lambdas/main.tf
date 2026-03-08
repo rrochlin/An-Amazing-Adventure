@@ -18,6 +18,7 @@ variable "user_pool_arn" { type = string }
 variable "user_pool_client_id" { type = string }
 variable "websocket_api_execution_arn" { type = string }
 variable "websocket_api_endpoint" { type = string }
+variable "websocket_stage_name" { type = string }
 
 # ── Shared bootstrap placeholder ────────────────────────────────────────────
 # CI replaces function code after first deploy. We use a minimal bootstrap

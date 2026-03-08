@@ -90,6 +90,7 @@ module "lambdas" {
   user_pool_client_id         = module.cognito.user_pool_client_id
   websocket_api_execution_arn = module.api_gateway.websocket_api_execution_arn
   websocket_api_endpoint      = module.api_gateway.websocket_api_endpoint
+  websocket_stage_name        = var.environment
 }
 
 module "api_gateway" {
