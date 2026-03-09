@@ -67,7 +67,7 @@ jobs:
         working-directory: server-v2
         run: |
           set -e
-          LAMBDAS=(ws-connect ws-disconnect ws-chat ws-game-action http-games http-users world-gen)
+          LAMBDAS=(ws-connect ws-disconnect ws-chat ws-game-action http-games http-users http-admin http-invites cognito-post-confirm world-gen)
           for name in "${LAMBDAS[@]}"; do
             echo "Building $name..."
             GOARCH=arm64 GOOS=linux go build \
@@ -84,7 +84,7 @@ jobs:
       - name: Update Lambda function code
         run: |
           set -e
-          LAMBDAS=(ws-connect ws-disconnect ws-chat ws-game-action http-games http-users world-gen)
+          LAMBDAS=(ws-connect ws-disconnect ws-chat ws-game-action http-games http-users http-admin http-invites cognito-post-confirm world-gen)
           PREFIX="amazing-adventure-prod"
           for name in "${LAMBDAS[@]}"; do
             FUNCTION_NAME="${PREFIX}-${name}"
