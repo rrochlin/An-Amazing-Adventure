@@ -85,9 +85,18 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 
 	results := make([]gameListItem, 0, len(saves))
 	for _, s := range saves {
+		// Determine player name: prefer Players map (v2), fall back to legacy Player field.
+		playerName := s.Player.Name
+		if s.Players != nil {
+			if pc, ok := s.Players[s.OwnerID]; ok && pc.Name != "" {
+				playerName = pc.Name
+			} else if pc, ok := s.Players[s.UserID]; ok && pc.Name != "" {
+				playerName = pc.Name
+			}
+		}
 		results = append(results, gameListItem{
 			SessionID:         s.SessionID,
-			PlayerName:        s.Player.Name,
+			PlayerName:        playerName,
 			Ready:             s.Ready,
 			Title:             s.Title,
 			Theme:             s.Theme,
@@ -166,7 +175,7 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	player.Backstory = body.PlayerBackstory
 
 	g := game.NewGame(sessionID, userID)
-	g.Player = player
+	g.SetPlayerCharacter(userID, player)
 	g.CreationParams = game.AdventureCreationParams{
 		PlayerDescription: body.PlayerDescription,
 		PlayerAge:         body.PlayerAge,
@@ -223,7 +232,7 @@ func handleGetGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, user
 	if err != nil {
 		return serverError(), nil
 	}
-	stateView := g.BuildGameStateView(saveState.ChatHistory)
+	stateView := g.BuildGameStateView(userID, saveState.ChatHistory)
 	return jsonResponse(200, map[string]any{
 		"session_id":         sessionID,
 		"ready":              saveState.Ready,

@@ -98,10 +98,14 @@ func (c *Client) requireMembershipsTable() {
 // overrides the key fields to marshal as Binary (B), matching the table schema.
 type saveStateDB struct {
 	SessionID         BinaryID                     `dynamodbav:"session_id"`
+	OwnerID           BinaryID                     `dynamodbav:"owner_id,omitempty"`
 	UserID            BinaryID                     `dynamodbav:"user_id"`
 	SchemaVersion     int                          `dynamodbav:"schema_version"`
 	Version           int                          `dynamodbav:"version"`
-	Player            game.Character               `dynamodbav:"player"`
+	Players           map[string]game.Character    `dynamodbav:"players,omitempty"`
+	Player            game.Character               `dynamodbav:"player,omitempty"` // v1 compat
+	PartySize         int                          `dynamodbav:"party_size,omitempty"`
+	InviteCode        string                       `dynamodbav:"invite_code,omitempty"`
 	Rooms             []game.Area                  `dynamodbav:"rooms"`
 	Items             []game.Item                  `dynamodbav:"items"`
 	NPCs              []game.Character             `dynamodbav:"npcs"`
@@ -119,10 +123,14 @@ type saveStateDB struct {
 func toDBState(s game.SaveState) saveStateDB {
 	return saveStateDB{
 		SessionID:         BinaryID(s.SessionID),
+		OwnerID:           BinaryID(s.OwnerID),
 		UserID:            BinaryID(s.UserID),
 		SchemaVersion:     s.SchemaVersion,
 		Version:           s.Version,
+		Players:           s.Players,
 		Player:            s.Player,
+		PartySize:         s.PartySize,
+		InviteCode:        s.InviteCode,
 		Rooms:             s.Rooms,
 		Items:             s.Items,
 		NPCs:              s.NPCs,
@@ -141,10 +149,14 @@ func toDBState(s game.SaveState) saveStateDB {
 func fromDBState(d saveStateDB) game.SaveState {
 	return game.SaveState{
 		SessionID:         string(d.SessionID),
+		OwnerID:           string(d.OwnerID),
 		UserID:            string(d.UserID),
 		SchemaVersion:     d.SchemaVersion,
 		Version:           d.Version,
+		Players:           d.Players,
 		Player:            d.Player,
+		PartySize:         d.PartySize,
+		InviteCode:        d.InviteCode,
 		Rooms:             d.Rooms,
 		Items:             d.Items,
 		NPCs:              d.NPCs,

@@ -198,7 +198,7 @@ func TestCharacterInventory(t *testing.T) {
 
 func newTestGame() *game.Game {
 	g := game.NewGame("session-1", "user-1")
-	g.Player = game.NewCharacter("Hero", "The player character")
+	g.SetPlayerCharacter("user-1", game.NewCharacter("Hero", "The player character"))
 	return g
 }
 
@@ -305,7 +305,8 @@ func TestPlaceItemInRoom(t *testing.T) {
 	if rAfter.HasItem(item.ID) {
 		t.Error("expected item removed from room after given to player")
 	}
-	if !g.Player.HasItem(item.ID) {
+	player, _ := g.GetPlayerCharacter("user-1")
+	if !player.HasItem(item.ID) {
 		t.Error("expected item in player inventory")
 	}
 }
@@ -326,7 +327,8 @@ func TestMovePlayer(t *testing.T) {
 	if dest.ID != north.ID {
 		t.Errorf("expected to be in north room, got %s", dest.ID)
 	}
-	if g.Player.LocationID != north.ID {
+	p, _ := g.GetPlayerCharacter("user-1")
+	if p.LocationID != north.ID {
 		t.Error("expected Player.LocationID to update")
 	}
 
@@ -429,10 +431,11 @@ func TestSaveStateRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromSaveState: %v", err)
 	}
-	if restored.Player.LocationID != room.ID {
+	restoredPlayer, _ := restored.GetPlayerCharacter("user-1")
+	if restoredPlayer.LocationID != room.ID {
 		t.Error("player location not preserved")
 	}
-	if !restored.Player.HasItem(item.ID) {
+	if !restoredPlayer.HasItem(item.ID) {
 		t.Error("player inventory not preserved")
 	}
 	if _, err := restored.GetNPC(npc.ID); err != nil {
@@ -534,7 +537,7 @@ func TestBuildGameStateView(t *testing.T) {
 	_ = g.GiveItemToPlayer(item.ID)
 
 	history := []game.ChatMessage{{Type: "player", Content: "hi"}}
-	view := g.BuildGameStateView(history)
+	view := g.BuildGameStateView("user-1", history)
 
 	if view.CurrentRoom.Name != "Tavern" {
 		t.Errorf("expected current room name 'Tavern', got %q", view.CurrentRoom.Name)

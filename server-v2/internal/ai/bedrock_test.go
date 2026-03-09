@@ -13,7 +13,7 @@ import (
 func newTestGame(t *testing.T) *game.Game {
 	t.Helper()
 	g := game.NewGame("test-session", "test-user")
-	g.Player = game.NewCharacter("Hero", "The protagonist")
+	g.SetPlayerCharacter("test-user", game.NewCharacter("Hero", "The protagonist"))
 	room := game.NewArea("Tavern", "A smoky room")
 	if err := g.AddRoom(room); err != nil {
 		t.Fatal(err)

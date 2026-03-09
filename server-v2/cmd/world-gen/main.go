@@ -106,22 +106,26 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	emit(fmt.Sprintf("Theme: %s", blueprint.Theme))
 	emit(fmt.Sprintf("Quest: %s", blueprint.QuestGoal))
 
-	// If the AI invented a player name (player left it blank), write it back
+	// If the AI invented a player name (player left it blank), write it back.
+	// Apply player-supplied character details (may override stub values).
+	owner, hasOwner := g.GetPlayerCharacter(g.OwnerID)
+	if !hasOwner {
+		owner = game.NewCharacter("Adventurer", "")
+	}
 	if evt.PlayerName == "" && blueprint.PlayerName != "" {
-		g.Player.Name = blueprint.PlayerName
+		owner.Name = blueprint.PlayerName
 		emit(fmt.Sprintf("Character named: %q", blueprint.PlayerName))
 	}
-
-	// Apply player-supplied character details (may override stub values)
 	if evt.PlayerDescription != "" {
-		g.Player.Description = evt.PlayerDescription
+		owner.Description = evt.PlayerDescription
 	}
 	if evt.PlayerAge != "" {
-		g.Player.Age = evt.PlayerAge
+		owner.Age = evt.PlayerAge
 	}
 	if evt.PlayerBackstory != "" {
-		g.Player.Backstory = evt.PlayerBackstory
+		owner.Backstory = evt.PlayerBackstory
 	}
+	g.SetPlayerCharacter(g.OwnerID, owner)
 
 	// Step 2: Build world deterministically
 	emit("Constructing world...")

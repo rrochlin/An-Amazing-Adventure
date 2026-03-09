@@ -114,7 +114,8 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}
 
 	// Capture pre-turn state for delta calculation
-	preTurnPlayerLoc := g.Player.LocationID
+	preTurnOwner, _ := g.OwnerCharacter()
+	preTurnPlayerLoc := preTurnOwner.LocationID
 
 	// Step 1: Stream narrator prose — no tools, pure narrative.
 	narratorResult, err := aiClient.NarrateStream(
@@ -191,14 +192,15 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}
 
 	// Step 7: Send state delta — player, current room, and any world events.
+	stateView := g.BuildGameStateView(userID, nil)
+	postTurnOwner, _ := g.OwnerCharacter()
 	delta := game.StateDelta{
 		Events: engineerResult.Events,
 	}
-	playerView := g.BuildGameStateView(nil).Player
-	delta.Player = &playerView
-	if g.Player.LocationID != preTurnPlayerLoc || true { // always send current room
-		roomView := g.BuildGameStateView(nil).CurrentRoom
-		delta.CurrentRoom = &roomView
+	delta.Player = &stateView.Player
+	delta.Self = &stateView.Self
+	if postTurnOwner.LocationID != preTurnPlayerLoc || true { // always send current room
+		delta.CurrentRoom = &stateView.CurrentRoom
 	}
 
 	_ = ws.SendDelta(ctx, connID, delta)

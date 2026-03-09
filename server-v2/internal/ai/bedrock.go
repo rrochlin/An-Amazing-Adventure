@@ -356,14 +356,15 @@ func engineerUserMessage(g *game.Game, narrative string) string {
 	sb.WriteString(narrative)
 	sb.WriteString("\n\n## Current Game State\n\n")
 
-	// Player
-	sb.WriteString(fmt.Sprintf("Player: %s (health %d, alive %v)\n", g.Player.Name, g.Player.Health, g.Player.Alive))
+	// Player (owner character for backward compat)
+	owner, _ := g.OwnerCharacter()
+	sb.WriteString(fmt.Sprintf("Player: %s (health %d, alive %v)\n", owner.Name, owner.Health, owner.Alive))
 	sb.WriteString("Player inventory: ")
-	if len(g.Player.Inventory) == 0 {
+	if len(owner.Inventory) == 0 {
 		sb.WriteString("empty")
 	} else {
-		names := make([]string, 0, len(g.Player.Inventory))
-		for _, id := range g.Player.Inventory {
+		names := make([]string, 0, len(owner.Inventory))
+		for _, id := range owner.Inventory {
 			if item, err := g.GetItem(id); err == nil {
 				names = append(names, item.Name)
 			}
@@ -373,7 +374,7 @@ func engineerUserMessage(g *game.Game, narrative string) string {
 	sb.WriteString("\n")
 
 	// Current room
-	if room, err := g.GetRoom(g.Player.LocationID); err == nil {
+	if room, err := g.GetRoom(owner.LocationID); err == nil {
 		sb.WriteString(fmt.Sprintf("Current room: %s\n", room.Name))
 		sb.WriteString("Room items: ")
 		if len(room.Items) == 0 {
@@ -802,7 +803,8 @@ func fromBedrockMessages(msgs []types.Message) []game.NarrativeMessage {
 // narratorSystemPrompt returns the system instructions for the narrator.
 // The Narrator has NO tools — it must write pure prose only.
 func narratorSystemPrompt(g *game.Game) string {
-	room, _ := g.GetRoom(g.Player.LocationID)
+	owner, _ := g.OwnerCharacter()
+	room, _ := g.GetRoom(owner.LocationID)
 	return fmt.Sprintf(`You are an expert Dungeon Master narrating a text adventure game.
 The player's name is %q and they are currently in %q.
 
@@ -819,7 +821,7 @@ DM Philosophy:
 - Be specific and sensory: name the smells, the sounds, the textures.
 
 Write 2-4 paragraphs of vivid prose. Do not break the fourth wall.`,
-		g.Player.Name, room.Name)
+		owner.Name, room.Name)
 }
 
 // extractText pulls the first text block from a ConverseOutput.
