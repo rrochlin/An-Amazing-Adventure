@@ -805,13 +805,23 @@ func fromBedrockMessages(msgs []types.Message) []game.NarrativeMessage {
 func narratorSystemPrompt(g *game.Game) string {
 	owner, _ := g.OwnerCharacter()
 	room, _ := g.GetRoom(owner.LocationID)
-	return fmt.Sprintf(`You are an expert Dungeon Master narrating a text adventure game.
-The player's name is %q and they are currently in %q.
+
+	// Build D&D character stats section if available
+	charContext := ""
+	if dndChar, ok := g.GetDnDCharacter(g.OwnerID); ok && dndChar != nil {
+		charContext = "\n\n" + game.BuildCharacterContext(owner.Name, dndChar.ToData())
+	}
+
+	return fmt.Sprintf(`You are an expert Dungeon Master narrating a D&D 5e text adventure game.
+The player's name is %q and they are currently in %q.%s
 
 Your ONLY job is to write immersive, engaging narrative prose.
 Do NOT describe what you are about to do or what tools you might call.
 Do NOT say things like "I will now..." or "As the DM, I...".
 Write only what the player experiences — sights, sounds, dialogue, action.
+
+When narrating combat or physical feats, respect the character's D&D stats (HP, AC, ability scores).
+A Barbarian with high STR smashes through doors; a Monk with high DEX moves like water.
 
 DM Philosophy:
 - Say Yes or Roll the Dice: if nothing is at stake, say yes and move the story forward.
@@ -821,7 +831,7 @@ DM Philosophy:
 - Be specific and sensory: name the smells, the sounds, the textures.
 
 Write 2-4 paragraphs of vivid prose. Do not break the fourth wall.`,
-		owner.Name, room.Name)
+		owner.Name, room.Name, charContext)
 }
 
 // extractText pulls the first text block from a ConverseOutput.

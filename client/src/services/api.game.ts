@@ -1,5 +1,5 @@
 import { DELETE, GET, POST } from "./api.service";
-import type { GameStateView, AdventureCreationParams } from "../types/types";
+import type { GameStateView, CharacterCreationData } from "../types/types";
 
 export interface GameListItem {
   session_id: string;
@@ -33,16 +33,8 @@ export interface GameLoadResponse {
   quest_goal?: string;
   total_tokens?: number;
   conversation_count?: number;
-  creation_params?: AdventureCreationParams;
-}
-
-export interface CreateGameParams {
-  player_name?: string;
-  player_description?: string;
-  player_age?: string;
-  player_backstory?: string;
-  theme_hint?: string;
-  preferences?: string[];
+  creation_params?: CharacterCreationData;
+  needs_character_reset?: boolean;
 }
 
 export interface CreateGameResponse {
@@ -57,7 +49,7 @@ export async function ListGames(): Promise<ListGamesResponse> {
 }
 
 export async function CreateGame(
-  params: CreateGameParams,
+  params: CharacterCreationData,
 ): Promise<CreateGameResponse> {
   const res = await POST<CreateGameResponse>("api/games", params);
   return res.data;
@@ -72,17 +64,10 @@ export async function DeleteGame(sessionId: string): Promise<void> {
   await DELETE(`api/games/${sessionId}`);
 }
 
-export interface JoinCharacterParams {
-  player_name?: string;
-  player_description?: string;
-  player_age?: string;
-  player_backstory?: string;
-}
-
-/** Update a joined party member's character stub with their actual character details. */
+/** Update a joined party member's character with their D&D creation data. */
 export async function JoinCharacter(
   sessionId: string,
-  params: JoinCharacterParams,
+  params: CharacterCreationData,
 ): Promise<{ session_id: string }> {
   const res = await POST<{ session_id: string }>(
     `api/games/${sessionId}/join-character`,

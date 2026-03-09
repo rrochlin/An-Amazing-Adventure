@@ -1,15 +1,18 @@
 package game
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/KirkDiggler/rpg-toolkit/events"
+	dnd5echar "github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/character"
 	"github.com/google/uuid"
 )
 
 // SchemaVersion is incremented whenever SaveState's structure changes
 // in a backward-incompatible way. FromSaveState handles migration from
 // older versions.
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 // AdventureCreationParams holds the player-provided setup choices that were
 // used when the game was created. All fields are optional — the AI fills in
@@ -25,36 +28,40 @@ type AdventureCreationParams struct {
 // Game is the in-memory representation of a live game session.
 // It is never stored directly; SaveState is the DynamoDB-serialisable form.
 type Game struct {
-	ID                string
-	OwnerID           string               // session owner — only they can delete
-	UserID            string               // preserved for backward compat (= OwnerID)
-	Players           map[string]Character // keyed by userID — all party members
-	PartySize         int                  // max party members (default 4)
-	InviteCode        string               // active invite code, if any
-	Rooms             map[string]Area      // keyed by room ID
-	Items             map[string]Item      // keyed by item ID — global item registry
-	NPCs              map[string]Character // keyed by character ID
-	Ready             bool
-	Version           int                     // optimistic locking counter, mirrors SaveState.Version
-	Title             string                  // adventure title from blueprint
-	Theme             string                  // world theme from blueprint
-	QuestGoal         string                  // win condition from blueprint
-	TotalTokens       int                     // cumulative Bedrock tokens used
-	ConversationCount int                     // number of completed narrator turns
-	CreationParams    AdventureCreationParams // player-supplied setup choices
+	ID                   string
+	OwnerID              string                          // session owner — only they can delete
+	UserID               string                          // preserved for backward compat (= OwnerID)
+	Players              map[string]Character            // keyed by userID — legacy (v1/v2) or stub for placement/items
+	DnDPlayers           map[string]*dnd5echar.Character // keyed by userID — full D&D 5e characters (v3+)
+	PartySize            int                             // max party members (default 4)
+	InviteCode           string                          // active invite code, if any
+	Rooms                map[string]Area                 // keyed by room ID
+	Items                map[string]Item                 // keyed by item ID — global item registry
+	NPCs                 map[string]Character            // keyed by character ID
+	Ready                bool
+	NeedsCharacterReset  bool                    // set on v1/v2 migration when characters can't be rebuilt
+	Version              int                     // optimistic locking counter, mirrors SaveState.Version
+	Title                string                  // adventure title from blueprint
+	Theme                string                  // world theme from blueprint
+	QuestGoal            string                  // win condition from blueprint
+	TotalTokens          int                     // cumulative Bedrock tokens used
+	ConversationCount    int                     // number of completed narrator turns
+	CreationParams       CharacterCreationData   // player-supplied setup choices (v3+)
+	LegacyCreationParams AdventureCreationParams // preserved for v1/v2 records
 }
 
 // NewGame creates a blank Game with server-generated IDs.
 func NewGame(sessionID, userID string) *Game {
 	return &Game{
-		ID:        sessionID,
-		OwnerID:   userID,
-		UserID:    userID,
-		Players:   make(map[string]Character),
-		PartySize: 4,
-		Rooms:     make(map[string]Area),
-		Items:     make(map[string]Item),
-		NPCs:      make(map[string]Character),
+		ID:         sessionID,
+		OwnerID:    userID,
+		UserID:     userID,
+		Players:    make(map[string]Character),
+		DnDPlayers: make(map[string]*dnd5echar.Character),
+		PartySize:  4,
+		Rooms:      make(map[string]Area),
+		Items:      make(map[string]Item),
+		NPCs:       make(map[string]Character),
 	}
 }
 
@@ -62,7 +69,7 @@ func NewGame(sessionID, userID string) *Game {
 // Party helpers
 // -------------------------------------------------------------------
 
-// GetPlayerCharacter returns the character for a specific user.
+// GetPlayerCharacter returns the legacy character stub for a specific user.
 // Returns zero-value Character and false if user is not in this game.
 func (g *Game) GetPlayerCharacter(userID string) (Character, bool) {
 	if g.Players == nil {
@@ -72,12 +79,30 @@ func (g *Game) GetPlayerCharacter(userID string) (Character, bool) {
 	return c, ok
 }
 
-// SetPlayerCharacter writes a character for a user.
+// SetPlayerCharacter writes a legacy character stub for a user.
 func (g *Game) SetPlayerCharacter(userID string, c Character) {
 	if g.Players == nil {
 		g.Players = make(map[string]Character)
 	}
 	g.Players[userID] = c
+}
+
+// GetDnDCharacter returns the full D&D 5e character for a specific user.
+// Returns nil and false if user has no DnD character yet.
+func (g *Game) GetDnDCharacter(userID string) (*dnd5echar.Character, bool) {
+	if g.DnDPlayers == nil {
+		return nil, false
+	}
+	c, ok := g.DnDPlayers[userID]
+	return c, ok
+}
+
+// SetDnDCharacter stores the full D&D 5e character for a user.
+func (g *Game) SetDnDCharacter(userID string, c *dnd5echar.Character) {
+	if g.DnDPlayers == nil {
+		g.DnDPlayers = make(map[string]*dnd5echar.Character)
+	}
+	g.DnDPlayers[userID] = c
 }
 
 // PlayerInGame returns true if the given user is a party member (owner or joined).
@@ -86,10 +111,28 @@ func (g *Game) PlayerInGame(userID string) bool {
 	return ok
 }
 
-// OwnerCharacter is a convenience accessor for the session owner's character.
+// OwnerCharacter is a convenience accessor for the session owner's legacy character stub.
 // Returns zero-value Character and false if the owner has no character yet.
 func (g *Game) OwnerCharacter() (Character, bool) {
 	return g.GetPlayerCharacter(g.OwnerID)
+}
+
+// OwnerDnDCharacter is a convenience accessor for the session owner's D&D character.
+func (g *Game) OwnerDnDCharacter() (*dnd5echar.Character, bool) {
+	return g.GetDnDCharacter(g.OwnerID)
+}
+
+// LoadDnDCharacters loads all DnD characters from their persisted Data forms
+// and binds them to a new event bus. Returns the characters and the bus.
+// Must be called at the start of every Lambda invocation that touches game state.
+func (g *Game) LoadDnDCharacters(ctx context.Context, playersData map[string]*dnd5echar.Data) (events.EventBus, error) {
+	bus := events.NewEventBus()
+	players, err := LoadDnDPlayers(ctx, bus, playersData)
+	if err != nil {
+		return nil, err
+	}
+	g.DnDPlayers = players
+	return bus, nil
 }
 
 // -------------------------------------------------------------------
@@ -494,27 +537,29 @@ func (g *Game) PlaceCharacter(userID, roomID string) error {
 
 // SaveState is the DynamoDB-serialisable snapshot of a Game.
 type SaveState struct {
-	SessionID         string                  `json:"session_id" dynamodbav:"session_id"`
-	OwnerID           string                  `json:"owner_id,omitempty" dynamodbav:"owner_id,omitempty"`
-	UserID            string                  `json:"user_id" dynamodbav:"user_id"` // preserved for backward compat
-	SchemaVersion     int                     `json:"schema_version" dynamodbav:"schema_version"`
-	Version           int                     `json:"version" dynamodbav:"version"`                     // optimistic lock
-	Players           map[string]Character    `json:"players,omitempty" dynamodbav:"players,omitempty"` // v2+: keyed by userID
-	Player            Character               `json:"player,omitempty" dynamodbav:"player,omitempty"`   // v1 compat only
-	PartySize         int                     `json:"party_size,omitempty" dynamodbav:"party_size,omitempty"`
-	InviteCode        string                  `json:"invite_code,omitempty" dynamodbav:"invite_code,omitempty"`
-	Rooms             []Area                  `json:"rooms" dynamodbav:"rooms"`
-	Items             []Item                  `json:"items" dynamodbav:"items"`
-	NPCs              []Character             `json:"npcs" dynamodbav:"npcs"`
-	Narrative         []NarrativeMessage      `json:"narrative" dynamodbav:"narrative"`
-	ChatHistory       []ChatMessage           `json:"chat_history" dynamodbav:"chat_history"`
-	Ready             bool                    `json:"ready" dynamodbav:"ready"`
-	Title             string                  `json:"title,omitempty" dynamodbav:"title,omitempty"`
-	Theme             string                  `json:"theme,omitempty" dynamodbav:"theme,omitempty"`
-	QuestGoal         string                  `json:"quest_goal,omitempty" dynamodbav:"quest_goal,omitempty"`
-	TotalTokens       int                     `json:"total_tokens,omitempty" dynamodbav:"total_tokens,omitempty"`
-	ConversationCount int                     `json:"conversation_count,omitempty" dynamodbav:"conversation_count,omitempty"`
-	CreationParams    AdventureCreationParams `json:"creation_params,omitempty" dynamodbav:"creation_params,omitempty"`
+	SessionID            string                     `json:"session_id" dynamodbav:"session_id"`
+	OwnerID              string                     `json:"owner_id,omitempty" dynamodbav:"owner_id,omitempty"`
+	UserID               string                     `json:"user_id" dynamodbav:"user_id"` // preserved for backward compat
+	SchemaVersion        int                        `json:"schema_version" dynamodbav:"schema_version"`
+	Version              int                        `json:"version" dynamodbav:"version"`                               // optimistic lock
+	Players              map[string]Character       `json:"players,omitempty" dynamodbav:"players,omitempty"`           // v2: keyed by userID (legacy stubs)
+	PlayersData          map[string]*dnd5echar.Data `json:"players_data,omitempty" dynamodbav:"players_data,omitempty"` // v3+: full D&D 5e character data
+	Player               Character                  `json:"player,omitempty" dynamodbav:"player,omitempty"`             // v1 compat only
+	PartySize            int                        `json:"party_size,omitempty" dynamodbav:"party_size,omitempty"`
+	InviteCode           string                     `json:"invite_code,omitempty" dynamodbav:"invite_code,omitempty"`
+	Rooms                []Area                     `json:"rooms" dynamodbav:"rooms"`
+	Items                []Item                     `json:"items" dynamodbav:"items"`
+	NPCs                 []Character                `json:"npcs" dynamodbav:"npcs"`
+	Narrative            []NarrativeMessage         `json:"narrative" dynamodbav:"narrative"`
+	ChatHistory          []ChatMessage              `json:"chat_history" dynamodbav:"chat_history"`
+	Ready                bool                       `json:"ready" dynamodbav:"ready"`
+	Title                string                     `json:"title,omitempty" dynamodbav:"title,omitempty"`
+	Theme                string                     `json:"theme,omitempty" dynamodbav:"theme,omitempty"`
+	QuestGoal            string                     `json:"quest_goal,omitempty" dynamodbav:"quest_goal,omitempty"`
+	TotalTokens          int                        `json:"total_tokens,omitempty" dynamodbav:"total_tokens,omitempty"`
+	ConversationCount    int                        `json:"conversation_count,omitempty" dynamodbav:"conversation_count,omitempty"`
+	CreationParams       CharacterCreationData      `json:"creation_params,omitempty" dynamodbav:"creation_params,omitempty"`               // v3+
+	LegacyCreationParams AdventureCreationParams    `json:"legacy_creation_params,omitempty" dynamodbav:"legacy_creation_params,omitempty"` // v1/v2 only
 }
 
 // NarrativeMessage stores a single turn of Bedrock conversation history.
@@ -569,33 +614,45 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 	for _, n := range g.NPCs {
 		npcs = append(npcs, n)
 	}
+
+	// Serialize DnD characters to Data for persistence
+	playersData := make(map[string]*dnd5echar.Data, len(g.DnDPlayers))
+	for uid, char := range g.DnDPlayers {
+		if char != nil {
+			playersData[uid] = char.ToData()
+		}
+	}
+
 	return SaveState{
-		SessionID:         g.ID,
-		OwnerID:           g.OwnerID,
-		UserID:            g.UserID,
-		SchemaVersion:     SchemaVersion,
-		Version:           g.Version,
-		Players:           g.Players,
-		PartySize:         g.PartySize,
-		InviteCode:        g.InviteCode,
-		Rooms:             rooms,
-		Items:             items,
-		NPCs:              npcs,
-		Narrative:         narrative,
-		ChatHistory:       history,
-		Ready:             g.Ready,
-		Title:             g.Title,
-		Theme:             g.Theme,
-		QuestGoal:         g.QuestGoal,
-		TotalTokens:       g.TotalTokens,
-		ConversationCount: g.ConversationCount,
-		CreationParams:    g.CreationParams,
+		SessionID:            g.ID,
+		OwnerID:              g.OwnerID,
+		UserID:               g.UserID,
+		SchemaVersion:        SchemaVersion,
+		Version:              g.Version,
+		Players:              g.Players,
+		PlayersData:          playersData,
+		PartySize:            g.PartySize,
+		InviteCode:           g.InviteCode,
+		Rooms:                rooms,
+		Items:                items,
+		NPCs:                 npcs,
+		Narrative:            narrative,
+		ChatHistory:          history,
+		Ready:                g.Ready,
+		Title:                g.Title,
+		Theme:                g.Theme,
+		QuestGoal:            g.QuestGoal,
+		TotalTokens:          g.TotalTokens,
+		ConversationCount:    g.ConversationCount,
+		CreationParams:       g.CreationParams,
+		LegacyCreationParams: g.LegacyCreationParams,
 	}
 }
 
-// FromSaveState restores a Game from a SaveState.
-// Supports schema version 1 (solo) and 2 (party). Returns error for unknown
-// future versions.
+// FromSaveState restores a Game from a SaveState (without loading DnD characters).
+// DnD characters must be loaded separately via g.LoadDnDCharacters() to bind
+// an event bus. This two-step design avoids context/bus passing here.
+// Supports schema versions 1–3. Returns error for unknown future versions.
 func FromSaveState(s SaveState) (*Game, error) {
 	if s.SchemaVersion > SchemaVersion {
 		return nil, fmt.Errorf("unsupported schema version %d (current: %d)", s.SchemaVersion, SchemaVersion)
@@ -609,32 +666,50 @@ func FromSaveState(s SaveState) (*Game, error) {
 		partySize = 4 // default
 	}
 	g := &Game{
-		ID:                s.SessionID,
-		OwnerID:           ownerID,
-		UserID:            s.UserID,
-		PartySize:         partySize,
-		InviteCode:        s.InviteCode,
-		Ready:             s.Ready,
-		Version:           s.Version,
-		Rooms:             make(map[string]Area, len(s.Rooms)),
-		Items:             make(map[string]Item, len(s.Items)),
-		NPCs:              make(map[string]Character, len(s.NPCs)),
-		Title:             s.Title,
-		Theme:             s.Theme,
-		QuestGoal:         s.QuestGoal,
-		TotalTokens:       s.TotalTokens,
-		ConversationCount: s.ConversationCount,
-		CreationParams:    s.CreationParams,
+		ID:                   s.SessionID,
+		OwnerID:              ownerID,
+		UserID:               s.UserID,
+		PartySize:            partySize,
+		InviteCode:           s.InviteCode,
+		Ready:                s.Ready,
+		Version:              s.Version,
+		DnDPlayers:           make(map[string]*dnd5echar.Character),
+		Rooms:                make(map[string]Area, len(s.Rooms)),
+		Items:                make(map[string]Item, len(s.Items)),
+		NPCs:                 make(map[string]Character, len(s.NPCs)),
+		Title:                s.Title,
+		Theme:                s.Theme,
+		QuestGoal:            s.QuestGoal,
+		TotalTokens:          s.TotalTokens,
+		ConversationCount:    s.ConversationCount,
+		CreationParams:       s.CreationParams,
+		LegacyCreationParams: s.LegacyCreationParams,
 	}
-	// v1 had a single Player field; migrate it into the Players map.
-	if s.SchemaVersion <= 1 {
+
+	switch {
+	case s.SchemaVersion <= 1:
+		// v1: single Player field → Players map; flag for character reset
 		g.Players = map[string]Character{ownerID: s.Player}
-	} else {
+		g.NeedsCharacterReset = true
+		// Preserve legacy creation params for display
+		g.LegacyCreationParams = s.LegacyCreationParams
+	case s.SchemaVersion == 2:
+		// v2: Players map[string]game.Character — no D&D model, flag for reset
 		g.Players = s.Players
 		if g.Players == nil {
 			g.Players = make(map[string]Character)
 		}
+		g.NeedsCharacterReset = true
+	default:
+		// v3+: full D&D characters stored in PlayersData; Players kept as stubs for
+		// room placement / movement tracking (LocationID lives on the legacy Character).
+		g.Players = s.Players
+		if g.Players == nil {
+			g.Players = make(map[string]Character)
+		}
+		// DnD characters are loaded lazily via LoadDnDCharacters() to bind event bus.
 	}
+
 	for _, r := range s.Rooms {
 		g.Rooms[r.ID] = r
 	}
@@ -688,6 +763,18 @@ type EquipmentView struct {
 	Back  *ItemView `json:"back,omitempty"`
 }
 
+// DnDStatsView holds the D&D 5e mechanical stats shown on the client.
+type DnDStatsView struct {
+	ClassID     string         `json:"class_id"`
+	RaceID      string         `json:"race_id"`
+	Level       int            `json:"level"`
+	MaxHP       int            `json:"max_hp"`
+	AC          int            `json:"ac"`
+	Speed       int            `json:"speed"`
+	Proficiency int            `json:"proficiency_bonus"`
+	Abilities   map[string]int `json:"abilities"` // "str","dex","con","int","wis","cha" → score
+}
+
 // CharacterView is the client-facing representation of a character.
 type CharacterView struct {
 	ID          string        `json:"id"`
@@ -698,6 +785,8 @@ type CharacterView struct {
 	Friendly    bool          `json:"friendly"`
 	Inventory   []ItemView    `json:"inventory"`
 	Equipment   EquipmentView `json:"equipment"`
+	// D&D 5e stats — populated when character was created via CharacterCreationData
+	DnD *DnDStatsView `json:"dnd,omitempty"`
 }
 
 // GameStateView is the full snapshot sent to the client on load or update.
@@ -711,8 +800,14 @@ type GameStateView struct {
 	ChatHistory []ChatMessage       `json:"chat_history"`
 }
 
-// buildCharacterView constructs a CharacterView for a given character.
+// buildCharacterView constructs a CharacterView for a given legacy character stub.
 func (g *Game) buildCharacterView(c Character) CharacterView {
+	return g.buildCharacterViewWithDnD(c, nil)
+}
+
+// buildCharacterViewWithDnD constructs a CharacterView, optionally merging
+// D&D 5e stats from a loaded character.
+func (g *Game) buildCharacterViewWithDnD(c Character, dnd *dnd5echar.Character) CharacterView {
 	resolveItems := func(ids []string) []ItemView {
 		views := make([]ItemView, 0, len(ids))
 		for _, id := range ids {
@@ -744,7 +839,8 @@ func (g *Game) buildCharacterView(c Character) CharacterView {
 		}
 		return nil
 	}
-	return CharacterView{
+
+	view := CharacterView{
 		ID:          c.ID,
 		Name:        c.Name,
 		Description: c.Description,
@@ -761,6 +857,33 @@ func (g *Game) buildCharacterView(c Character) CharacterView {
 			Back:  resolveSlot(c.Equipment.Back),
 		},
 	}
+
+	// Overlay D&D 5e stats if available
+	if dnd != nil {
+		data := dnd.ToData()
+		view.Health = dnd.GetHitPoints()
+		view.Alive = dnd.GetHitPoints() > 0
+		abilities := map[string]int{
+			"str": data.AbilityScores["str"],
+			"dex": data.AbilityScores["dex"],
+			"con": data.AbilityScores["con"],
+			"int": data.AbilityScores["int"],
+			"wis": data.AbilityScores["wis"],
+			"cha": data.AbilityScores["cha"],
+		}
+		view.DnD = &DnDStatsView{
+			ClassID:     string(data.ClassID),
+			RaceID:      string(data.RaceID),
+			Level:       data.Level,
+			MaxHP:       data.MaxHitPoints,
+			AC:          dnd.AC(),
+			Speed:       dnd.GetSpeed(),
+			Proficiency: data.ProficiencyBonus,
+			Abilities:   abilities,
+		}
+	}
+
+	return view
 }
 
 // BuildGameStateView constructs a full snapshot from the Game for a specific
@@ -786,14 +909,16 @@ func (g *Game) BuildGameStateView(callerUserID string, history []ChatMessage) Ga
 	if !ok {
 		caller, _ = g.OwnerCharacter()
 	}
-	selfView := g.buildCharacterView(caller)
+	callerDnD, _ := g.GetDnDCharacter(callerUserID)
+	selfView := g.buildCharacterViewWithDnD(caller, callerDnD)
 
 	party := make([]CharacterView, 0, len(g.Players)-1)
 	for uid, char := range g.Players {
 		if uid == callerUserID {
 			continue
 		}
-		party = append(party, g.buildCharacterView(char))
+		memberDnD, _ := g.GetDnDCharacter(uid)
+		party = append(party, g.buildCharacterViewWithDnD(char, memberDnD))
 	}
 
 	roomViews := make(map[string]RoomView, len(g.Rooms))

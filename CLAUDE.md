@@ -132,6 +132,32 @@ Bare model IDs without prefix are rejected with `ValidationException`.
 
 ## Working Process
 
+### Starting a new phase — MANDATORY first step
+**Before creating a feature branch or writing any code, always sync with the remote:**
+
+```bash
+git fetch origin
+git log --oneline origin/main -5   # confirm any recently merged PRs are visible
+git checkout -b feat/<phase-name> origin/main
+```
+
+**Why this matters:** If a previous PR was merged while the last session was running, your local `main` is stale. Starting a branch from stale `main` means your Phase N branch includes Phase N-1 commits. When you later rebase/PR, git sees those commits as divergent (not as the squash-merge from main) and either raises conflicts or duplicates the work.
+
+**If you forgot and already have commits on a stale branch:**
+```bash
+# Identify your Phase N-only commits (the ones NOT in origin/main)
+git log --oneline origin/main..HEAD
+
+# Create a clean branch and cherry-pick only your commits
+git checkout -b feat/<phase-name>-rebased origin/main
+git cherry-pick <sha1> <sha2> ...   # your Phase N commits only
+
+# Push and open a new PR; close the stale one
+git push -u origin feat/<phase-name>-rebased
+gh pr close <old-pr-number> --comment "Superseded by rebased branch"
+gh pr create ...
+```
+
 ### Commit cadence
 **Commit early and often — do not accumulate a large diff before committing.**
 

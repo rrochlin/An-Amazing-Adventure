@@ -56,6 +56,13 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
+	// Load D&D characters for this invocation (binds a fresh event bus)
+	if saveState.PlayersData != nil {
+		if _, loadErr := g.LoadDnDCharacters(ctx, saveState.PlayersData); loadErr != nil {
+			log.Printf("ws-game-action: LoadDnDCharacters (non-fatal): %v", loadErr)
+		}
+	}
+
 	ws, err := wsutil.New(ctx)
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil

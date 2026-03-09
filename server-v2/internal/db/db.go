@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	dnd5echar "github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/character"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -97,78 +98,84 @@ func (c *Client) requireMembershipsTable() {
 // saveStateDB is a DynamoDB-specific wrapper around game.SaveState that
 // overrides the key fields to marshal as Binary (B), matching the table schema.
 type saveStateDB struct {
-	SessionID         BinaryID                     `dynamodbav:"session_id"`
-	OwnerID           BinaryID                     `dynamodbav:"owner_id,omitempty"`
-	UserID            BinaryID                     `dynamodbav:"user_id"`
-	SchemaVersion     int                          `dynamodbav:"schema_version"`
-	Version           int                          `dynamodbav:"version"`
-	Players           map[string]game.Character    `dynamodbav:"players,omitempty"`
-	Player            game.Character               `dynamodbav:"player,omitempty"` // v1 compat
-	PartySize         int                          `dynamodbav:"party_size,omitempty"`
-	InviteCode        string                       `dynamodbav:"invite_code,omitempty"`
-	Rooms             []game.Area                  `dynamodbav:"rooms"`
-	Items             []game.Item                  `dynamodbav:"items"`
-	NPCs              []game.Character             `dynamodbav:"npcs"`
-	Narrative         []game.NarrativeMessage      `dynamodbav:"narrative"`
-	ChatHistory       []game.ChatMessage           `dynamodbav:"chat_history"`
-	Ready             bool                         `dynamodbav:"ready"`
-	Title             string                       `dynamodbav:"title,omitempty"`
-	Theme             string                       `dynamodbav:"theme,omitempty"`
-	QuestGoal         string                       `dynamodbav:"quest_goal,omitempty"`
-	TotalTokens       int                          `dynamodbav:"total_tokens,omitempty"`
-	ConversationCount int                          `dynamodbav:"conversation_count,omitempty"`
-	CreationParams    game.AdventureCreationParams `dynamodbav:"creation_params,omitempty"`
+	SessionID            BinaryID                     `dynamodbav:"session_id"`
+	OwnerID              BinaryID                     `dynamodbav:"owner_id,omitempty"`
+	UserID               BinaryID                     `dynamodbav:"user_id"`
+	SchemaVersion        int                          `dynamodbav:"schema_version"`
+	Version              int                          `dynamodbav:"version"`
+	Players              map[string]game.Character    `dynamodbav:"players,omitempty"`
+	PlayersData          map[string]*dnd5echar.Data   `dynamodbav:"players_data,omitempty"` // v3+
+	Player               game.Character               `dynamodbav:"player,omitempty"`       // v1 compat
+	PartySize            int                          `dynamodbav:"party_size,omitempty"`
+	InviteCode           string                       `dynamodbav:"invite_code,omitempty"`
+	Rooms                []game.Area                  `dynamodbav:"rooms"`
+	Items                []game.Item                  `dynamodbav:"items"`
+	NPCs                 []game.Character             `dynamodbav:"npcs"`
+	Narrative            []game.NarrativeMessage      `dynamodbav:"narrative"`
+	ChatHistory          []game.ChatMessage           `dynamodbav:"chat_history"`
+	Ready                bool                         `dynamodbav:"ready"`
+	Title                string                       `dynamodbav:"title,omitempty"`
+	Theme                string                       `dynamodbav:"theme,omitempty"`
+	QuestGoal            string                       `dynamodbav:"quest_goal,omitempty"`
+	TotalTokens          int                          `dynamodbav:"total_tokens,omitempty"`
+	ConversationCount    int                          `dynamodbav:"conversation_count,omitempty"`
+	CreationParams       game.CharacterCreationData   `dynamodbav:"creation_params,omitempty"`        // v3+
+	LegacyCreationParams game.AdventureCreationParams `dynamodbav:"legacy_creation_params,omitempty"` // v1/v2
 }
 
 func toDBState(s game.SaveState) saveStateDB {
 	return saveStateDB{
-		SessionID:         BinaryID(s.SessionID),
-		OwnerID:           BinaryID(s.OwnerID),
-		UserID:            BinaryID(s.UserID),
-		SchemaVersion:     s.SchemaVersion,
-		Version:           s.Version,
-		Players:           s.Players,
-		Player:            s.Player,
-		PartySize:         s.PartySize,
-		InviteCode:        s.InviteCode,
-		Rooms:             s.Rooms,
-		Items:             s.Items,
-		NPCs:              s.NPCs,
-		Narrative:         s.Narrative,
-		ChatHistory:       s.ChatHistory,
-		Ready:             s.Ready,
-		Title:             s.Title,
-		Theme:             s.Theme,
-		QuestGoal:         s.QuestGoal,
-		TotalTokens:       s.TotalTokens,
-		ConversationCount: s.ConversationCount,
-		CreationParams:    s.CreationParams,
+		SessionID:            BinaryID(s.SessionID),
+		OwnerID:              BinaryID(s.OwnerID),
+		UserID:               BinaryID(s.UserID),
+		SchemaVersion:        s.SchemaVersion,
+		Version:              s.Version,
+		Players:              s.Players,
+		PlayersData:          s.PlayersData,
+		Player:               s.Player,
+		PartySize:            s.PartySize,
+		InviteCode:           s.InviteCode,
+		Rooms:                s.Rooms,
+		Items:                s.Items,
+		NPCs:                 s.NPCs,
+		Narrative:            s.Narrative,
+		ChatHistory:          s.ChatHistory,
+		Ready:                s.Ready,
+		Title:                s.Title,
+		Theme:                s.Theme,
+		QuestGoal:            s.QuestGoal,
+		TotalTokens:          s.TotalTokens,
+		ConversationCount:    s.ConversationCount,
+		CreationParams:       s.CreationParams,
+		LegacyCreationParams: s.LegacyCreationParams,
 	}
 }
 
 func fromDBState(d saveStateDB) game.SaveState {
 	return game.SaveState{
-		SessionID:         string(d.SessionID),
-		OwnerID:           string(d.OwnerID),
-		UserID:            string(d.UserID),
-		SchemaVersion:     d.SchemaVersion,
-		Version:           d.Version,
-		Players:           d.Players,
-		Player:            d.Player,
-		PartySize:         d.PartySize,
-		InviteCode:        d.InviteCode,
-		Rooms:             d.Rooms,
-		Items:             d.Items,
-		NPCs:              d.NPCs,
-		Narrative:         d.Narrative,
-		ChatHistory:       d.ChatHistory,
-		Ready:             d.Ready,
-		Title:             d.Title,
-		Theme:             d.Theme,
-		QuestGoal:         d.QuestGoal,
-		TotalTokens:       d.TotalTokens,
-		ConversationCount: d.ConversationCount,
-		CreationParams:    d.CreationParams,
+		SessionID:            string(d.SessionID),
+		OwnerID:              string(d.OwnerID),
+		UserID:               string(d.UserID),
+		SchemaVersion:        d.SchemaVersion,
+		Version:              d.Version,
+		Players:              d.Players,
+		PlayersData:          d.PlayersData,
+		Player:               d.Player,
+		PartySize:            d.PartySize,
+		InviteCode:           d.InviteCode,
+		Rooms:                d.Rooms,
+		Items:                d.Items,
+		NPCs:                 d.NPCs,
+		Narrative:            d.Narrative,
+		ChatHistory:          d.ChatHistory,
+		Ready:                d.Ready,
+		Title:                d.Title,
+		Theme:                d.Theme,
+		QuestGoal:            d.QuestGoal,
+		TotalTokens:          d.TotalTokens,
+		ConversationCount:    d.ConversationCount,
+		CreationParams:       d.CreationParams,
+		LegacyCreationParams: d.LegacyCreationParams,
 	}
 }
 

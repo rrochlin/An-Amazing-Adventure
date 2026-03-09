@@ -1,11 +1,36 @@
 // Core domain types — mirror the server-v2 game engine view models.
 
+// Legacy creation params (v1/v2 records)
 export interface AdventureCreationParams {
   player_description?: string;
   player_age?: string;
   player_backstory?: string;
   theme_hint?: string;
   preferences?: string[];
+}
+
+// D&D 5e character creation data (v3+)
+export interface CharacterCreationData {
+  name: string;
+  race_id: string;          // e.g. "dwarf"
+  subrace_id?: string;      // e.g. "hill-dwarf"
+  class_id: string;         // "barbarian" | "fighter" | "monk"
+  ability_scores: Record<string, number>; // "str","dex","con","int","wis","cha" -> value
+  selected_skills: string[];
+  theme_hint?: string;
+  preferences?: string[];
+}
+
+// D&D 5e mechanical stats returned in CharacterView
+export interface DnDStatsView {
+  class_id: string;
+  race_id: string;
+  level: number;
+  max_hp: number;
+  ac: number;
+  speed: number;
+  proficiency_bonus: number;
+  abilities: Record<string, number>; // "str","dex","con","int","wis","cha" -> score
 }
 
 export interface Coordinates {
@@ -41,6 +66,7 @@ export interface CharacterView {
   friendly: boolean;
   inventory: ItemView[];
   equipment: EquipmentView;
+  dnd?: DnDStatsView; // present for v3+ characters
 }
 
 export interface RoomView {

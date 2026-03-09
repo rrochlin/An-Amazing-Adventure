@@ -19,9 +19,11 @@ import (
 )
 
 type worldGenEvent struct {
-	SessionID         string   `json:"session_id"`
-	UserID            string   `json:"user_id"`
-	PlayerName        string   `json:"player_name"`
+	SessionID      string                     `json:"session_id"`
+	UserID         string                     `json:"user_id"`
+	CreationParams game.CharacterCreationData `json:"creation_params"`
+	// Legacy fields — preserved for backward-compat
+	PlayerName        string   `json:"player_name,omitempty"`
 	PlayerDescription string   `json:"player_description,omitempty"`
 	PlayerAge         string   `json:"player_age,omitempty"`
 	PlayerBackstory   string   `json:"player_backstory,omitempty"`
@@ -107,14 +109,32 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	emit(fmt.Sprintf("Quest: %s", blueprint.QuestGoal))
 
 	// If the AI invented a player name (player left it blank), write it back.
+	// Load DnD players from SaveState so they survive the save at the end
+	if saveState.PlayersData != nil {
+		bus, loadErr := g.LoadDnDCharacters(ctx, saveState.PlayersData)
+		if loadErr != nil {
+			log.Printf("world-gen: LoadDnDCharacters (non-fatal): %v", loadErr)
+		} else {
+			_ = bus
+		}
+	}
+
 	// Apply player-supplied character details (may override stub values).
 	owner, hasOwner := g.GetPlayerCharacter(g.OwnerID)
 	if !hasOwner {
 		owner = game.NewCharacter("Adventurer", "")
 	}
-	if evt.PlayerName == "" && blueprint.PlayerName != "" {
-		owner.Name = blueprint.PlayerName
-		emit(fmt.Sprintf("Character named: %q", blueprint.PlayerName))
+	// Resolve player name: prefer creation params, then blueprint, then legacy fields
+	playerName := evt.CreationParams.Name
+	if playerName == "" {
+		playerName = evt.PlayerName
+	}
+	if playerName == "" && blueprint.PlayerName != "" {
+		playerName = blueprint.PlayerName
+		emit(fmt.Sprintf("Character named by Architect: %q", blueprint.PlayerName))
+	}
+	if playerName != "" {
+		owner.Name = playerName
 	}
 	if evt.PlayerDescription != "" {
 		owner.Description = evt.PlayerDescription
@@ -164,12 +184,23 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	g.Theme = blueprint.Theme
 	g.QuestGoal = blueprint.QuestGoal
 	g.TotalTokens = blueprintTokens.Total()
-	g.CreationParams = game.AdventureCreationParams{
-		PlayerDescription: evt.PlayerDescription,
-		PlayerAge:         evt.PlayerAge,
-		PlayerBackstory:   evt.PlayerBackstory,
-		ThemeHint:         evt.ThemeHint,
-		Preferences:       evt.Preferences,
+	// Preserve creation params — use the v3 struct if present, else build from legacy fields
+	if evt.CreationParams.ClassID != "" || evt.CreationParams.RaceID != "" {
+		g.CreationParams = evt.CreationParams
+	} else {
+		// Backward-compat: wrap legacy fields into CharacterCreationData
+		g.CreationParams = game.CharacterCreationData{
+			Name:        evt.PlayerName,
+			ThemeHint:   evt.ThemeHint,
+			Preferences: evt.Preferences,
+		}
+		g.LegacyCreationParams = game.AdventureCreationParams{
+			PlayerDescription: evt.PlayerDescription,
+			PlayerAge:         evt.PlayerAge,
+			PlayerBackstory:   evt.PlayerBackstory,
+			ThemeHint:         evt.ThemeHint,
+			Preferences:       evt.Preferences,
+		}
 	}
 	saved := g.ToSaveState(openingNarrative, openingHistory)
 
