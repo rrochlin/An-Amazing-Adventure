@@ -12,6 +12,7 @@ export interface AdventureCreationParams {
 // D&D 5e character creation data (v3+)
 export interface CharacterCreationData {
   name: string;
+  backstory?: string;        // optional 2-3 sentence character backstory
   race_id: string;          // e.g. "dwarf"
   subrace_id?: string;      // e.g. "hill-dwarf"
   class_id: string;         // "barbarian" | "fighter" | "monk"
