@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
 func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -22,6 +23,9 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	gameID := req.QueryStringParameters["gameId"]
 	if token == "" {
 		return reject(401, "missing token"), nil
+	}
+	if gameID == "" {
+		return reject(400, "missing gameId"), nil
 	}
 
 	userID, err := validateCognitoToken(token)
@@ -36,10 +40,21 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return reject(500, "internal error"), nil
 	}
 
-	// Enforce one connection per user — delete any existing connections
-	if err := dbClient.DeleteUserConnections(ctx, userID); err != nil {
-		log.Printf("ws-connect: cleanup old connections: %v", err)
-		// Non-fatal — proceed
+	// Authorize: caller must be owner or a party member of the session.
+	saveState, err := dbClient.GetGame(ctx, gameID)
+	if err != nil {
+		log.Printf("ws-connect: get game %s: %v", gameID, err)
+		return reject(404, "game not found"), nil
+	}
+	if !isAuthorizedForSession(saveState, userID) {
+		log.Printf("ws-connect: user %s not authorized for game %s", userID, gameID)
+		return reject(403, "forbidden"), nil
+	}
+
+	// Scoped cleanup: remove any stale connection for this (user, game) pair only.
+	// This allows a user to maintain connections to multiple different sessions.
+	if err := dbClient.DeleteUserConnectionForGame(ctx, userID, gameID); err != nil {
+		log.Printf("ws-connect: cleanup stale connection (non-fatal): %v", err)
 	}
 
 	conn := db.Connection{
@@ -56,6 +71,20 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 	log.Printf("ws-connect: user %s connected (%s), game %s", userID, req.RequestContext.ConnectionID, gameID)
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+// isAuthorizedForSession returns true if userID is the owner or a party member
+// of the given session.
+func isAuthorizedForSession(ss game.SaveState, userID string) bool {
+	if ss.UserID == userID || ss.OwnerID == userID {
+		return true
+	}
+	if ss.Players != nil {
+		if _, ok := ss.Players[userID]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func reject(code int, msg string) events.APIGatewayProxyResponse {

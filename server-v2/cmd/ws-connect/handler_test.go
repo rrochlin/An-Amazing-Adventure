@@ -55,7 +55,7 @@ func TestHandlerConnect_MissingToken(t *testing.T) {
 }
 
 func TestHandlerConnect_MalformedToken(t *testing.T) {
-	req := makeWSReq("conn-1", map[string]string{"token": "not-a-jwt"})
+	req := makeWSReq("conn-1", map[string]string{"token": "not-a-jwt", "gameId": "game-uuid"})
 	resp, err := handler(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -70,7 +70,7 @@ func TestHandlerConnect_ExpiredToken(t *testing.T) {
 	// Header: {"alg":"HS256","typ":"JWT"}
 	// Payload: {"sub":"user-123","exp":1000000000}  (year 2001 - definitely expired)
 	expiredToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEyMyIsImV4cCI6MTAwMDAwMDAwMH0.signature"
-	req := makeWSReq("conn-1", map[string]string{"token": expiredToken})
+	req := makeWSReq("conn-1", map[string]string{"token": expiredToken, "gameId": "game-uuid"})
 	resp, err := handler(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -103,33 +103,30 @@ func TestHandlerConnect_ValidTokenFormat_ReachesDB(t *testing.T) {
 }
 
 // ---- Required env var tests ----
-// ws-connect only touches the connections table — SESSIONS_TABLE is not required
-// at runtime (though Terraform sets it for consistency). CONNECTIONS_TABLE is required.
+// ws-connect now reads the sessions table (for auth) before writing to connections.
+// Both SESSIONS_TABLE and CONNECTIONS_TABLE must be set.
 
-func TestHandlerConnect_MissingCONNECTIONS_TABLE_Panics(t *testing.T) {
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
+func TestHandlerConnect_MissingSESSIONS_TABLE_Panics(t *testing.T) {
+	t.Setenv("CONNECTIONS_TABLE", "test-connections")
 	t.Setenv("USER_POOL_ID", "us-west-2_test")
 	validToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLWFiYyIsImV4cCI6OTk5OTk5OTk5OX0.signature"
 	req := makeWSReq("conn-1", map[string]string{"token": validToken, "gameId": "g"})
-	assertPanicsWithEnvAbsent(t, "CONNECTIONS_TABLE", func() {
+	assertPanicsWithEnvAbsent(t, "SESSIONS_TABLE", func() {
 		handler(context.Background(), req) //nolint:errcheck
 	})
 }
 
-func TestHandlerConnect_NoCONNECTIONS_TABLE_Panics_Without_SESSIONS_TABLE(t *testing.T) {
-	// Verify SESSIONS_TABLE absent does NOT cause a panic in ws-connect
-	// (it only writes connection records, never reads sessions).
-	t.Setenv("CONNECTIONS_TABLE", "test-connections")
-	t.Setenv("USER_POOL_ID", "us-west-2_test")
-	t.Setenv("SESSIONS_TABLE", "") // explicitly absent
+// TestHandlerConnect_MissingGameId verifies we reject connections without a gameId.
+func TestHandlerConnect_MissingGameId(t *testing.T) {
 	validToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLWFiYyIsImV4cCI6OTk5OTk5OTk5OX0.signature"
-	req := makeWSReq("conn-1", map[string]string{"token": validToken, "gameId": "g"})
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("ws-connect panicked with SESSIONS_TABLE absent: %v", r)
-		}
-	}()
-	handler(context.Background(), req) //nolint:errcheck
+	req := makeWSReq("conn-1", map[string]string{"token": validToken}) // no gameId
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		t.Errorf("expected 400 for missing gameId, got %d", resp.StatusCode)
+	}
 }
 
 // ---- validateCognitoToken unit tests ----

@@ -142,9 +142,22 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
-	// Send full state update after any direct action
-	stateView := g.BuildGameStateView(userID, saveState.ChatHistory)
-	_ = ws.SendFullState(ctx, connID, stateView)
+	// Broadcast per-member state update to all connected party members
+	allConns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	if len(allConns) == 0 {
+		// Fallback: send only to the requesting connection
+		stateView := g.BuildGameStateView(userID, saveState.ChatHistory)
+		_ = ws.SendFullState(ctx, connID, stateView)
+	} else {
+		for _, gc := range allConns {
+			memberUID := string(gc.UserID)
+			memberView := g.BuildGameStateView(memberUID, saveState.ChatHistory)
+			if sendErr := ws.SendFullState(ctx, gc.ConnectionID, memberView); sendErr != nil {
+				log.Printf("ws-game-action: send state to %s: %v", gc.ConnectionID, sendErr)
+				_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)
+			}
+		}
+	}
 
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }

@@ -58,6 +58,60 @@ func (c *Client) GetMembershipsByUser(ctx context.Context, userID string) ([]Mem
 	return records, nil
 }
 
+// GetMemberSessions returns all session IDs the user belongs to (owned + joined).
+func (c *Client) GetMemberSessions(ctx context.Context, userID string) ([]string, error) {
+	records, err := c.GetMembershipsByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(records))
+	for _, r := range records {
+		ids = append(ids, string(r.SessionID))
+	}
+	return ids, nil
+}
+
+// GetSessionMembers returns all membership records for a session.
+// Uses the session-members-index GSI on the memberships table.
+func (c *Client) GetSessionMembers(ctx context.Context, sessionID string) ([]MembershipRecord, error) {
+	c.requireMembershipsTable()
+	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(c.membershipsTable),
+		IndexName:              aws.String("session-members-index"),
+		KeyConditionExpression: aws.String("session_id = :sid"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":sid": binaryIDVal(sessionID),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("GetSessionMembers: %w", err)
+	}
+	members := make([]MembershipRecord, 0, len(out.Items))
+	for _, item := range out.Items {
+		var m MembershipRecord
+		if err := attributevalue.UnmarshalMap(item, &m); err != nil {
+			continue
+		}
+		members = append(members, m)
+	}
+	return members, nil
+}
+
+// DeleteMembership removes a single membership record.
+func (c *Client) DeleteMembership(ctx context.Context, userID, sessionID string) error {
+	c.requireMembershipsTable()
+	uk := marshalBinaryKey("user_id", userID)
+	sk := marshalBinaryKey("session_id", sessionID)
+	_, err := c.ddb.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: aws.String(c.membershipsTable),
+		Key: map[string]types.AttributeValue{
+			"user_id":    uk["user_id"],
+			"session_id": sk["session_id"],
+		},
+	})
+	return err
+}
+
 // CountUserGames returns the number of sessions a user owns (via user-sessions-index
 // on the sessions table). Used to enforce the games_limit quota.
 func (c *Client) CountUserGames(ctx context.Context, userID string) (int, error) {
