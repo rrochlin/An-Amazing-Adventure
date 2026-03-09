@@ -22,12 +22,15 @@ type Client struct {
 	sessionsTable    string
 	connectionsTable string
 	mutationsTable   string
+	usersTable       string
+	invitesTable     string
+	membershipsTable string
 }
 
 // New creates a Client from the current AWS environment.
-// SESSIONS_TABLE, CONNECTIONS_TABLE, and MUTATIONS_TABLE are all optional at
-// construction time — panics are deferred to the first method call that needs
-// each table. This allows Lambdas to omit env vars they don't use.
+// All table names are optional at construction time — panics are deferred to
+// the first method call that needs each table. This allows Lambdas to omit
+// env vars they don't use.
 func New(ctx context.Context) (*Client, error) {
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
@@ -38,6 +41,9 @@ func New(ctx context.Context) (*Client, error) {
 		sessionsTable:    os.Getenv("SESSIONS_TABLE"),    // checked at use
 		connectionsTable: os.Getenv("CONNECTIONS_TABLE"), // checked at use
 		mutationsTable:   os.Getenv("MUTATIONS_TABLE"),   // checked at use
+		usersTable:       os.Getenv("USERS_TABLE"),       // checked at use
+		invitesTable:     os.Getenv("INVITES_TABLE"),     // checked at use
+		membershipsTable: os.Getenv("MEMBERSHIPS_TABLE"), // checked at use
 	}, nil
 }
 
@@ -60,6 +66,27 @@ func (c *Client) requireConnectionsTable() {
 func (c *Client) requireMutationsTable() {
 	if c.mutationsTable == "" {
 		panic("required env var MUTATIONS_TABLE is not set")
+	}
+}
+
+// requireUsersTable panics with a clear message if USERS_TABLE was not set.
+func (c *Client) requireUsersTable() {
+	if c.usersTable == "" {
+		panic("required env var USERS_TABLE is not set")
+	}
+}
+
+// requireInvitesTable panics with a clear message if INVITES_TABLE was not set.
+func (c *Client) requireInvitesTable() {
+	if c.invitesTable == "" {
+		panic("required env var INVITES_TABLE is not set")
+	}
+}
+
+// requireMembershipsTable panics with a clear message if MEMBERSHIPS_TABLE was not set.
+func (c *Client) requireMembershipsTable() {
+	if c.membershipsTable == "" {
+		panic("required env var MEMBERSHIPS_TABLE is not set")
 	}
 }
 

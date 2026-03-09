@@ -146,6 +146,11 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 		},
 	}
 
+	// Account for blueprint token usage — best-effort, non-fatal.
+	if accountErr := dbClient.UpdateUserTokens(ctx, evt.UserID, blueprintTokens.Total()); accountErr != nil {
+		log.Printf("world-gen: UpdateUserTokens (non-fatal): %v", accountErr)
+	}
+
 	// Step 4: Persist and mark ready
 	emit("Sealing the world into the tome...")
 	g.Ready = true

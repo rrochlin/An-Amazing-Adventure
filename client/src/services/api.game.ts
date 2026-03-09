@@ -12,6 +12,18 @@ export interface GameListItem {
   total_tokens?: number;
 }
 
+export interface UserQuotaInfo {
+  tokens_used: number;
+  token_limit: number; // 0 = unlimited
+  ai_enabled: boolean;
+  role: string;
+}
+
+export interface ListGamesResponse {
+  games: GameListItem[];
+  user_quota: UserQuotaInfo;
+}
+
 export interface GameLoadResponse {
   session_id: string;
   ready: boolean;
@@ -33,15 +45,21 @@ export interface CreateGameParams {
   preferences?: string[];
 }
 
-export async function ListGames(): Promise<GameListItem[]> {
-  const res = await GET<GameListItem[]>("api/games");
+export interface CreateGameResponse {
+  session_id: string;
+  ready: boolean;
+  preview_mode: boolean;
+}
+
+export async function ListGames(): Promise<ListGamesResponse> {
+  const res = await GET<ListGamesResponse>("api/games");
   return res.data;
 }
 
 export async function CreateGame(
   params: CreateGameParams,
-): Promise<{ session_id: string; ready: boolean }> {
-  const res = await POST<{ session_id: string; ready: boolean }>("api/games", params);
+): Promise<CreateGameResponse> {
+  const res = await POST<CreateGameResponse>("api/games", params);
   return res.data;
 }
 

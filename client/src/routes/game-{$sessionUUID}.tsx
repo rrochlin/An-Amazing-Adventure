@@ -285,10 +285,26 @@ function GamePage() {
             command={command}
             setCommand={setCommand}
             handleCommand={handleCommand}
-            isLoading={isStreaming}
+            isLoading={
+              isStreaming ||
+              wsError === "ai_access_not_enabled" ||
+              wsError === "quota_exceeded"
+            }
           />
         </Paper>
-        {(wsError || wsStatus === "error") && (
+        {wsError === "ai_access_not_enabled" && (
+          <Alert severity="info" sx={{ mt: 1 }}>
+            <strong>Preview Mode</strong> — AI narration is not enabled for your account.
+            Contact the admin to request access.
+          </Alert>
+        )}
+        {wsError === "quota_exceeded" && (
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            <strong>Token quota reached</strong> — Your token limit has been reached.
+            Contact the admin to increase your limit.
+          </Alert>
+        )}
+        {wsError && wsError !== "ai_access_not_enabled" && wsError !== "quota_exceeded" && (
           <Alert severity="warning" sx={{ mt: 1 }}>
             {wsError ?? "Connection lost — retrying..."}
           </Alert>

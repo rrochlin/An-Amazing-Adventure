@@ -89,6 +89,25 @@ export function getUserEmail(): string {
   }
 }
 
+/**
+ * Decodes and returns all claims from the stored Cognito ID token payload.
+ * Used for client-side group checks (e.g. "cognito:groups" contains "admin").
+ * Returns null when no valid ID token is stored.
+ */
+export function getIdTokenClaims(): Record<string, unknown> | null {
+  const tokens = getStoredTokens();
+  if (!tokens?.idToken) return null;
+  try {
+    const parts = tokens.idToken.split(".");
+    if (parts.length !== 3) return null;
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payload + "=".repeat((4 - (payload.length % 4)) % 4);
+    return JSON.parse(atob(padded)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 // ----------------------------------------------------------------
 // Auth operations
 // ----------------------------------------------------------------

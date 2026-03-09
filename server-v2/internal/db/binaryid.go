@@ -30,6 +30,15 @@ func binaryIDVal(s string) types.AttributeValue {
 	return &types.AttributeValueMemberB{Value: []byte(s)}
 }
 
+// marshalBinaryKey returns a DynamoDB key map with a single Binary-typed attribute.
+// Used to build GetItem/UpdateItem/DeleteItem key inputs for tables whose key
+// attribute is stored as B (Binary) type.
+func marshalBinaryKey(attr, value string) map[string]types.AttributeValue {
+	return map[string]types.AttributeValue{
+		attr: &types.AttributeValueMemberB{Value: []byte(value)},
+	}
+}
+
 // Ensure BinaryID satisfies the interfaces at compile time.
 var _ attributevalue.Marshaler = BinaryID("")
 var _ attributevalue.Unmarshaler = (*BinaryID)(nil)
