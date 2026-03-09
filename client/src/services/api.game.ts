@@ -64,6 +64,11 @@ export async function DeleteGame(sessionId: string): Promise<void> {
   await DELETE(`api/games/${sessionId}`);
 }
 
+/** Re-trigger world generation for a stuck not-ready game. */
+export async function RetryWorldGen(sessionId: string): Promise<void> {
+  await POST(`api/games/${sessionId}/retry-world-gen`, {});
+}
+
 /** Update a joined party member's character with their D&D creation data. */
 export async function JoinCharacter(
   sessionId: string,

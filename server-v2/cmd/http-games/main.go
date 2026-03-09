@@ -52,12 +52,14 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		resp, err = handleListGames(ctx, userID)
 	case method == "POST" && path == "/api/games":
 		resp, err = handleCreateGame(ctx, req, userID)
-	case method == "GET" && matchesGamePath(path) && !matchesJoinCharacterPath(path):
+	case method == "GET" && matchesGamePath(path) && !matchesJoinCharacterPath(path) && !matchesRetryWorldGenPath(path):
 		resp, err = handleGetGame(ctx, req, userID)
 	case method == "DELETE" && matchesGamePath(path):
 		resp, err = handleDeleteGame(ctx, req, userID)
 	case method == "POST" && matchesJoinCharacterPath(path):
 		resp, err = handleJoinCharacter(ctx, req, userID)
+	case method == "POST" && matchesRetryWorldGenPath(path):
+		resp, err = handleRetryWorldGen(ctx, req, userID)
 	default:
 		resp, err = jsonResponse(404, map[string]string{"error": "not found"}), nil
 	}
@@ -385,6 +387,78 @@ func matchesJoinCharacterPath(path string) bool {
 	// matches /api/games/{uuid}/join-character
 	const suffix = "/join-character"
 	return len(path) > len(suffix) && path[len(path)-len(suffix):] == suffix
+}
+
+func matchesRetryWorldGenPath(path string) bool {
+	// matches /api/games/{uuid}/retry-world-gen
+	const suffix = "/retry-world-gen"
+	return len(path) > len(suffix) && path[len(path)-len(suffix):] == suffix
+}
+
+// handleRetryWorldGen re-invokes world-gen for a session that is stuck in not-ready state.
+// Only the session owner can retry. Only allowed when ready=false.
+func handleRetryWorldGen(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
+	p := req.RequestContext.HTTP.Path
+	const suffix = "/retry-world-gen"
+	const prefix = "/api/games/"
+	sessionID := ""
+	if len(p) > len(prefix)+len(suffix) {
+		sessionID = p[len(prefix) : len(p)-len(suffix)]
+	}
+	if sessionID == "" {
+		return jsonResponse(400, map[string]string{"error": "missing session id"}), nil
+	}
+
+	dbClient, err := db.New(ctx)
+	if err != nil {
+		return serverError(), nil
+	}
+
+	saveState, err := dbClient.GetGame(ctx, sessionID)
+	if err != nil {
+		return jsonResponse(404, map[string]string{"error": "game not found"}), nil
+	}
+
+	// Only the owner can trigger a retry.
+	ownerID := saveState.OwnerID
+	if ownerID == "" {
+		ownerID = saveState.UserID
+	}
+	if ownerID != userID {
+		return jsonResponse(403, map[string]string{"error": "only the session owner can retry world generation"}), nil
+	}
+
+	// Refuse if the game is already ready — nothing to retry.
+	if saveState.Ready {
+		return jsonResponse(409, map[string]string{"error": "game is already ready"}), nil
+	}
+
+	// Check the user still has AI access (in case their record changed).
+	userRecord, err := dbClient.GetUser(ctx, userID)
+	if err != nil {
+		log.Printf("handleRetryWorldGen: GetUser error user=%s: %v", userID, err)
+	}
+	if userRecord == nil || !userRecord.AIEnabled {
+		log.Printf("handleRetryWorldGen: ai_access_not_enabled for user=%s (record=%v)", userID, userRecord != nil)
+		return jsonResponse(403, map[string]string{"error": "ai_access_not_enabled"}), nil
+	}
+
+	payload, _ := json.Marshal(worldGenPayload{
+		SessionID:      sessionID,
+		UserID:         userID,
+		CreationParams: saveState.CreationParams,
+		PlayerName:     saveState.Player.Name,
+		ThemeHint:      saveState.CreationParams.ThemeHint,
+		Preferences:    saveState.CreationParams.Preferences,
+	})
+
+	log.Printf("handleRetryWorldGen: invoking world-gen for session %s user=%s", sessionID, userID)
+	if err := invokeWorldGen(ctx, payload); err != nil {
+		log.Printf("handleRetryWorldGen: invoke world-gen FAILED for session %s: %v", sessionID, err)
+		return serverError(), nil
+	}
+
+	return jsonResponse(202, map[string]string{"status": "world generation restarted"}), nil
 }
 
 // handleJoinCharacter updates a member's character stub with real character details.
