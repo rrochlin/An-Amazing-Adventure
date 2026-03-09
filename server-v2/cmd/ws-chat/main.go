@@ -31,11 +31,13 @@ type chatRequest struct {
 
 func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	connID := req.RequestContext.ConnectionID
+	reqID := req.RequestContext.RequestID
+	log.Printf("ws-chat: conn=%s req=%s", connID, reqID)
 
 	// Parse message
 	var msg chatRequest
 	if err := json.Unmarshal([]byte(req.Body), &msg); err != nil {
-		log.Printf("ws-chat: bad body: %v", err)
+		log.Printf("ws-chat: bad body conn=%s: %v", connID, err)
 		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
 	}
 	if msg.Content == "" {
@@ -87,11 +89,13 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 	// RBAC + quota check — must pass before loading game or calling Bedrock
 	userID := string(conn.UserID)
+	log.Printf("ws-chat: conn=%s user=%s game=%s", connID, userID, conn.GameID)
 	userRecord, err := dbClient.GetUser(ctx, userID)
 	if err != nil {
-		log.Printf("ws-chat: GetUser error (treating as restricted): %v", err)
+		log.Printf("ws-chat: GetUser error user=%s (treating as restricted): %v", userID, err)
 	}
 	if userRecord == nil || !userRecord.AIEnabled {
+		log.Printf("ws-chat: ai_access_not_enabled for user=%s (record=%v)", userID, userRecord != nil)
 		_ = ws.SendError(ctx, connID, "ai_access_not_enabled")
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
@@ -247,6 +251,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		}
 	}
 
+	log.Printf("ws-chat: complete conn=%s user=%s game=%s turns=%d tokens=%d", connID, userID, conn.GameID, g.ConversationCount, g.TotalTokens)
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 

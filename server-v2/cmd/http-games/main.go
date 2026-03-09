@@ -41,21 +41,31 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 
 	method := req.RequestContext.HTTP.Method
 	path := req.RequestContext.HTTP.Path
+	reqID := req.RequestContext.RequestID
 
+	log.Printf("http-games: %s %s user=%s req=%s", method, path, userID, reqID)
+
+	var resp events.APIGatewayV2HTTPResponse
+	var err error
 	switch {
 	case method == "GET" && path == "/api/games":
-		return handleListGames(ctx, userID)
+		resp, err = handleListGames(ctx, userID)
 	case method == "POST" && path == "/api/games":
-		return handleCreateGame(ctx, req, userID)
-	case method == "GET" && matchesGamePath(path) && !matchesJoinCharacterPath(path):
-		return handleGetGame(ctx, req, userID)
+		resp, err = handleCreateGame(ctx, req, userID)
+	case method == "GET" && matchesGamePath(path) && !matchesJoinCharacterPath(path) && !matchesRetryWorldGenPath(path):
+		resp, err = handleGetGame(ctx, req, userID)
 	case method == "DELETE" && matchesGamePath(path):
-		return handleDeleteGame(ctx, req, userID)
+		resp, err = handleDeleteGame(ctx, req, userID)
 	case method == "POST" && matchesJoinCharacterPath(path):
-		return handleJoinCharacter(ctx, req, userID)
+		resp, err = handleJoinCharacter(ctx, req, userID)
+	case method == "POST" && matchesRetryWorldGenPath(path):
+		resp, err = handleRetryWorldGen(ctx, req, userID)
 	default:
-		return jsonResponse(404, map[string]string{"error": "not found"}), nil
+		resp, err = jsonResponse(404, map[string]string{"error": "not found"}), nil
 	}
+
+	log.Printf("http-games: %s %s → %d (req=%s)", method, path, resp.StatusCode, reqID)
+	return resp, err
 }
 
 type gameListItem struct {
@@ -145,7 +155,9 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 
 	// Include user quota info so the frontend can display usage bar
 	quota := userQuotaInfo{Role: "restricted"}
-	if ur, err := dbClient.GetUser(ctx, userID); err == nil && ur != nil {
+	if ur, err := dbClient.GetUser(ctx, userID); err != nil {
+		log.Printf("list games: GetUser error (quota will show restricted): %v", err)
+	} else if ur != nil {
 		quota = userQuotaInfo{
 			TokensUsed: ur.TokensUsed,
 			TokenLimit: ur.TokenLimit,
@@ -193,6 +205,7 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	}
 
 	previewMode := !userRecord.AIEnabled
+	log.Printf("http-games POST: user=%s role=%s ai_enabled=%v preview=%v", userID, userRecord.Role, userRecord.AIEnabled, previewMode)
 
 	sessionID := game.NewSessionID()
 
@@ -238,6 +251,7 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 
 	// Kick off world generation asynchronously (skipped in preview mode)
 	if !previewMode {
+		log.Printf("http-games POST: invoking world-gen for session %s", sessionID)
 		payload, _ := json.Marshal(worldGenPayload{
 			SessionID:      sessionID,
 			UserID:         userID,
@@ -248,8 +262,12 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 			Preferences: body.Preferences,
 		})
 		if err := invokeWorldGen(ctx, payload); err != nil {
-			log.Printf("invoke world-gen: %v (game still created)", err)
+			log.Printf("http-games POST: invoke world-gen FAILED for session %s: %v (game still created)", sessionID, err)
+		} else {
+			log.Printf("http-games POST: world-gen invoked for session %s", sessionID)
 		}
+	} else {
+		log.Printf("http-games POST: skipping world-gen for session %s (preview mode)", sessionID)
 	}
 
 	return jsonResponse(201, map[string]any{
@@ -345,25 +363,102 @@ func handleDeleteGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 func invokeWorldGen(ctx context.Context, payload []byte) error {
 	fnName := os.Getenv("WORLD_GEN_ARN")
 	if fnName == "" {
+		log.Printf("invokeWorldGen: WORLD_GEN_ARN not set, skipping")
 		return nil
 	}
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("load AWS config: %w", err)
 	}
 	client := awslambda.NewFromConfig(cfg)
-	_, err = client.Invoke(ctx, &awslambda.InvokeInput{
+	out, err := client.Invoke(ctx, &awslambda.InvokeInput{
 		FunctionName:   aws.String(fnName),
 		InvocationType: awslambdatypes.InvocationTypeEvent, // async, no wait
 		Payload:        payload,
 	})
-	return err
+	if err != nil {
+		return fmt.Errorf("lambda invoke %s: %w", fnName, err)
+	}
+	log.Printf("invokeWorldGen: dispatched to %s status=%d", fnName, out.StatusCode)
+	return nil
 }
 
 func matchesJoinCharacterPath(path string) bool {
 	// matches /api/games/{uuid}/join-character
 	const suffix = "/join-character"
 	return len(path) > len(suffix) && path[len(path)-len(suffix):] == suffix
+}
+
+func matchesRetryWorldGenPath(path string) bool {
+	// matches /api/games/{uuid}/retry-world-gen
+	const suffix = "/retry-world-gen"
+	return len(path) > len(suffix) && path[len(path)-len(suffix):] == suffix
+}
+
+// handleRetryWorldGen re-invokes world-gen for a session that is stuck in not-ready state.
+// Only the session owner can retry. Only allowed when ready=false.
+func handleRetryWorldGen(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
+	p := req.RequestContext.HTTP.Path
+	const suffix = "/retry-world-gen"
+	const prefix = "/api/games/"
+	sessionID := ""
+	if len(p) > len(prefix)+len(suffix) {
+		sessionID = p[len(prefix) : len(p)-len(suffix)]
+	}
+	if sessionID == "" {
+		return jsonResponse(400, map[string]string{"error": "missing session id"}), nil
+	}
+
+	dbClient, err := db.New(ctx)
+	if err != nil {
+		return serverError(), nil
+	}
+
+	saveState, err := dbClient.GetGame(ctx, sessionID)
+	if err != nil {
+		return jsonResponse(404, map[string]string{"error": "game not found"}), nil
+	}
+
+	// Only the owner can trigger a retry.
+	ownerID := saveState.OwnerID
+	if ownerID == "" {
+		ownerID = saveState.UserID
+	}
+	if ownerID != userID {
+		return jsonResponse(403, map[string]string{"error": "only the session owner can retry world generation"}), nil
+	}
+
+	// Refuse if the game is already ready — nothing to retry.
+	if saveState.Ready {
+		return jsonResponse(409, map[string]string{"error": "game is already ready"}), nil
+	}
+
+	// Check the user still has AI access (in case their record changed).
+	userRecord, err := dbClient.GetUser(ctx, userID)
+	if err != nil {
+		log.Printf("handleRetryWorldGen: GetUser error user=%s: %v", userID, err)
+	}
+	if userRecord == nil || !userRecord.AIEnabled {
+		log.Printf("handleRetryWorldGen: ai_access_not_enabled for user=%s (record=%v)", userID, userRecord != nil)
+		return jsonResponse(403, map[string]string{"error": "ai_access_not_enabled"}), nil
+	}
+
+	payload, _ := json.Marshal(worldGenPayload{
+		SessionID:      sessionID,
+		UserID:         userID,
+		CreationParams: saveState.CreationParams,
+		PlayerName:     saveState.Player.Name,
+		ThemeHint:      saveState.CreationParams.ThemeHint,
+		Preferences:    saveState.CreationParams.Preferences,
+	})
+
+	log.Printf("handleRetryWorldGen: invoking world-gen for session %s user=%s", sessionID, userID)
+	if err := invokeWorldGen(ctx, payload); err != nil {
+		log.Printf("handleRetryWorldGen: invoke world-gen FAILED for session %s: %v", sessionID, err)
+		return serverError(), nil
+	}
+
+	return jsonResponse(202, map[string]string{"status": "world generation restarted"}), nil
 }
 
 // handleJoinCharacter updates a member's character stub with real character details.

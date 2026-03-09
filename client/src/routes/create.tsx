@@ -302,7 +302,8 @@ export function CreateRoute() {
    const [abilityScores, setAbilityScores] = useState<Record<AbilityKey, number>>({
       str: 0, dex: 0, con: 0, int: 0, wis: 0, cha: 0,
    });
-   const [usedValues, setUsedValues] = useState<number[]>([]);
+   // Derived — no separate state; avoids stale-closure bugs on swap.
+   const usedValues = Object.values(abilityScores).filter((v) => v !== 0);
 
    // Step 4 — Skills
    const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
@@ -342,7 +343,6 @@ export function CreateRoute() {
 
    // ── Ability score helpers ──
    const assignValue = (ability: AbilityKey, value: number) => {
-      const oldValue = abilityScores[ability];
       setAbilityScores((prev) => {
          const next = { ...prev };
          // If the chosen value is already assigned to another ability, swap: clear that slot.
@@ -356,11 +356,13 @@ export function CreateRoute() {
          next[ability] = value;
          return next;
       });
-      setUsedValues((prev) => {
-         const next = prev.filter((v) => v !== oldValue);
-         if (value !== 0) next.push(value);
-         return next;
-      });
+   };
+
+   const randomizeAbilityScores = () => {
+      const shuffled = [...STANDARD_ARRAY].sort(() => Math.random() - 0.5);
+      const next = {} as Record<AbilityKey, number>;
+      ABILITY_KEYS.forEach((key, i) => { next[key] = shuffled[i]; });
+      setAbilityScores(next);
    };
 
    // ── Skill helpers ──
@@ -481,60 +483,68 @@ export function CreateRoute() {
                   </Typography>
 
                   <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1.5 }}>
-                     {RACES.map((race) => (
-                        <Card
-                           key={race.id}
-                           variant={raceID === race.id ? "outlined" : "elevation"}
-                           sx={{ borderColor: raceID === race.id ? "primary.main" : "transparent", borderWidth: 2, cursor: "pointer" }}
-                        >
-                           <CardActionArea onClick={() => { setRaceID(race.id); setSubraceID(""); }}>
-                              <CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
-                                 <Typography variant="body2" fontWeight={raceID === race.id ? 700 : 500}>
-                                    {race.name}
-                                 </Typography>
-                                 <Typography variant="caption" color="primary.light" display="block">
-                                    {race.asi}
-                                 </Typography>
-                                 <Typography variant="caption" color="text.secondary" display="block">
-                                    Speed: {race.speed}
-                                 </Typography>
-                                 <Box sx={{ mt: 0.5, display: "flex", flexWrap: "wrap", gap: 0.4 }}>
-                                    {race.traits.map((t) => (
-                                       <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: "0.6rem", height: 18 }} />
-                                    ))}
-                                 </Box>
-                              </CardContent>
-                           </CardActionArea>
-                        </Card>
-                     ))}
-                  </Box>
-
-                  {/* Subrace chips */}
-                  {selectedRace && selectedRace.subraces.length > 0 && (
-                     <Box>
-                        <Typography variant="subtitle2" sx={{ mb: 1, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                           Choose Subrace
-                        </Typography>
-                        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                           {selectedRace.subraces.map((sr) => (
-                              <Chip
-                                 key={sr.id}
-                                 label={`${sr.name} (${sr.asiBonusLabel})`}
-                                 clickable
-                                 onClick={() => setSubraceID(sr.id)}
-                                 color={subraceID === sr.id ? "primary" : "default"}
-                                 variant={subraceID === sr.id ? "filled" : "outlined"}
-                                 sx={{ fontSize: "0.85rem" }}
-                              />
-                           ))}
-                        </Box>
-                        {selectedRace.subraces.length > 0 && !subraceID && (
-                           <FormHelperText sx={{ color: "warning.main", mt: 0.5 }}>
-                              Select a subrace to continue.
-                           </FormHelperText>
-                        )}
-                     </Box>
-                  )}
+                     {RACES.map((race) => {
+                        const isSelected = raceID === race.id;
+                        const hasSubraces = race.subraces.length > 0;
+                        return (
+                           <Card
+                              key={race.id}
+                              variant={isSelected ? "outlined" : "elevation"}
+                              sx={{ borderColor: isSelected ? "primary.main" : "transparent", borderWidth: 2, cursor: "pointer" }}
+                           >
+                              <CardActionArea onClick={() => { setRaceID(race.id); setSubraceID(""); }}>
+                                 <CardContent sx={{ py: 1.5, px: 2, "&:last-child": { pb: isSelected && hasSubraces ? 1 : 1.5 } }}>
+                                    <Typography variant="body2" fontWeight={isSelected ? 700 : 500}>
+                                       {race.name}
+                                    </Typography>
+                                    <Typography variant="caption" color="primary.light" display="block">
+                                       {race.asi}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary" display="block">
+                                       Speed: {race.speed}
+                                    </Typography>
+                                    <Box sx={{ mt: 0.5, display: "flex", flexWrap: "wrap", gap: 0.4 }}>
+                                       {race.traits.map((t) => (
+                                          <Chip key={t} label={t} size="small" variant="outlined" sx={{ fontSize: "0.6rem", height: 18 }} />
+                                       ))}
+                                       {!isSelected && hasSubraces && (
+                                          <Chip label="has subraces" size="small" color="secondary" variant="outlined" sx={{ fontSize: "0.6rem", height: 18 }} />
+                                       )}
+                                    </Box>
+                                 </CardContent>
+                              </CardActionArea>
+                              {/* Subrace picker — shown inline on the selected card */}
+                              {isSelected && hasSubraces && (
+                                 <CardContent sx={{ pt: 0, pb: 1.5, px: 2, "&:last-child": { pb: 1.5 } }}>
+                                    <Divider sx={{ mb: 1 }} />
+                                    <Typography variant="caption" sx={{ textTransform: "uppercase", letterSpacing: "0.08em", color: "text.secondary", display: "block", mb: 0.75 }}>
+                                       Choose Subrace
+                                    </Typography>
+                                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                                       {race.subraces.map((sr) => (
+                                          <Chip
+                                             key={sr.id}
+                                             label={`${sr.name} (${sr.asiBonusLabel})`}
+                                             clickable
+                                             onClick={(e) => { e.stopPropagation(); setSubraceID(sr.id); }}
+                                             color={subraceID === sr.id ? "primary" : "default"}
+                                             variant={subraceID === sr.id ? "filled" : "outlined"}
+                                             size="small"
+                                             sx={{ fontSize: "0.8rem" }}
+                                          />
+                                       ))}
+                                    </Box>
+                                    {!subraceID && (
+                                       <FormHelperText sx={{ color: "warning.main", mt: 0.5 }}>
+                                          Select a subrace to continue.
+                                       </FormHelperText>
+                                    )}
+                                 </CardContent>
+                              )}
+                           </Card>
+                        );
+                      })}
+                   </Box>
 
                   {navButtons(!!raceID && (!selectedRace?.subraces.length || !!subraceID), "Next: Class")}
                </Box>
@@ -596,7 +606,7 @@ export function CreateRoute() {
                      Racial bonuses will be applied automatically.
                   </Typography>
 
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1 }}>
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1, alignItems: "center" }}>
                      <Typography variant="caption" sx={{ width: "100%", color: "text.secondary" }}>Available values:</Typography>
                      {STANDARD_ARRAY.map((v) => (
                         <Chip
@@ -607,6 +617,9 @@ export function CreateRoute() {
                            size="small"
                         />
                      ))}
+                     <Button size="small" variant="outlined" onClick={randomizeAbilityScores} sx={{ ml: "auto", fontSize: "0.75rem" }}>
+                        Randomize
+                     </Button>
                   </Box>
 
                    {ABILITY_KEYS.map((ab) => {
@@ -723,7 +736,7 @@ export function CreateRoute() {
                      onChange={(e) => setThemeHint(e.target.value)}
                      fullWidth
                      helperText='e.g. "gritty noir", "high fantasy epic", "light-hearted comedy", "cosmic horror"'
-                     slotProps={{ htmlInput: { maxLength: 200 } }}
+                     slotProps={{ htmlInput: { maxLength: 200, autoComplete: "off" } }}
                   />
 
                   {navButtons(true, "Next: Review")}

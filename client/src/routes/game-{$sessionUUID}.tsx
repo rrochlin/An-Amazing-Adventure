@@ -6,7 +6,7 @@ import { RoomMap } from "../components/RoomMap";
 import { GameInfo } from "../components/GameInfo";
 import { Chat } from "../components/Chat";
 import { isAuthenticated, getIdTokenClaims } from "../services/auth.service";
-import { LoadGame } from "../services/api.game";
+import { LoadGame, RetryWorldGen } from "../services/api.game";
 import { useGameStore } from "../store/gameStore";
 import { useGameSocket } from "../hooks/useGameSocket";
 import { WorldGenTerminal } from "../components/WorldGenTerminal";
@@ -55,6 +55,10 @@ function GamePage() {
   // UI-FUT-8: reconnection toast — show when WS reconnects after a drop
   const [reconnectToast, setReconnectToast] = useState(false);
   const [ownerID, setOwnerID] = useState<string | null>(null);
+  // Stuck world-gen detection: set after 90s with no world_gen_ready and still not-ready
+  const [worldGenStuck, setWorldGenStuck] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   const claims = getIdTokenClaims();
   const currentUserID = claims?.sub ?? null;
@@ -73,6 +77,7 @@ function GamePage() {
       const data = await LoadGame(sessionUUID);
       if (data.ready && data.state) {
         setGameState(data.state);
+        setWorldGenStuck(false);
       }
       // Capture owner ID for party panel
       if ((data as { owner_id?: string }).owner_id) {
@@ -85,6 +90,34 @@ function GamePage() {
       setLoadingGame(false);
     }
   }, [sessionUUID, setGameState]);
+
+  // If we're still in world-gen after 90s with no progress frames, show retry option.
+  const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (worldGenReady || gameState) {
+      if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
+      setWorldGenStuck(false);
+      return;
+    }
+    stuckTimerRef.current = setTimeout(() => setWorldGenStuck(true), 90_000);
+    return () => { if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current); };
+  }, [worldGenReady, gameState, worldGenLog.length]);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    setRetryError(null);
+    setWorldGenStuck(false);
+    try {
+      await RetryWorldGen(sessionUUID);
+      // Reset stuck timer — give another 90s for the retry to complete
+      stuckTimerRef.current = setTimeout(() => setWorldGenStuck(true), 90_000);
+    } catch {
+      setRetryError("Failed to restart world generation. Please try again.");
+      setWorldGenStuck(true);
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   // Called by useGameSocket when world_gen_ready arrives
   const handleWorldReady = useCallback(() => {
@@ -175,7 +208,7 @@ function GamePage() {
           <Box sx={{ p: 2 }}>
             <WorldGenTerminal lines={worldGenLog} ready={worldGenReady} />
           </Box>
-          {worldGenLog.length === 0 && !worldGenReady && (
+          {worldGenLog.length === 0 && !worldGenReady && !worldGenStuck && (
             <Box sx={{ px: 2, pb: 1.5 }}>
               <Typography
                 variant="caption"
@@ -183,6 +216,37 @@ function GamePage() {
               >
                 Connecting to world generator...
               </Typography>
+            </Box>
+          )}
+          {worldGenStuck && (
+            <Box sx={{ px: 2, pb: 2, display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Typography
+                variant="caption"
+                sx={{ color: "rgba(255,180,0,0.8)", fontFamily: "monospace" }}
+              >
+                World generation appears to have stalled.
+              </Typography>
+              {retryError && (
+                <Typography variant="caption" sx={{ color: "rgba(255,80,80,0.9)", fontFamily: "monospace" }}>
+                  {retryError}
+                </Typography>
+              )}
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={handleRetry}
+                disabled={retrying}
+                sx={{
+                  alignSelf: "flex-start",
+                  color: "rgba(0,255,70,0.9)",
+                  borderColor: "rgba(0,255,70,0.4)",
+                  fontFamily: "monospace",
+                  fontSize: "0.75rem",
+                  "&:hover": { borderColor: "rgba(0,255,70,0.8)", background: "rgba(0,255,70,0.08)" },
+                }}
+              >
+                {retrying ? "Restarting..." : "Restart World Generation"}
+              </Button>
             </Box>
           )}
         </Paper>

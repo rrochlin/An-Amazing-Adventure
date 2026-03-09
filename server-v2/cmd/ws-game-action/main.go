@@ -31,19 +31,25 @@ type actionRequest struct {
 
 func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	connID := req.RequestContext.ConnectionID
+	reqID := req.RequestContext.RequestID
 
 	var msg actionRequest
 	if err := json.Unmarshal([]byte(req.Body), &msg); err != nil {
+		log.Printf("ws-game-action: bad body conn=%s: %v", connID, err)
 		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
 	}
 
+	log.Printf("ws-game-action: conn=%s req=%s action=%s payload=%q", connID, reqID, msg.SubAction, msg.Payload)
+
 	dbClient, err := db.New(ctx)
 	if err != nil {
+		log.Printf("ws-game-action: db init conn=%s: %v", connID, err)
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
 	conn, err := dbClient.GetConnection(ctx, connID)
 	if err != nil {
+		log.Printf("ws-game-action: get connection conn=%s: %v", connID, err)
 		return events.APIGatewayProxyResponse{StatusCode: 410}, nil
 	}
 	userID := string(conn.UserID)
