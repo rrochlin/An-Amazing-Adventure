@@ -45,10 +45,12 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 		return handleListGames(ctx, userID)
 	case method == "POST" && path == "/api/games":
 		return handleCreateGame(ctx, req, userID)
-	case method == "GET" && matchesGamePath(path):
+	case method == "GET" && matchesGamePath(path) && !matchesJoinCharacterPath(path):
 		return handleGetGame(ctx, req, userID)
 	case method == "DELETE" && matchesGamePath(path):
 		return handleDeleteGame(ctx, req, userID)
+	case method == "POST" && matchesJoinCharacterPath(path):
+		return handleJoinCharacter(ctx, req, userID)
 	default:
 		return jsonResponse(404, map[string]string{"error": "not found"}), nil
 	}
@@ -340,6 +342,76 @@ func invokeWorldGen(ctx context.Context, payload []byte) error {
 		Payload:        payload,
 	})
 	return err
+}
+
+func matchesJoinCharacterPath(path string) bool {
+	// matches /api/games/{uuid}/join-character
+	const suffix = "/join-character"
+	return len(path) > len(suffix) && path[len(path)-len(suffix):] == suffix
+}
+
+// handleJoinCharacter updates a member's character stub with real character details.
+// Called by party members after they've been added via invite flow.
+func handleJoinCharacter(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
+	sessionID := req.PathParameters["uuid"]
+	if sessionID == "" {
+		// Try extracting from path: /api/games/{uuid}/join-character
+		p := req.RequestContext.HTTP.Path
+		const suffix = "/join-character"
+		const prefix = "/api/games/"
+		if len(p) > len(prefix)+len(suffix) {
+			sessionID = p[len(prefix) : len(p)-len(suffix)]
+		}
+	}
+	if sessionID == "" {
+		return jsonResponse(400, map[string]string{"error": "missing session id"}), nil
+	}
+
+	var body struct {
+		PlayerName        string `json:"player_name"`
+		PlayerDescription string `json:"player_description"`
+		PlayerAge         string `json:"player_age"`
+		PlayerBackstory   string `json:"player_backstory"`
+	}
+	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
+		return jsonResponse(400, map[string]string{"error": "invalid body"}), nil
+	}
+
+	dbClient, err := db.New(ctx)
+	if err != nil {
+		return serverError(), nil
+	}
+
+	saveState, err := dbClient.GetGame(ctx, sessionID)
+	if err != nil {
+		return jsonResponse(404, map[string]string{"error": "game not found"}), nil
+	}
+	if !isAuthorizedForSession(saveState, userID) {
+		return jsonResponse(403, map[string]string{"error": "forbidden"}), nil
+	}
+
+	g, err := game.FromSaveState(saveState)
+	if err != nil {
+		return serverError(), nil
+	}
+
+	playerName := body.PlayerName
+	if playerName == "" {
+		playerName = "Adventurer"
+	}
+	char := game.NewCharacter(playerName, body.PlayerDescription)
+	char.Age = body.PlayerAge
+	char.Backstory = body.PlayerBackstory
+	g.SetPlayerCharacter(userID, char)
+	g.Version++
+
+	updated := g.ToSaveState(saveState.Narrative, saveState.ChatHistory)
+	if err := dbClient.PutGame(ctx, updated); err != nil {
+		log.Printf("handleJoinCharacter PutGame: %v", err)
+		return serverError(), nil
+	}
+
+	return jsonResponse(200, map[string]string{"session_id": sessionID}), nil
 }
 
 // isAuthorizedForSession returns true if userID is the owner or a party member.

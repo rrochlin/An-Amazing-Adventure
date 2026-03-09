@@ -71,3 +71,22 @@ export async function LoadGame(sessionId: string): Promise<GameLoadResponse> {
 export async function DeleteGame(sessionId: string): Promise<void> {
   await DELETE(`api/games/${sessionId}`);
 }
+
+export interface JoinCharacterParams {
+  player_name?: string;
+  player_description?: string;
+  player_age?: string;
+  player_backstory?: string;
+}
+
+/** Update a joined party member's character stub with their actual character details. */
+export async function JoinCharacter(
+  sessionId: string,
+  params: JoinCharacterParams,
+): Promise<{ session_id: string }> {
+  const res = await POST<{ session_id: string }>(
+    `api/games/${sessionId}/join-character`,
+    params,
+  );
+  return res.data;
+}
