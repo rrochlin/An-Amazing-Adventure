@@ -3,6 +3,7 @@
 package ai
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -88,29 +89,19 @@ func NarratorTools() []types.Tool {
 			),
 			[]string{"item_name", "room_name"},
 		),
-		tool("damage_character",
-			"Reduce a character's health by an amount. Use for NPCs and the player.",
+		tool("trigger_short_rest",
+			"Trigger a short rest for all players. Restores Fighter Second Wind, Action Surge, Monk Ki. Does NOT restore hit points.",
 			props(
-				req("character_name", "string", "Character name, or 'player' for the player"),
-				req("amount", "integer", "Damage amount (positive integer)"),
+				req("reason", "string", "Brief in-world reason for the rest (e.g. 'The party finds a quiet alcove')"),
 			),
-			[]string{"character_name", "amount"},
+			[]string{"reason"},
 		),
-		tool("heal_character",
-			"Restore a character's health by an amount.",
+		tool("trigger_long_rest",
+			"Trigger a long rest for all players. Restores all resources, spell slots, and full hit points.",
 			props(
-				req("character_name", "string", "Character name, or 'player' for the player"),
-				req("amount", "integer", "Heal amount (positive integer)"),
+				req("reason", "string", "Brief in-world reason for the rest (e.g. 'The party makes camp for the night')"),
 			),
-			[]string{"character_name", "amount"},
-		),
-		tool("set_character_alive",
-			"Set a character's alive status (kill or revive).",
-			props(
-				req("character_name", "string", "Character name, or 'player' for the player"),
-				req("alive", "boolean", "true to revive, false to kill"),
-			),
-			[]string{"character_name", "alive"},
+			[]string{"reason"},
 		),
 		tool("get_room_info",
 			"Get full details about a room including items, occupants, and exits.",
@@ -134,7 +125,7 @@ func WorldBuilderTools() []types.Tool {
 //   - result: string to feed back to the model as a tool_result block
 //   - event: player-visible WorldEvent if the player can observe the mutation, otherwise nil
 //   - err: non-nil if the tool call failed
-func DispatchTool(g *game.Game, name string, input map[string]any) (result string, event *game.WorldEvent, err error) {
+func DispatchTool(ctx context.Context, g *game.Game, name string, input map[string]any) (result string, event *game.WorldEvent, err error) {
 	switch name {
 	case "create_room":
 		result, event, err = execCreateRoom(g, input)
@@ -152,12 +143,10 @@ func DispatchTool(g *game.Game, name string, input map[string]any) (result strin
 		result, event, err = execTakeItemFromPlayer(g, input)
 	case "place_item_in_room":
 		result, event, err = execPlaceItemInRoom(g, input)
-	case "damage_character":
-		result, event, err = execDamageCharacter(g, input)
-	case "heal_character":
-		result, event, err = execHealCharacter(g, input)
-	case "set_character_alive":
-		result, event, err = execSetCharacterAlive(g, input)
+	case "trigger_short_rest":
+		result, event, err = execTriggerShortRest(ctx, g, input)
+	case "trigger_long_rest":
+		result, event, err = execTriggerLongRest(ctx, g, input)
 	case "get_room_info":
 		result, event, err = execGetRoomInfo(g, input)
 	default:
@@ -363,111 +352,48 @@ func execPlaceItemInRoom(g *game.Game, in map[string]any) (string, *game.WorldEv
 	return fmt.Sprintf("Placed %q in %q", itemName, roomName), ev, nil
 }
 
-func execDamageCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
-	charName := strArg(in, "character_name")
-	amount := int(numArg(in, "amount"))
-	if charName == "player" {
-		owner, _ := g.OwnerCharacter()
-		if err := owner.TakeDamage(amount); err != nil {
-			return "", nil, err
+func execTriggerShortRest(ctx context.Context, g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	reason := strArg(in, "reason")
+	var errs []string
+	restored := 0
+	for uid, dndChar := range g.DnDPlayers {
+		if dndChar == nil {
+			continue
 		}
-		g.SetPlayerCharacter(g.OwnerID, owner)
-		result := fmt.Sprintf("Player health: %d", owner.Health)
-		// Always visible
-		ev := &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. \u2764 %d", amount, owner.Health)}
-		return result, ev, nil
-	}
-	c, err := g.GetNPCByName(charName)
-	if err != nil {
-		return "", nil, err
-	}
-	if err := c.TakeDamage(amount); err != nil {
-		return "", nil, err
-	}
-	g.NPCs[c.ID] = c
-	result := fmt.Sprintf("%q health: %d", charName, c.Health)
-	// Visible only if NPC is in player's current room
-	owner, _ := g.OwnerCharacter()
-	var ev *game.WorldEvent
-	if c.LocationID == owner.LocationID {
-		ev = &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("%s takes %d damage. \u2764 %d", charName, amount, c.Health)}
-	}
-	return result, ev, nil
-}
-
-func execHealCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
-	charName := strArg(in, "character_name")
-	amount := int(numArg(in, "amount"))
-	if charName == "player" {
-		owner, _ := g.OwnerCharacter()
-		if err := owner.Heal(amount); err != nil {
-			return "", nil, err
-		}
-		g.SetPlayerCharacter(g.OwnerID, owner)
-		result := fmt.Sprintf("Player health: %d", owner.Health)
-		// Always visible
-		ev := &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. \u2764 %d", amount, owner.Health)}
-		return result, ev, nil
-	}
-	c, err := g.GetNPCByName(charName)
-	if err != nil {
-		return "", nil, err
-	}
-	if err := c.Heal(amount); err != nil {
-		return "", nil, err
-	}
-	g.NPCs[c.ID] = c
-	result := fmt.Sprintf("%q health: %d", charName, c.Health)
-	// Visible only if NPC is in player's current room
-	owner, _ := g.OwnerCharacter()
-	var ev *game.WorldEvent
-	if c.LocationID == owner.LocationID {
-		ev = &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("%s recovers %d health.", charName, amount)}
-	}
-	return result, ev, nil
-}
-
-func execSetCharacterAlive(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
-	charName := strArg(in, "character_name")
-	alive, _ := in["alive"].(bool)
-	if charName == "player" {
-		owner, _ := g.OwnerCharacter()
-		if alive {
-			err := owner.Revive(50)
-			g.SetPlayerCharacter(g.OwnerID, owner)
-			ev := &game.WorldEvent{Type: "revive", Message: "You have been revived. \u2764 50"}
-			return "Player revived", ev, err
-		}
-		owner.Alive = false
-		owner.Health = 0
-		g.SetPlayerCharacter(g.OwnerID, owner)
-		ev := &game.WorldEvent{Type: "death", Message: "You have been slain."}
-		return "Player killed", ev, nil
-	}
-	c, err := g.GetNPCByName(charName)
-	if err != nil {
-		return "", nil, err
-	}
-	var reviveErr error
-	if alive {
-		reviveErr = c.Revive(50)
-	} else {
-		c.Alive = false
-		c.Health = 0
-	}
-	g.NPCs[c.ID] = c
-	result := fmt.Sprintf("%q alive=%v", charName, alive)
-	// Visible if NPC is in player's current room
-	owner, _ := g.OwnerCharacter()
-	var ev *game.WorldEvent
-	if c.LocationID == owner.LocationID {
-		if alive {
-			ev = &game.WorldEvent{Type: "revive", Message: fmt.Sprintf("%s stirs back to life.", charName)}
+		if err := dndChar.ShortRest(ctx); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", uid, err))
 		} else {
-			ev = &game.WorldEvent{Type: "death", Message: fmt.Sprintf("%s has been slain.", charName)}
+			restored++
 		}
 	}
-	return result, ev, reviveErr
+	result := fmt.Sprintf("Short rest taken (%s). %d characters restored resources.", reason, restored)
+	if len(errs) > 0 {
+		result += " Errors: " + fmt.Sprint(errs)
+	}
+	ev := &game.WorldEvent{Type: "heal", Message: "The party takes a short rest and recovers their resources."}
+	return result, ev, nil
+}
+
+func execTriggerLongRest(ctx context.Context, g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	reason := strArg(in, "reason")
+	var errs []string
+	restored := 0
+	for uid, dndChar := range g.DnDPlayers {
+		if dndChar == nil {
+			continue
+		}
+		if err := dndChar.LongRest(ctx); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", uid, err))
+		} else {
+			restored++
+		}
+	}
+	result := fmt.Sprintf("Long rest taken (%s). %d characters fully restored.", reason, restored)
+	if len(errs) > 0 {
+		result += " Errors: " + fmt.Sprint(errs)
+	}
+	ev := &game.WorldEvent{Type: "heal", Message: "The party takes a long rest and recovers fully."}
+	return result, ev, nil
 }
 
 func execGetRoomInfo(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {

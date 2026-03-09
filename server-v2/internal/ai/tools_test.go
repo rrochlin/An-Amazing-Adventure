@@ -1,6 +1,7 @@
 package ai_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
@@ -32,13 +33,13 @@ func newTestGameWithRooms(t *testing.T) (*game.Game, string, string) {
 
 // dispatch is a helper that calls DispatchTool and discards the WorldEvent return.
 func dispatch(g *game.Game, name string, args map[string]any) (string, error) {
-	result, _, err := ai.DispatchTool(g, name, args)
+	result, _, err := ai.DispatchTool(context.Background(), g, name, args)
 	return result, err
 }
 
 // dispatchWithEvent is a helper that returns the WorldEvent alongside result.
 func dispatchWithEvent(g *game.Game, name string, args map[string]any) (string, *game.WorldEvent, error) {
-	return ai.DispatchTool(g, name, args)
+	return ai.DispatchTool(context.Background(), g, name, args)
 }
 
 func TestDispatchCreateRoom(t *testing.T) {
@@ -219,94 +220,31 @@ func TestDispatchGiveAndTakeItem(t *testing.T) {
 	}
 }
 
-func TestDispatchDamageAndHealPlayer(t *testing.T) {
+func TestDispatchTriggerShortRest(t *testing.T) {
 	g, _, _ := newTestGameWithRooms(t)
-
-	_, err := dispatch(g, "damage_character", map[string]any{
-		"character_name": "player",
-		"amount":         float64(40),
+	// short rest with no DnD players — should not error
+	result, err := dispatch(g, "trigger_short_rest", map[string]any{
+		"reason": "The party finds a quiet alcove",
 	})
 	if err != nil {
-		t.Fatalf("damage player: %v", err)
+		t.Fatalf("trigger_short_rest: %v", err)
 	}
-	ownerAfterDamage, _ := g.OwnerCharacter()
-	if ownerAfterDamage.Health != 60 {
-		t.Errorf("expected player health 60, got %d", ownerAfterDamage.Health)
-	}
-
-	_, err = dispatch(g, "heal_character", map[string]any{
-		"character_name": "player",
-		"amount":         float64(20),
-	})
-	if err != nil {
-		t.Fatalf("heal player: %v", err)
-	}
-	ownerAfterHeal, _ := g.OwnerCharacter()
-	if ownerAfterHeal.Health != 80 {
-		t.Errorf("expected player health 80, got %d", ownerAfterHeal.Health)
+	if result == "" {
+		t.Error("expected non-empty result")
 	}
 }
 
-func TestDispatchDamageAndHealNPC(t *testing.T) {
+func TestDispatchTriggerLongRest(t *testing.T) {
 	g, _, _ := newTestGameWithRooms(t)
-	_, _ = dispatch(g, "create_character", map[string]any{
-		"name": "Troll", "description": "Big", "backstory": "", "room_name": "Tavern",
-		"health": float64(100),
-	})
-
-	_, err := dispatch(g, "damage_character", map[string]any{
-		"character_name": "Troll",
-		"amount":         float64(60),
+	// long rest with no DnD players — should not error
+	result, err := dispatch(g, "trigger_long_rest", map[string]any{
+		"reason": "The party makes camp for the night",
 	})
 	if err != nil {
-		t.Fatalf("damage NPC: %v", err)
+		t.Fatalf("trigger_long_rest: %v", err)
 	}
-	troll, _ := g.GetNPCByName("Troll")
-	if troll.Health != 40 {
-		t.Errorf("expected Troll health 40, got %d", troll.Health)
-	}
-
-	_, err = dispatch(g, "heal_character", map[string]any{
-		"character_name": "Troll",
-		"amount":         float64(10),
-	})
-	if err != nil {
-		t.Fatalf("heal NPC: %v", err)
-	}
-	troll, _ = g.GetNPCByName("Troll")
-	if troll.Health != 50 {
-		t.Errorf("expected Troll health 50 after heal, got %d", troll.Health)
-	}
-}
-
-func TestDispatchSetCharacterAlive(t *testing.T) {
-	g, _, _ := newTestGameWithRooms(t)
-	_, _ = dispatch(g, "create_character", map[string]any{
-		"name": "Bandit", "description": "", "backstory": "", "room_name": "Tavern",
-	})
-
-	_, err := dispatch(g, "set_character_alive", map[string]any{
-		"character_name": "Bandit",
-		"alive":          false,
-	})
-	if err != nil {
-		t.Fatalf("kill NPC: %v", err)
-	}
-	bandit, _ := g.GetNPCByName("Bandit")
-	if bandit.Alive {
-		t.Error("expected Bandit to be dead")
-	}
-
-	_, err = dispatch(g, "set_character_alive", map[string]any{
-		"character_name": "Bandit",
-		"alive":          true,
-	})
-	if err != nil {
-		t.Fatalf("revive NPC: %v", err)
-	}
-	bandit, _ = g.GetNPCByName("Bandit")
-	if !bandit.Alive {
-		t.Error("expected Bandit to be alive after revive")
+	if result == "" {
+		t.Error("expected non-empty result")
 	}
 }
 
@@ -342,61 +280,6 @@ func TestNarratorToolsDefined(t *testing.T) {
 }
 
 // ---- Visibility tests ----
-
-func TestDamagePlayerAlwaysProducesEvent(t *testing.T) {
-	g, _, _ := newTestGameWithRooms(t)
-	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
-		"character_name": "player",
-		"amount":         float64(30),
-	})
-	if err != nil {
-		t.Fatalf("damage player: %v", err)
-	}
-	if ev == nil {
-		t.Fatal("expected WorldEvent for player damage, got nil")
-	}
-	if ev.Type != "damage" {
-		t.Errorf("expected event type 'damage', got %q", ev.Type)
-	}
-}
-
-func TestDamageNPCInSameRoom_ProducesEvent(t *testing.T) {
-	g, _, _ := newTestGameWithRooms(t)
-	_, _ = dispatch(g, "create_character", map[string]any{
-		"name": "Goblin", "description": "", "backstory": "", "room_name": "Tavern",
-		"health": float64(50),
-	})
-	// Player is in Tavern; Goblin is in Tavern — should see event
-	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
-		"character_name": "Goblin",
-		"amount":         float64(10),
-	})
-	if err != nil {
-		t.Fatalf("damage NPC: %v", err)
-	}
-	if ev == nil {
-		t.Fatal("expected WorldEvent for NPC damage in same room, got nil")
-	}
-}
-
-func TestDamageNPCInDifferentRoom_NoEvent(t *testing.T) {
-	g, _, _ := newTestGameWithRooms(t)
-	// Create NPC in Alley; player is in Tavern
-	_, _ = dispatch(g, "create_character", map[string]any{
-		"name": "Shadow", "description": "", "backstory": "", "room_name": "Alley",
-		"health": float64(50),
-	})
-	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
-		"character_name": "Shadow",
-		"amount":         float64(10),
-	})
-	if err != nil {
-		t.Fatalf("damage NPC in different room: %v", err)
-	}
-	if ev != nil {
-		t.Errorf("expected nil WorldEvent for NPC damage in different room, got %+v", ev)
-	}
-}
 
 func TestGiveItemToPlayerAlwaysProducesEvent(t *testing.T) {
 	g, _, _ := newTestGameWithRooms(t)

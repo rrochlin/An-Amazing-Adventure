@@ -10,9 +10,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 
+	"github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/monster"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
+	"github.com/rrochlin/an-amazing-adventure/internal/combat"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
@@ -156,6 +159,15 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	}
 	emit(fmt.Sprintf("World built — %d rooms placed", len(g.Rooms)))
 
+	// Step 2b: Seed monsters into non-starting rooms
+	emit("Placing encounters...")
+	seedMonsters(g)
+	liveCount := 0
+	for _, ms := range g.RoomMonsters {
+		liveCount += len(ms)
+	}
+	emit(fmt.Sprintf("Placed %d monsters across %d rooms", liveCount, len(g.RoomMonsters)))
+
 	// Step 3: Populate opening state
 	emit("Writing opening scene...")
 	openingHistory := []game.ChatMessage{
@@ -237,6 +249,72 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	}
 
 	return nil
+}
+
+// seedMonsters populates rooms with monsters. The player's starting room is left
+// clear. The last room in blueprint order gets a tougher encounter (boss room).
+// Remaining rooms get 1–3 low-CR monsters chosen at random.
+func seedMonsters(g *game.Game) {
+	// Standard encounter table: low-CR threats
+	lowCR := []string{"skeleton", "zombie", "goblin", "wolf", "giant_rat", "bandit"}
+	// Boss encounter: one high-CR + two low-CR guards
+	bossTypes := []string{"brown_bear", "ghoul", "thug"}
+
+	// Identify starting room ID (owner's location)
+	owner, ok := g.GetPlayerCharacter(g.OwnerID)
+	startRoomID := ""
+	if ok {
+		startRoomID = owner.LocationID
+	}
+
+	// Collect room IDs (excluding starting room)
+	var roomIDs []string
+	for id := range g.Rooms {
+		if id != startRoomID {
+			roomIDs = append(roomIDs, id)
+		}
+	}
+
+	if len(roomIDs) == 0 {
+		return
+	}
+
+	rng := rand.New(rand.NewSource(int64(len(roomIDs) * 17))) //nolint:gosec
+
+	// Last room in the slice is the boss room
+	bossRoomID := roomIDs[len(roomIDs)-1]
+
+	for _, roomID := range roomIDs {
+		var monsterList []*monster.Data
+		if roomID == bossRoomID {
+			// Boss encounter: pick one boss + two low-CR guards
+			bossType := bossTypes[rng.Intn(len(bossTypes))]
+			if m := combat.NewMonsterByType(bossType); m != nil {
+				monsterList = append(monsterList, m.ToData())
+			}
+			for i := 0; i < 2; i++ {
+				guardType := lowCR[rng.Intn(len(lowCR))]
+				if m := combat.NewMonsterByType(guardType); m != nil {
+					monsterList = append(monsterList, m.ToData())
+				}
+			}
+		} else {
+			// Standard encounter: 1–3 low-CR monsters (50% chance of any room having monsters)
+			if rng.Intn(2) == 0 {
+				continue // skip — empty room
+			}
+			count := 1 + rng.Intn(3)
+			for i := 0; i < count; i++ {
+				monsterType := lowCR[rng.Intn(len(lowCR))]
+				if m := combat.NewMonsterByType(monsterType); m != nil {
+					monsterList = append(monsterList, m.ToData())
+				}
+			}
+		}
+		if len(monsterList) > 0 {
+			g.SetRoomMonsters(roomID, monsterList)
+		}
+	}
 }
 
 func main() {

@@ -6,7 +6,10 @@ import (
 
 	"github.com/KirkDiggler/rpg-toolkit/events"
 	dnd5echar "github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/character"
+	"github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/monster"
 	"github.com/google/uuid"
+
+	"github.com/rrochlin/an-amazing-adventure/internal/combat"
 )
 
 // SchemaVersion is incremented whenever SaveState's structure changes
@@ -48,20 +51,32 @@ type Game struct {
 	ConversationCount    int                     // number of completed narrator turns
 	CreationParams       CharacterCreationData   // player-supplied setup choices (v3+)
 	LegacyCreationParams AdventureCreationParams // preserved for v1/v2 records
+
+	// Combat state (v3+)
+	// RoomMonsters maps roomID → serialized monster data for that room.
+	// Monsters are loaded into live *monster.Monster only during combat resolution.
+	RoomMonsters map[string][]*monster.Data // keyed by roomID
+	// PendingCombatContext is set by ws-game-action after resolving combat and consumed
+	// by the next ws-chat call to inject mechanical results into the Narrator prompt.
+	PendingCombatContext string
+	// InitiativeOrder is set when a combat encounter begins and cleared when all
+	// monsters in the current room are dead.
+	InitiativeOrder []combat.InitiativeEntry
 }
 
 // NewGame creates a blank Game with server-generated IDs.
 func NewGame(sessionID, userID string) *Game {
 	return &Game{
-		ID:         sessionID,
-		OwnerID:    userID,
-		UserID:     userID,
-		Players:    make(map[string]Character),
-		DnDPlayers: make(map[string]*dnd5echar.Character),
-		PartySize:  4,
-		Rooms:      make(map[string]Area),
-		Items:      make(map[string]Item),
-		NPCs:       make(map[string]Character),
+		ID:           sessionID,
+		OwnerID:      userID,
+		UserID:       userID,
+		Players:      make(map[string]Character),
+		DnDPlayers:   make(map[string]*dnd5echar.Character),
+		PartySize:    4,
+		Rooms:        make(map[string]Area),
+		Items:        make(map[string]Item),
+		NPCs:         make(map[string]Character),
+		RoomMonsters: make(map[string][]*monster.Data),
 	}
 }
 
@@ -133,6 +148,59 @@ func (g *Game) LoadDnDCharacters(ctx context.Context, playersData map[string]*dn
 	}
 	g.DnDPlayers = players
 	return bus, nil
+}
+
+// -------------------------------------------------------------------
+// Combat helpers
+// -------------------------------------------------------------------
+
+// GetRoomMonsters returns the serialized monster data for a specific room.
+// Returns nil if no monsters are present.
+func (g *Game) GetRoomMonsters(roomID string) []*monster.Data {
+	if g.RoomMonsters == nil {
+		return nil
+	}
+	return g.RoomMonsters[roomID]
+}
+
+// SetRoomMonsters writes serialized monster data for a room.
+func (g *Game) SetRoomMonsters(roomID string, data []*monster.Data) {
+	if g.RoomMonsters == nil {
+		g.RoomMonsters = make(map[string][]*monster.Data)
+	}
+	if len(data) == 0 {
+		delete(g.RoomMonsters, roomID)
+		return
+	}
+	g.RoomMonsters[roomID] = data
+}
+
+// CurrentRoomMonsters returns the serialized monster data for the owner's current room.
+func (g *Game) CurrentRoomMonsters() []*monster.Data {
+	owner, ok := g.GetPlayerCharacter(g.OwnerID)
+	if !ok || owner.LocationID == "" {
+		return nil
+	}
+	return g.GetRoomMonsters(owner.LocationID)
+}
+
+// CurrentRoomMonstersForPlayer returns serialized monster data for a specific player's current room.
+func (g *Game) CurrentRoomMonstersForPlayer(userID string) []*monster.Data {
+	player, ok := g.GetPlayerCharacter(userID)
+	if !ok || player.LocationID == "" {
+		return nil
+	}
+	return g.GetRoomMonsters(player.LocationID)
+}
+
+// HasLiveMonstersInRoom returns true if there is at least one alive monster in the room.
+func (g *Game) HasLiveMonstersInRoom(roomID string) bool {
+	for _, data := range g.GetRoomMonsters(roomID) {
+		if data != nil && data.HitPoints > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // -------------------------------------------------------------------
@@ -560,6 +628,11 @@ type SaveState struct {
 	ConversationCount    int                        `json:"conversation_count,omitempty" dynamodbav:"conversation_count,omitempty"`
 	CreationParams       CharacterCreationData      `json:"creation_params,omitempty" dynamodbav:"creation_params,omitempty"`               // v3+
 	LegacyCreationParams AdventureCreationParams    `json:"legacy_creation_params,omitempty" dynamodbav:"legacy_creation_params,omitempty"` // v1/v2 only
+
+	// Combat state (v3+)
+	RoomMonsters         map[string][]*monster.Data `json:"room_monsters,omitempty" dynamodbav:"room_monsters,omitempty"`
+	PendingCombatContext string                     `json:"pending_combat_context,omitempty" dynamodbav:"pending_combat_context,omitempty"`
+	InitiativeOrder      []combat.InitiativeEntry   `json:"initiative_order,omitempty" dynamodbav:"initiative_order,omitempty"`
 }
 
 // NarrativeMessage stores a single turn of Bedrock conversation history.
@@ -646,6 +719,9 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 		ConversationCount:    g.ConversationCount,
 		CreationParams:       g.CreationParams,
 		LegacyCreationParams: g.LegacyCreationParams,
+		RoomMonsters:         g.RoomMonsters,
+		PendingCombatContext: g.PendingCombatContext,
+		InitiativeOrder:      g.InitiativeOrder,
 	}
 }
 
@@ -665,6 +741,11 @@ func FromSaveState(s SaveState) (*Game, error) {
 	if partySize == 0 {
 		partySize = 4 // default
 	}
+	roomMonsters := s.RoomMonsters
+	if roomMonsters == nil {
+		roomMonsters = make(map[string][]*monster.Data)
+	}
+
 	g := &Game{
 		ID:                   s.SessionID,
 		OwnerID:              ownerID,
@@ -684,6 +765,9 @@ func FromSaveState(s SaveState) (*Game, error) {
 		ConversationCount:    s.ConversationCount,
 		CreationParams:       s.CreationParams,
 		LegacyCreationParams: s.LegacyCreationParams,
+		RoomMonsters:         roomMonsters,
+		PendingCombatContext: s.PendingCombatContext,
+		InitiativeOrder:      s.InitiativeOrder,
 	}
 
 	switch {

@@ -266,7 +266,7 @@ func (c *Client) EngineerScan(
 			raw, _ := json.Marshal(tu.Value.Input)
 			_ = json.Unmarshal(raw, &input)
 
-			toolResult, event, dispatchErr := DispatchTool(g, toolName, input)
+			toolResult, event, dispatchErr := DispatchTool(ctx, g, toolName, input)
 			if dispatchErr != nil {
 				log.Printf("[engineer] round=%d tool=%s FAILED: %v", round, toolName, dispatchErr)
 				toolResult = fmt.Sprintf("error: %v", dispatchErr)
@@ -802,6 +802,8 @@ func fromBedrockMessages(msgs []types.Message) []game.NarrativeMessage {
 
 // narratorSystemPrompt returns the system instructions for the narrator.
 // The Narrator has NO tools — it must write pure prose only.
+// When g.PendingCombatContext is non-empty it is injected as a [COMBAT LOG] block
+// so Claude narrates the mechanical results dramatically without inventing outcomes.
 func narratorSystemPrompt(g *game.Game) string {
 	owner, _ := g.OwnerCharacter()
 	room, _ := g.GetRoom(owner.LocationID)
@@ -812,8 +814,16 @@ func narratorSystemPrompt(g *game.Game) string {
 		charContext = "\n\n" + game.BuildCharacterContext(owner.Name, dndChar.ToData())
 	}
 
+	// Inject pending combat results so Claude narrates what actually happened
+	combatContext := ""
+	if g.PendingCombatContext != "" {
+		combatContext = fmt.Sprintf("\n\n[COMBAT LOG — narrate these mechanical results dramatically; do not change the outcomes:]\n%s", g.PendingCombatContext)
+		// Consume after injecting so it is not repeated on subsequent turns
+		g.PendingCombatContext = ""
+	}
+
 	return fmt.Sprintf(`You are an expert Dungeon Master narrating a D&D 5e text adventure game.
-The player's name is %q and they are currently in %q.%s
+The player's name is %q and they are currently in %q.%s%s
 
 Your ONLY job is to write immersive, engaging narrative prose.
 Do NOT describe what you are about to do or what tools you might call.
@@ -831,7 +841,7 @@ DM Philosophy:
 - Be specific and sensory: name the smells, the sounds, the textures.
 
 Write 2-4 paragraphs of vivid prose. Do not break the fourth wall.`,
-		owner.Name, room.Name, charContext)
+		owner.Name, room.Name, charContext, combatContext)
 }
 
 // extractText pulls the first text block from a ConverseOutput.
