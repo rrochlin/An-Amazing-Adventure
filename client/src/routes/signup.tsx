@@ -197,15 +197,17 @@ function RouteComponent() {
               margin="normal"
               required
               autoFocus
-              inputProps={{ maxLength: 8, inputMode: "numeric" }}
-              helperText="6-digit code from the enchanted missive"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Typography sx={{ fontSize: "1rem", opacity: 0.5 }}>🔑</Typography>
-                  </InputAdornment>
-                ),
+              slotProps={{
+                htmlInput: { maxLength: 8, inputMode: "numeric", autoComplete: "one-time-code" },
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Typography sx={{ fontSize: "1rem", opacity: 0.5 }}>🔑</Typography>
+                    </InputAdornment>
+                  ),
+                },
               }}
+              helperText="6-digit code from the enchanted missive"
             />
             <Button
               type="submit"
