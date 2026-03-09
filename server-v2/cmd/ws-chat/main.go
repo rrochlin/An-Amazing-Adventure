@@ -113,6 +113,13 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
+	// Load D&D characters for this invocation (binds a fresh event bus)
+	if saveState.PlayersData != nil {
+		if _, loadErr := g.LoadDnDCharacters(ctx, saveState.PlayersData); loadErr != nil {
+			log.Printf("ws-chat: LoadDnDCharacters (non-fatal): %v", loadErr)
+		}
+	}
+
 	// Set up Bedrock client
 	aiClient, err := ai.New(ctx)
 	if err != nil {
