@@ -5,13 +5,16 @@ package wsutil
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewaymanagementapi"
+	apigateway_types "github.com/aws/aws-sdk-go-v2/service/apigatewaymanagementapi/types"
 )
 
 // FrameType identifies the kind of message being pushed to the client.
@@ -122,4 +125,55 @@ func (s *Sender) SendWorldGenLog(ctx context.Context, connectionID, line string)
 // The client should transition from the terminal view to the game.
 func (s *Sender) SendWorldGenReady(ctx context.Context, connectionID string) error {
 	return s.Send(ctx, connectionID, Frame{Type: FrameWorldGenReady})
+}
+
+// Broadcast sends a frame to multiple connections concurrently.
+// Returns the connection IDs of stale connections (410 Gone from API Gateway).
+// Stale connections should be deleted by the caller.
+func (s *Sender) Broadcast(ctx context.Context, connectionIDs []string, frame Frame) (stale []string, err error) {
+	data, err := json.Marshal(frame)
+	if err != nil {
+		return nil, fmt.Errorf("wsutil.Broadcast: marshal: %w", err)
+	}
+	for _, connID := range connectionIDs {
+		_, postErr := s.mgmt.PostToConnection(ctx, &apigatewaymanagementapi.PostToConnectionInput{
+			ConnectionId: aws.String(connID),
+			Data:         data,
+		})
+		if postErr != nil {
+			var gone *apigateway_types.GoneException
+			if errors.As(postErr, &gone) {
+				stale = append(stale, connID)
+			} else {
+				log.Printf("wsutil.Broadcast: send to %s: %v", connID, postErr)
+			}
+		}
+	}
+	return stale, nil
+}
+
+// ConnectionStore is the minimal DB interface needed by BroadcastAndCleanStale.
+type ConnectionStore interface {
+	GetConnectionsByGameID(context.Context, string) ([]Connection, error)
+	DeleteConnection(context.Context, string) error
+}
+
+// Connection is the minimal type needed by BroadcastAndCleanStale.
+// It mirrors db.Connection — defined here to avoid an import cycle.
+type Connection struct {
+	ConnectionID string
+	UserID       string
+}
+
+// BroadcastAndCleanStale sends a frame to all connections for a game session and
+// deletes any stale (410 Gone) connections from the database.
+// This is the common broadcast pattern used in ws-chat and ws-game-action.
+func (s *Sender) BroadcastAndCleanStale(ctx context.Context, connIDs []string, frame Frame, deleter interface {
+	DeleteConnection(context.Context, string) error
+}) error {
+	stale, _ := s.Broadcast(ctx, connIDs, frame)
+	for _, connID := range stale {
+		_ = deleter.DeleteConnection(ctx, connID)
+	}
+	return nil
 }

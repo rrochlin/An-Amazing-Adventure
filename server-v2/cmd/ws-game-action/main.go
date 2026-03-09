@@ -38,6 +38,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 410}, nil
 	}
+	userID := string(conn.UserID)
 
 	if conn.Streaming {
 		ws, _ := wsutil.New(ctx)
@@ -71,7 +72,8 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			actionErr = findErr
 			break
 		}
-		currentRoom, roomErr := g.GetRoom(g.Player.LocationID)
+		player, _ := g.GetPlayerCharacter(userID)
+		currentRoom, roomErr := g.GetRoom(player.LocationID)
 		if roomErr != nil {
 			actionErr = roomErr
 			break
@@ -82,18 +84,19 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		}
 		_ = currentRoom.RemoveItemID(item.ID)
 		g.UpdateRoom(currentRoom)
-		actionErr = g.Player.AddItemID(item.ID)
+		actionErr = g.GiveItemToCharacter(item.ID, userID)
 	case "drop":
 		item, findErr := g.GetItemByName(msg.Payload)
 		if findErr != nil {
 			actionErr = findErr
 			break
 		}
-		if !g.Player.HasItem(item.ID) {
+		player, _ := g.GetPlayerCharacter(userID)
+		if !player.HasItem(item.ID) {
 			actionErr = fmt.Errorf("you don't have %q", msg.Payload)
 			break
 		}
-		room, roomErr := g.GetRoom(g.Player.LocationID)
+		room, roomErr := g.GetRoom(player.LocationID)
 		if roomErr != nil {
 			actionErr = roomErr
 			break
@@ -105,11 +108,21 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			actionErr = findErr
 			break
 		}
-		actionErr = g.Player.EquipItem(item)
+		player, _ := g.GetPlayerCharacter(userID)
+		if equipErr := player.EquipItem(item); equipErr != nil {
+			actionErr = equipErr
+			break
+		}
+		g.SetPlayerCharacter(userID, player)
 	case "unequip":
 		// Payload is the slot name (e.g. "head", "chest")
 		slot := game.EquipmentSlot(msg.Payload)
-		_, actionErr = g.Player.UnequipItem(slot)
+		player, _ := g.GetPlayerCharacter(userID)
+		if _, unequipErr := player.UnequipItem(slot); unequipErr != nil {
+			actionErr = unequipErr
+			break
+		}
+		g.SetPlayerCharacter(userID, player)
 	default:
 		actionErr = fmt.Errorf("unknown sub_action: %s", msg.SubAction)
 	}
@@ -129,9 +142,22 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
-	// Send full state update after any direct action
-	stateView := g.BuildGameStateView(saveState.ChatHistory)
-	_ = ws.SendFullState(ctx, connID, stateView)
+	// Broadcast per-member state update to all connected party members
+	allConns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	if len(allConns) == 0 {
+		// Fallback: send only to the requesting connection
+		stateView := g.BuildGameStateView(userID, saveState.ChatHistory)
+		_ = ws.SendFullState(ctx, connID, stateView)
+	} else {
+		for _, gc := range allConns {
+			memberUID := string(gc.UserID)
+			memberView := g.BuildGameStateView(memberUID, saveState.ChatHistory)
+			if sendErr := ws.SendFullState(ctx, gc.ConnectionID, memberView); sendErr != nil {
+				log.Printf("ws-game-action: send state to %s: %v", gc.ConnectionID, sendErr)
+				_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)
+			}
+		}
+	}
 
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }

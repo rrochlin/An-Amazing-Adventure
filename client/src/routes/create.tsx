@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useSearch } from "@tanstack/react-router";
 import {
    Box,
    Button,
@@ -13,7 +13,8 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import { isAuthenticated } from "@/services/auth.service";
-import { CreateGame } from "@/services/api.game";
+import { CreateGame, JoinCharacter } from "@/services/api.game";
+import { z } from "zod";
 
 const PREFERENCE_OPTIONS = [
    { label: "Combat", value: "combat" },
@@ -26,10 +27,12 @@ const PREFERENCE_OPTIONS = [
    { label: "Mystery", value: "mystery" },
 ];
 
-const STEPS = ["Your Character", "Adventure Preferences"];
+const CREATE_STEPS = ["Your Character", "Adventure Preferences"];
+const JOIN_STEPS = ["Your Character"];
 
 export const Route = createFileRoute("/create")({
    component: CreateRoute,
+   validateSearch: z.object({ session: z.string().optional() }),
    beforeLoad: () => {
       if (!isAuthenticated()) {
          throw redirect({ to: "/login", search: { redirect: location.href } });
@@ -39,6 +42,10 @@ export const Route = createFileRoute("/create")({
 
 function CreateRoute() {
    const navigate = useNavigate();
+   const { session: joinSessionId } = useSearch({ from: "/create" });
+   const isJoinPath = !!joinSessionId;
+   const STEPS = isJoinPath ? JOIN_STEPS : CREATE_STEPS;
+
    const [step, setStep] = useState(0);
    const [error, setError] = useState<string | null>(null);
    const [isSubmitting, setIsSubmitting] = useState(false);
@@ -49,7 +56,7 @@ function CreateRoute() {
    const [playerDescription, setPlayerDescription] = useState("");
    const [playerBackstory, setPlayerBackstory] = useState("");
 
-   // Adventure preference fields
+   // Adventure preference fields (new-game only)
    const [preferences, setPreferences] = useState<string[]>([]);
    const [themeHint, setThemeHint] = useState("");
 
@@ -66,6 +73,20 @@ function CreateRoute() {
       setError(null);
       setIsSubmitting(true);
       try {
+         if (isJoinPath) {
+            // Join path: update character stub for this session
+            await JoinCharacter(joinSessionId, {
+               player_name: playerName.trim() || undefined,
+               player_age: playerAge.trim() || undefined,
+               player_description: playerDescription.trim() || undefined,
+               player_backstory: playerBackstory.trim() || undefined,
+            });
+            navigate({
+               to: "/game-{$sessionUUID}",
+               params: { sessionUUID: joinSessionId },
+            });
+            return;
+         }
          const result = await CreateGame({
             player_name: playerName.trim() || undefined,
             player_age: playerAge.trim() || undefined,
@@ -126,8 +147,14 @@ function CreateRoute() {
                   pb: 2,
                }}
             >
-               Forge Your Adventure
+               {isJoinPath ? "Join the Adventure" : "Forge Your Adventure"}
             </Typography>
+            {isJoinPath && (
+               <Alert severity="info" sx={{ mb: 2 }}>
+                  You&apos;re joining an existing adventure. Create your character and
+                  you&apos;ll be dropped into the world.
+               </Alert>
+            )}
 
             <Stepper activeStep={step} sx={{ mb: 4, mt: 3 }}>
                {STEPS.map((label) => (
@@ -211,9 +238,20 @@ function CreateRoute() {
                      >
                         Cancel
                      </Button>
-                     <Button variant="contained" onClick={handleNext}>
-                        Next: Adventure Preferences
-                     </Button>
+                     {isJoinPath ? (
+                        <Button
+                           variant="contained"
+                           onClick={handleSubmit}
+                           disabled={isSubmitting}
+                           sx={{ minWidth: 160 }}
+                        >
+                           {isSubmitting ? "Joining..." : "Enter the Adventure"}
+                        </Button>
+                     ) : (
+                        <Button variant="contained" onClick={handleNext}>
+                           Next: Adventure Preferences
+                        </Button>
+                     )}
                   </Box>
                </Box>
             )}

@@ -55,14 +55,22 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 410}, nil // Gone
 	}
 
-	// Block concurrent chats
-	if conn.Streaming {
-		ws, _ := wsutil.New(ctx)
-		_ = ws.Send(ctx, connID, wsutil.Frame{Type: wsutil.FrameStreamingBlocked})
-		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	// Block concurrent chats: check if ANY connection for this session is already streaming.
+	gameConns, gcErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	if gcErr != nil {
+		log.Printf("ws-chat: GetConnectionsByGameID: %v", gcErr)
+		// Fall back to checking just this connection
+		gameConns = []db.Connection{conn}
+	}
+	for _, gc := range gameConns {
+		if gc.Streaming {
+			ws, _ := wsutil.New(ctx)
+			_ = ws.Send(ctx, connID, wsutil.Frame{Type: wsutil.FrameStreamingBlocked})
+			return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+		}
 	}
 
-	// Mark streaming = true
+	// Mark streaming = true on this connection only
 	if err := dbClient.SetStreaming(ctx, connID, true); err != nil {
 		log.Printf("ws-chat: set streaming: %v", err)
 	}
@@ -114,14 +122,30 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}
 
 	// Capture pre-turn state for delta calculation
-	preTurnPlayerLoc := g.Player.LocationID
+	preTurnOwner, _ := g.OwnerCharacter()
+	preTurnPlayerLoc := preTurnOwner.LocationID
 
-	// Step 1: Stream narrator prose — no tools, pure narrative.
+	// Build connection ID list for broadcast (refresh after streaming flag is set)
+	allGameConns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	allConnIDs := make([]string, 0, len(allGameConns))
+	for _, gc := range allGameConns {
+		allConnIDs = append(allConnIDs, gc.ConnectionID)
+	}
+	if len(allConnIDs) == 0 {
+		allConnIDs = []string{connID} // fallback to sender only
+	}
+
+	// Step 1: Stream narrator prose — broadcast each chunk to all party members.
 	narratorResult, err := aiClient.NarrateStream(
 		ctx, g, saveState.Narrative, msg.Content,
 		func(chunk string) {
-			if sendErr := ws.SendNarrativeChunk(ctx, connID, chunk); sendErr != nil {
-				log.Printf("ws-chat: send chunk: %v", sendErr)
+			chunkFrame := wsutil.Frame{
+				Type:    wsutil.FrameNarrativeChunk,
+				Payload: map[string]string{"content": chunk},
+			}
+			stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
+			for _, s := range stale {
+				_ = dbClient.DeleteConnection(ctx, s)
 			}
 		},
 	)
@@ -131,8 +155,11 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
-	// Step 2: Signal streaming complete (client commits the narrative bubble).
-	_ = ws.SendNarrativeEnd(ctx, connID)
+	// Step 2: Signal streaming complete — broadcast to all party members.
+	staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
+	for _, s := range staleEnds {
+		_ = dbClient.DeleteConnection(ctx, s)
+	}
 
 	// Step 3: Engineer infers world mutations from the narrative and executes them.
 	// Runs after narrative_end so the client never waits on the Engineer for prose.
@@ -190,18 +217,28 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		log.Printf("ws-chat: UpdateUserTokens (non-fatal): %v", accountErr)
 	}
 
-	// Step 7: Send state delta — player, current room, and any world events.
-	delta := game.StateDelta{
-		Events: engineerResult.Events,
+	// Step 7: Send per-member state delta — each party member gets their own
+	// perspective (their own character's location and inventory).
+	postTurnOwner, _ := g.OwnerCharacter()
+	postTurnOwnerLoc := postTurnOwner.LocationID
+	// Refresh connection list for delta fanout (some may have disconnected)
+	freshConns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	for _, gc := range freshConns {
+		memberUID := string(gc.UserID)
+		memberView := g.BuildGameStateView(memberUID, nil)
+		delta := game.StateDelta{
+			Events: engineerResult.Events,
+			Player: &memberView.Player,
+			Self:   &memberView.Self,
+		}
+		if postTurnOwnerLoc != preTurnPlayerLoc || true { // always send current room
+			delta.CurrentRoom = &memberView.CurrentRoom
+		}
+		if sendErr := ws.SendDelta(ctx, gc.ConnectionID, delta); sendErr != nil {
+			log.Printf("ws-chat: send delta to %s: %v", gc.ConnectionID, sendErr)
+			_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)
+		}
 	}
-	playerView := g.BuildGameStateView(nil).Player
-	delta.Player = &playerView
-	if g.Player.LocationID != preTurnPlayerLoc || true { // always send current room
-		roomView := g.BuildGameStateView(nil).CurrentRoom
-		delta.CurrentRoom = &roomView
-	}
-
-	_ = ws.SendDelta(ctx, connID, delta)
 
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }

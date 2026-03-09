@@ -7,9 +7,9 @@ import (
 )
 
 // SchemaVersion is incremented whenever SaveState's structure changes
-// in a backward-incompatible way. Records with a lower version are
-// rejected on load rather than silently corrupted.
-const SchemaVersion = 1
+// in a backward-incompatible way. FromSaveState handles migration from
+// older versions.
+const SchemaVersion = 2
 
 // AdventureCreationParams holds the player-provided setup choices that were
 // used when the game was created. All fields are optional — the AI fills in
@@ -26,8 +26,11 @@ type AdventureCreationParams struct {
 // It is never stored directly; SaveState is the DynamoDB-serialisable form.
 type Game struct {
 	ID                string
-	UserID            string
-	Player            Character
+	OwnerID           string               // session owner — only they can delete
+	UserID            string               // preserved for backward compat (= OwnerID)
+	Players           map[string]Character // keyed by userID — all party members
+	PartySize         int                  // max party members (default 4)
+	InviteCode        string               // active invite code, if any
 	Rooms             map[string]Area      // keyed by room ID
 	Items             map[string]Item      // keyed by item ID — global item registry
 	NPCs              map[string]Character // keyed by character ID
@@ -44,12 +47,49 @@ type Game struct {
 // NewGame creates a blank Game with server-generated IDs.
 func NewGame(sessionID, userID string) *Game {
 	return &Game{
-		ID:     sessionID,
-		UserID: userID,
-		Rooms:  make(map[string]Area),
-		Items:  make(map[string]Item),
-		NPCs:   make(map[string]Character),
+		ID:        sessionID,
+		OwnerID:   userID,
+		UserID:    userID,
+		Players:   make(map[string]Character),
+		PartySize: 4,
+		Rooms:     make(map[string]Area),
+		Items:     make(map[string]Item),
+		NPCs:      make(map[string]Character),
 	}
+}
+
+// -------------------------------------------------------------------
+// Party helpers
+// -------------------------------------------------------------------
+
+// GetPlayerCharacter returns the character for a specific user.
+// Returns zero-value Character and false if user is not in this game.
+func (g *Game) GetPlayerCharacter(userID string) (Character, bool) {
+	if g.Players == nil {
+		return Character{}, false
+	}
+	c, ok := g.Players[userID]
+	return c, ok
+}
+
+// SetPlayerCharacter writes a character for a user.
+func (g *Game) SetPlayerCharacter(userID string, c Character) {
+	if g.Players == nil {
+		g.Players = make(map[string]Character)
+	}
+	g.Players[userID] = c
+}
+
+// PlayerInGame returns true if the given user is a party member (owner or joined).
+func (g *Game) PlayerInGame(userID string) bool {
+	_, ok := g.Players[userID]
+	return ok
+}
+
+// OwnerCharacter is a convenience accessor for the session owner's character.
+// Returns zero-value Character and false if the owner has no character yet.
+func (g *Game) OwnerCharacter() (Character, bool) {
+	return g.GetPlayerCharacter(g.OwnerID)
 }
 
 // -------------------------------------------------------------------
@@ -139,10 +179,14 @@ func (g *Game) ConnectRooms(fromID, toID, direction string) error {
 	return nil
 }
 
-// CalculateRoomCoordinates runs BFS from the player's starting room to assign
+// CalculateRoomCoordinates runs BFS from the owner's starting room to assign
 // map coordinates to all reachable rooms.
 func (g *Game) CalculateRoomCoordinates() {
-	startID := g.Player.LocationID
+	owner, ok := g.GetPlayerCharacter(g.OwnerID)
+	if !ok {
+		return
+	}
+	startID := owner.LocationID
 	if startID == "" {
 		return
 	}
@@ -233,23 +277,54 @@ func (g *Game) PlaceItemInRoom(itemID, roomID string) error {
 	return nil
 }
 
-// GiveItemToPlayer moves an item into the player's inventory.
+// GiveItemToPlayer moves an item into the owner's inventory.
+// For party sessions, items are given to the session owner.
 func (g *Game) GiveItemToPlayer(itemID string) error {
 	if _, err := g.GetItem(itemID); err != nil {
 		return err
 	}
 	g.removeItemFromAnywhere(itemID)
-	return g.Player.AddItemID(itemID)
-}
-
-// TakeItemFromPlayer moves an item from the player's inventory into a room.
-func (g *Game) TakeItemFromPlayer(itemID, roomID string) error {
-	if !g.Player.HasItem(itemID) {
-		return fmt.Errorf("player does not have item %s", itemID)
+	owner, ok := g.GetPlayerCharacter(g.OwnerID)
+	if !ok {
+		return fmt.Errorf("owner character not found")
 	}
-	if err := g.Player.RemoveItemID(itemID); err != nil {
+	if err := owner.AddItemID(itemID); err != nil {
 		return err
 	}
+	g.Players[g.OwnerID] = owner
+	return nil
+}
+
+// GiveItemToCharacter moves an item into the specified player's inventory.
+func (g *Game) GiveItemToCharacter(itemID, userID string) error {
+	if _, err := g.GetItem(itemID); err != nil {
+		return err
+	}
+	player, ok := g.GetPlayerCharacter(userID)
+	if !ok {
+		return fmt.Errorf("player %s not found in game", userID)
+	}
+	g.removeItemFromAnywhere(itemID)
+	if err := player.AddItemID(itemID); err != nil {
+		return err
+	}
+	g.Players[userID] = player
+	return nil
+}
+
+// TakeItemFromPlayer moves an item from the owner's inventory into a room.
+func (g *Game) TakeItemFromPlayer(itemID, roomID string) error {
+	owner, ok := g.GetPlayerCharacter(g.OwnerID)
+	if !ok {
+		return fmt.Errorf("owner character not found")
+	}
+	if !owner.HasItem(itemID) {
+		return fmt.Errorf("player does not have item %s", itemID)
+	}
+	if err := owner.RemoveItemID(itemID); err != nil {
+		return err
+	}
+	g.Players[g.OwnerID] = owner
 	room, err := g.GetRoom(roomID)
 	if err != nil {
 		return err
@@ -270,7 +345,12 @@ func (g *Game) removeItemFromAnywhere(itemID string) {
 			g.Rooms[id] = room
 		}
 	}
-	_ = g.Player.RemoveItemID(itemID)
+	for uid, player := range g.Players {
+		if player.HasItem(itemID) {
+			_ = player.RemoveItemID(itemID)
+			g.Players[uid] = player
+		}
+	}
 	for id, npc := range g.NPCs {
 		if npc.HasItem(itemID) {
 			_ = npc.RemoveItemID(itemID)
@@ -342,49 +422,69 @@ func (g *Game) MoveNPC(npcID, roomID string) error {
 // Player movement
 // -------------------------------------------------------------------
 
-// MovePlayer moves the player to an adjacent room via a direction.
+// MovePlayer moves the owner's character to an adjacent room via a direction.
 // Returns the destination room and an error if the direction has no exit.
 func (g *Game) MovePlayer(direction string) (Area, error) {
-	currentRoom, err := g.GetRoom(g.Player.LocationID)
+	return g.MoveCharacter(g.OwnerID, direction)
+}
+
+// MoveCharacter moves a specific player's character to an adjacent room.
+// Returns the destination room and an error if the direction has no exit.
+func (g *Game) MoveCharacter(userID, direction string) (Area, error) {
+	player, ok := g.GetPlayerCharacter(userID)
+	if !ok {
+		return Area{}, fmt.Errorf("player %s not found in game", userID)
+	}
+	currentRoom, err := g.GetRoom(player.LocationID)
 	if err != nil {
 		return Area{}, fmt.Errorf("player has no current room: %w", err)
 	}
-	destID, ok := currentRoom.Connections[direction]
-	if !ok {
+	destID, connOK := currentRoom.Connections[direction]
+	if !connOK {
 		return Area{}, fmt.Errorf("no exit to the %s", direction)
 	}
 	destRoom, err := g.GetRoom(destID)
 	if err != nil {
 		return Area{}, err
 	}
-	// Update player location
-	_ = currentRoom.RemoveOccupant(g.Player.ID)
+	_ = currentRoom.RemoveOccupant(player.ID)
 	g.Rooms[currentRoom.ID] = currentRoom
-	_ = destRoom.AddOccupant(g.Player.ID)
+	_ = destRoom.AddOccupant(player.ID)
 	g.Rooms[destID] = destRoom
-	g.Player.LocationID = destID
+	player.LocationID = destID
+	g.Players[userID] = player
 	return destRoom, nil
 }
 
-// PlacePlayer sets the player's starting room during world generation.
+// PlacePlayer sets the owner's starting room during world generation.
 func (g *Game) PlacePlayer(roomID string) error {
+	return g.PlaceCharacter(g.OwnerID, roomID)
+}
+
+// PlaceCharacter sets a specific player's starting room.
+func (g *Game) PlaceCharacter(userID, roomID string) error {
 	room, err := g.GetRoom(roomID)
 	if err != nil {
 		return err
 	}
+	player, ok := g.GetPlayerCharacter(userID)
+	if !ok {
+		return fmt.Errorf("player %s not found in game", userID)
+	}
 	// Remove from previous room if set
-	if g.Player.LocationID != "" {
-		if old, ok := g.Rooms[g.Player.LocationID]; ok {
-			_ = old.RemoveOccupant(g.Player.ID)
-			g.Rooms[g.Player.LocationID] = old
+	if player.LocationID != "" {
+		if old, exists := g.Rooms[player.LocationID]; exists {
+			_ = old.RemoveOccupant(player.ID)
+			g.Rooms[player.LocationID] = old
 		}
 	}
-	if err := room.AddOccupant(g.Player.ID); err != nil {
+	if err := room.AddOccupant(player.ID); err != nil {
 		// Occupant already there — fine
 		_ = err
 	}
 	g.Rooms[roomID] = room
-	g.Player.LocationID = roomID
+	player.LocationID = roomID
+	g.Players[userID] = player
 	return nil
 }
 
@@ -395,10 +495,14 @@ func (g *Game) PlacePlayer(roomID string) error {
 // SaveState is the DynamoDB-serialisable snapshot of a Game.
 type SaveState struct {
 	SessionID         string                  `json:"session_id" dynamodbav:"session_id"`
-	UserID            string                  `json:"user_id" dynamodbav:"user_id"`
+	OwnerID           string                  `json:"owner_id,omitempty" dynamodbav:"owner_id,omitempty"`
+	UserID            string                  `json:"user_id" dynamodbav:"user_id"` // preserved for backward compat
 	SchemaVersion     int                     `json:"schema_version" dynamodbav:"schema_version"`
-	Version           int                     `json:"version" dynamodbav:"version"` // optimistic lock
-	Player            Character               `json:"player" dynamodbav:"player"`
+	Version           int                     `json:"version" dynamodbav:"version"`                     // optimistic lock
+	Players           map[string]Character    `json:"players,omitempty" dynamodbav:"players,omitempty"` // v2+: keyed by userID
+	Player            Character               `json:"player,omitempty" dynamodbav:"player,omitempty"`   // v1 compat only
+	PartySize         int                     `json:"party_size,omitempty" dynamodbav:"party_size,omitempty"`
+	InviteCode        string                  `json:"invite_code,omitempty" dynamodbav:"invite_code,omitempty"`
 	Rooms             []Area                  `json:"rooms" dynamodbav:"rooms"`
 	Items             []Item                  `json:"items" dynamodbav:"items"`
 	NPCs              []Character             `json:"npcs" dynamodbav:"npcs"`
@@ -467,10 +571,13 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 	}
 	return SaveState{
 		SessionID:         g.ID,
+		OwnerID:           g.OwnerID,
 		UserID:            g.UserID,
 		SchemaVersion:     SchemaVersion,
 		Version:           g.Version,
-		Player:            g.Player,
+		Players:           g.Players,
+		PartySize:         g.PartySize,
+		InviteCode:        g.InviteCode,
 		Rooms:             rooms,
 		Items:             items,
 		NPCs:              npcs,
@@ -487,15 +594,26 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 }
 
 // FromSaveState restores a Game from a SaveState.
-// Returns an error if the schema version is incompatible.
+// Supports schema version 1 (solo) and 2 (party). Returns error for unknown
+// future versions.
 func FromSaveState(s SaveState) (*Game, error) {
-	if s.SchemaVersion != SchemaVersion {
-		return nil, fmt.Errorf("incompatible schema version %d (current: %d)", s.SchemaVersion, SchemaVersion)
+	if s.SchemaVersion > SchemaVersion {
+		return nil, fmt.Errorf("unsupported schema version %d (current: %d)", s.SchemaVersion, SchemaVersion)
+	}
+	ownerID := s.OwnerID
+	if ownerID == "" {
+		ownerID = s.UserID // v1 migration
+	}
+	partySize := s.PartySize
+	if partySize == 0 {
+		partySize = 4 // default
 	}
 	g := &Game{
 		ID:                s.SessionID,
+		OwnerID:           ownerID,
 		UserID:            s.UserID,
-		Player:            s.Player,
+		PartySize:         partySize,
+		InviteCode:        s.InviteCode,
 		Ready:             s.Ready,
 		Version:           s.Version,
 		Rooms:             make(map[string]Area, len(s.Rooms)),
@@ -507,6 +625,15 @@ func FromSaveState(s SaveState) (*Game, error) {
 		TotalTokens:       s.TotalTokens,
 		ConversationCount: s.ConversationCount,
 		CreationParams:    s.CreationParams,
+	}
+	// v1 had a single Player field; migrate it into the Players map.
+	if s.SchemaVersion <= 1 {
+		g.Players = map[string]Character{ownerID: s.Player}
+	} else {
+		g.Players = s.Players
+		if g.Players == nil {
+			g.Players = make(map[string]Character)
+		}
 	}
 	for _, r := range s.Rooms {
 		g.Rooms[r.ID] = r
@@ -574,15 +701,18 @@ type CharacterView struct {
 }
 
 // GameStateView is the full snapshot sent to the client on load or update.
+// Self is the calling user's own character; Party contains all other members.
 type GameStateView struct {
 	CurrentRoom RoomView            `json:"current_room"`
-	Player      CharacterView       `json:"player"`
+	Player      CharacterView       `json:"player"` // kept for backward compat — same as Self
+	Self        CharacterView       `json:"self"`
+	Party       []CharacterView     `json:"party"`
 	Rooms       map[string]RoomView `json:"rooms"`
 	ChatHistory []ChatMessage       `json:"chat_history"`
 }
 
-// BuildGameStateView constructs a full snapshot from the Game.
-func (g *Game) BuildGameStateView(history []ChatMessage) GameStateView {
+// buildCharacterView constructs a CharacterView for a given character.
+func (g *Game) buildCharacterView(c Character) CharacterView {
 	resolveItems := func(ids []string) []ItemView {
 		views := make([]ItemView, 0, len(ids))
 		for _, id := range ids {
@@ -598,26 +728,6 @@ func (g *Game) BuildGameStateView(history []ChatMessage) GameStateView {
 		}
 		return views
 	}
-
-	toRoomView := func(a Area) RoomView {
-		occupantViews := make([]CharacterView, 0)
-		for _, cid := range a.Occupants {
-			if c, ok := g.NPCs[cid]; ok {
-				occupantViews = append(occupantViews, CharacterView{
-					ID: c.ID, Name: c.Name, Description: c.Description,
-					Alive: c.Alive, Health: c.Health, Friendly: c.Friendly,
-					Inventory: resolveItems(c.Inventory),
-				})
-			}
-		}
-		return RoomView{
-			ID: a.ID, Name: a.Name, Description: a.Description,
-			Connections: a.Connections, Coordinates: a.Coordinates,
-			Items:     resolveItems(a.Items),
-			Occupants: occupantViews,
-		}
-	}
-
 	resolveSlot := func(idPtr *string) *ItemView {
 		if idPtr == nil {
 			return nil
@@ -634,24 +744,56 @@ func (g *Game) BuildGameStateView(history []ChatMessage) GameStateView {
 		}
 		return nil
 	}
+	return CharacterView{
+		ID:          c.ID,
+		Name:        c.Name,
+		Description: c.Description,
+		Alive:       c.Alive,
+		Health:      c.Health,
+		Friendly:    c.Friendly,
+		Inventory:   resolveItems(c.Inventory),
+		Equipment: EquipmentView{
+			Head:  resolveSlot(c.Equipment.Head),
+			Chest: resolveSlot(c.Equipment.Chest),
+			Legs:  resolveSlot(c.Equipment.Legs),
+			Hands: resolveSlot(c.Equipment.Hands),
+			Feet:  resolveSlot(c.Equipment.Feet),
+			Back:  resolveSlot(c.Equipment.Back),
+		},
+	}
+}
 
-	playerEquipment := EquipmentView{
-		Head:  resolveSlot(g.Player.Equipment.Head),
-		Chest: resolveSlot(g.Player.Equipment.Chest),
-		Legs:  resolveSlot(g.Player.Equipment.Legs),
-		Hands: resolveSlot(g.Player.Equipment.Hands),
-		Feet:  resolveSlot(g.Player.Equipment.Feet),
-		Back:  resolveSlot(g.Player.Equipment.Back),
+// BuildGameStateView constructs a full snapshot from the Game for a specific
+// caller. Self is the caller's own character; Party contains all other members.
+// If callerUserID is empty or not found, falls back to the owner's character.
+func (g *Game) BuildGameStateView(callerUserID string, history []ChatMessage) GameStateView {
+	toRoomView := func(a Area) RoomView {
+		occupantViews := make([]CharacterView, 0)
+		for _, cid := range a.Occupants {
+			if c, ok := g.NPCs[cid]; ok {
+				occupantViews = append(occupantViews, g.buildCharacterView(c))
+			}
+		}
+		return RoomView{
+			ID: a.ID, Name: a.Name, Description: a.Description,
+			Connections: a.Connections, Coordinates: a.Coordinates,
+			Items:     g.buildItemViews(a.Items),
+			Occupants: occupantViews,
+		}
 	}
 
-	playerView := CharacterView{
-		ID: g.Player.ID, Name: g.Player.Name,
-		Description: g.Player.Description,
-		Alive:       g.Player.Alive,
-		Health:      g.Player.Health,
-		Friendly:    g.Player.Friendly,
-		Inventory:   resolveItems(g.Player.Inventory),
-		Equipment:   playerEquipment,
+	caller, ok := g.GetPlayerCharacter(callerUserID)
+	if !ok {
+		caller, _ = g.OwnerCharacter()
+	}
+	selfView := g.buildCharacterView(caller)
+
+	party := make([]CharacterView, 0, len(g.Players)-1)
+	for uid, char := range g.Players {
+		if uid == callerUserID {
+			continue
+		}
+		party = append(party, g.buildCharacterView(char))
 	}
 
 	roomViews := make(map[string]RoomView, len(g.Rooms))
@@ -660,16 +802,35 @@ func (g *Game) BuildGameStateView(history []ChatMessage) GameStateView {
 	}
 
 	var currentRoom RoomView
-	if r, ok := g.Rooms[g.Player.LocationID]; ok {
+	if r, ok := g.Rooms[caller.LocationID]; ok {
 		currentRoom = toRoomView(r)
 	}
 
 	return GameStateView{
 		CurrentRoom: currentRoom,
-		Player:      playerView,
+		Player:      selfView, // backward compat
+		Self:        selfView,
+		Party:       party,
 		Rooms:       roomViews,
 		ChatHistory: history,
 	}
+}
+
+// buildItemViews resolves a list of item IDs into ItemView slices.
+func (g *Game) buildItemViews(ids []string) []ItemView {
+	views := make([]ItemView, 0, len(ids))
+	for _, id := range ids {
+		if item, ok := g.Items[id]; ok {
+			views = append(views, ItemView{
+				ID: item.ID, Name: item.Name,
+				Description: item.Description,
+				Weight:      item.Weight,
+				Equippable:  item.Equippable,
+				Slot:        item.Slot,
+			})
+		}
+	}
+	return views
 }
 
 // StateDelta holds only what changed between two game states.
@@ -679,7 +840,9 @@ func (g *Game) BuildGameStateView(history []ChatMessage) GameStateView {
 // caused duplicate messages in the chat log.
 type StateDelta struct {
 	CurrentRoom  *RoomView           `json:"current_room,omitempty"`
-	Player       *CharacterView      `json:"player,omitempty"`
+	Player       *CharacterView      `json:"player,omitempty"` // backward compat — same as Self
+	Self         *CharacterView      `json:"self,omitempty"`
+	Party        []CharacterView     `json:"party,omitempty"` // updated party member views
 	UpdatedRooms map[string]RoomView `json:"updated_rooms,omitempty"`
 	Events       []WorldEvent        `json:"events,omitempty"` // player-visible world events this turn
 }

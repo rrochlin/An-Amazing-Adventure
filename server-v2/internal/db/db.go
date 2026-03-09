@@ -98,10 +98,14 @@ func (c *Client) requireMembershipsTable() {
 // overrides the key fields to marshal as Binary (B), matching the table schema.
 type saveStateDB struct {
 	SessionID         BinaryID                     `dynamodbav:"session_id"`
+	OwnerID           BinaryID                     `dynamodbav:"owner_id,omitempty"`
 	UserID            BinaryID                     `dynamodbav:"user_id"`
 	SchemaVersion     int                          `dynamodbav:"schema_version"`
 	Version           int                          `dynamodbav:"version"`
-	Player            game.Character               `dynamodbav:"player"`
+	Players           map[string]game.Character    `dynamodbav:"players,omitempty"`
+	Player            game.Character               `dynamodbav:"player,omitempty"` // v1 compat
+	PartySize         int                          `dynamodbav:"party_size,omitempty"`
+	InviteCode        string                       `dynamodbav:"invite_code,omitempty"`
 	Rooms             []game.Area                  `dynamodbav:"rooms"`
 	Items             []game.Item                  `dynamodbav:"items"`
 	NPCs              []game.Character             `dynamodbav:"npcs"`
@@ -119,10 +123,14 @@ type saveStateDB struct {
 func toDBState(s game.SaveState) saveStateDB {
 	return saveStateDB{
 		SessionID:         BinaryID(s.SessionID),
+		OwnerID:           BinaryID(s.OwnerID),
 		UserID:            BinaryID(s.UserID),
 		SchemaVersion:     s.SchemaVersion,
 		Version:           s.Version,
+		Players:           s.Players,
 		Player:            s.Player,
+		PartySize:         s.PartySize,
+		InviteCode:        s.InviteCode,
 		Rooms:             s.Rooms,
 		Items:             s.Items,
 		NPCs:              s.NPCs,
@@ -141,10 +149,14 @@ func toDBState(s game.SaveState) saveStateDB {
 func fromDBState(d saveStateDB) game.SaveState {
 	return game.SaveState{
 		SessionID:         string(d.SessionID),
+		OwnerID:           string(d.OwnerID),
 		UserID:            string(d.UserID),
 		SchemaVersion:     d.SchemaVersion,
 		Version:           d.Version,
+		Players:           d.Players,
 		Player:            d.Player,
+		PartySize:         d.PartySize,
+		InviteCode:        d.InviteCode,
 		Rooms:             d.Rooms,
 		Items:             d.Items,
 		NPCs:              d.NPCs,
@@ -285,6 +297,73 @@ func sessionKey(sessionID string) map[string]types.AttributeValue {
 	return map[string]types.AttributeValue{"session_id": binaryIDVal(sessionID)}
 }
 
+// ListGamesByOwner returns session IDs owned by userID (via user-sessions-index GSI).
+func (c *Client) ListGamesByOwner(ctx context.Context, userID string) ([]string, error) {
+	c.requireSessionsTable()
+	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(c.sessionsTable),
+		IndexName:              aws.String("user-sessions-index"),
+		KeyConditionExpression: aws.String("user_id = :uid"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":uid": binaryIDVal(userID),
+		},
+		ProjectionExpression: aws.String("session_id"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("ListGamesByOwner: %w", err)
+	}
+	ids := make([]string, 0, len(out.Items))
+	for _, item := range out.Items {
+		var d struct {
+			SessionID BinaryID `dynamodbav:"session_id"`
+		}
+		if err := attributevalue.UnmarshalMap(item, &d); err != nil {
+			continue
+		}
+		ids = append(ids, string(d.SessionID))
+	}
+	return ids, nil
+}
+
+// BatchGetSessions retrieves multiple sessions by their IDs in a single batch request.
+// Sessions not found in DynamoDB are silently skipped.
+func (c *Client) BatchGetSessions(ctx context.Context, sessionIDs []string) ([]game.SaveState, error) {
+	c.requireSessionsTable()
+	if len(sessionIDs) == 0 {
+		return nil, nil
+	}
+	// DynamoDB BatchGetItem limit is 100 items per call — chunk if needed.
+	const batchSize = 100
+	var allStates []game.SaveState
+	for i := 0; i < len(sessionIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(sessionIDs) {
+			end = len(sessionIDs)
+		}
+		chunk := sessionIDs[i:end]
+		keys := make([]map[string]types.AttributeValue, 0, len(chunk))
+		for _, id := range chunk {
+			keys = append(keys, sessionKey(id))
+		}
+		out, err := c.ddb.BatchGetItem(ctx, &dynamodb.BatchGetItemInput{
+			RequestItems: map[string]types.KeysAndAttributes{
+				c.sessionsTable: {Keys: keys},
+			},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("BatchGetSessions: %w", err)
+		}
+		for _, item := range out.Responses[c.sessionsTable] {
+			var d saveStateDB
+			if err := attributevalue.UnmarshalMap(item, &d); err != nil {
+				continue
+			}
+			allStates = append(allStates, fromDBState(d))
+		}
+	}
+	return allStates, nil
+}
+
 // -------------------------------------------------------------------
 // Mutation log
 // -------------------------------------------------------------------
@@ -390,7 +469,7 @@ func (c *Client) DeleteConnection(ctx context.Context, connectionID string) erro
 }
 
 // DeleteUserConnections removes all connection records for a given user ID.
-// Called on new $connect to enforce one-connection-per-user.
+// Deprecated: use DeleteUserConnectionForGame for scoped cleanup in party sessions.
 func (c *Client) DeleteUserConnections(ctx context.Context, userID string) error {
 	c.requireConnectionsTable()
 	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
@@ -420,6 +499,72 @@ func (c *Client) DeleteUserConnections(ctx context.Context, userID string) error
 		}
 	}
 	return nil
+}
+
+// DeleteUserConnectionForGame removes the stale connection record for a specific
+// (userID, gameID) pair. Called on $connect to allow re-connects without
+// evicting the user's connections to other sessions.
+func (c *Client) DeleteUserConnectionForGame(ctx context.Context, userID, gameID string) error {
+	c.requireConnectionsTable()
+	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(c.connectionsTable),
+		IndexName:              aws.String("user-connections-index"),
+		KeyConditionExpression: aws.String("user_id = :uid"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":uid": binaryIDVal(userID),
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("DeleteUserConnectionForGame query: %w", err)
+	}
+	for _, item := range out.Items {
+		var conn Connection
+		if err := attributevalue.UnmarshalMap(item, &conn); err != nil {
+			continue
+		}
+		if conn.GameID != gameID {
+			continue
+		}
+		connIDAttr, ok := item["connection_id"]
+		if !ok {
+			continue
+		}
+		_, err := c.ddb.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+			TableName: aws.String(c.connectionsTable),
+			Key:       map[string]types.AttributeValue{"connection_id": connIDAttr},
+		})
+		if err != nil {
+			return fmt.Errorf("DeleteUserConnectionForGame delete: %w", err)
+		}
+	}
+	return nil
+}
+
+// GetConnectionsByGameID returns all active connections for a game session.
+// Uses the game-connections-index GSI (game_id is a plain String attribute).
+func (c *Client) GetConnectionsByGameID(ctx context.Context, gameID string) ([]Connection, error) {
+	c.requireConnectionsTable()
+	gameIDVal, _ := attributevalue.Marshal(gameID)
+	out, err := c.ddb.Query(ctx, &dynamodb.QueryInput{
+		TableName:              aws.String(c.connectionsTable),
+		IndexName:              aws.String("game-connections-index"),
+		KeyConditionExpression: aws.String("game_id = :gid"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":gid": gameIDVal,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("GetConnectionsByGameID: %w", err)
+	}
+	conns := make([]Connection, 0, len(out.Items))
+	for _, item := range out.Items {
+		var conn Connection
+		if err := attributevalue.UnmarshalMap(item, &conn); err != nil {
+			continue
+		}
+		conns = append(conns, conn)
+	}
+	return conns, nil
 }
 
 // GetConnectionByUserID returns the most recent active connection for a user,

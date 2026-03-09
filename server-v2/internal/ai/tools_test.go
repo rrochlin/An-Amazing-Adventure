@@ -11,7 +11,7 @@ import (
 func newTestGameWithRooms(t *testing.T) (*game.Game, string, string) {
 	t.Helper()
 	g := game.NewGame("test-session", "test-user")
-	g.Player = game.NewCharacter("Hero", "The protagonist")
+	g.SetPlayerCharacter("test-user", game.NewCharacter("Hero", "The protagonist"))
 
 	start := game.NewArea("Tavern", "A smoky tavern")
 	north := game.NewArea("Alley", "A dark alley")
@@ -131,7 +131,8 @@ func TestDispatchCreateItemForPlayer(t *testing.T) {
 	if err != nil {
 		t.Fatal("item not in registry")
 	}
-	if !g.Player.HasItem(item.ID) {
+	ownerChar, _ := g.OwnerCharacter()
+	if !ownerChar.HasItem(item.ID) {
 		t.Error("expected item in player inventory when no place_in_room given")
 	}
 }
@@ -198,7 +199,8 @@ func TestDispatchGiveAndTakeItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("give_item_to_player: %v", err)
 	}
-	if !g.Player.HasItem(item.ID) {
+	ownerChar, _ := g.OwnerCharacter()
+	if !ownerChar.HasItem(item.ID) {
 		t.Error("expected Potion in player inventory")
 	}
 
@@ -207,7 +209,8 @@ func TestDispatchGiveAndTakeItem(t *testing.T) {
 	if err != nil {
 		t.Fatalf("take_item_from_player: %v", err)
 	}
-	if g.Player.HasItem(item.ID) {
+	ownerChar2, _ := g.OwnerCharacter()
+	if ownerChar2.HasItem(item.ID) {
 		t.Error("expected Potion removed from player inventory")
 	}
 	startRoom, _ := g.GetRoom(startID)
@@ -226,8 +229,9 @@ func TestDispatchDamageAndHealPlayer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("damage player: %v", err)
 	}
-	if g.Player.Health != 60 {
-		t.Errorf("expected player health 60, got %d", g.Player.Health)
+	ownerAfterDamage, _ := g.OwnerCharacter()
+	if ownerAfterDamage.Health != 60 {
+		t.Errorf("expected player health 60, got %d", ownerAfterDamage.Health)
 	}
 
 	_, err = dispatch(g, "heal_character", map[string]any{
@@ -237,8 +241,9 @@ func TestDispatchDamageAndHealPlayer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("heal player: %v", err)
 	}
-	if g.Player.Health != 80 {
-		t.Errorf("expected player health 80, got %d", g.Player.Health)
+	ownerAfterHeal, _ := g.OwnerCharacter()
+	if ownerAfterHeal.Health != 80 {
+		t.Errorf("expected player health 80, got %d", ownerAfterHeal.Health)
 	}
 }
 

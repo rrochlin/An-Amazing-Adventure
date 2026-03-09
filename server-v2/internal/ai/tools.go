@@ -231,7 +231,8 @@ func execCreateItem(g *game.Game, in map[string]any) (string, *game.WorldEvent, 
 		}
 		// Visible if placed in player's current room
 		var ev *game.WorldEvent
-		if room.ID == g.Player.LocationID {
+		owner, _ := g.OwnerCharacter()
+		if room.ID == owner.LocationID {
 			ev = &game.WorldEvent{Type: "item_appeared", Message: fmt.Sprintf("A %s appears nearby.", name)}
 		}
 		return fmt.Sprintf("Created item %q and placed in %q", name, roomName), ev, nil
@@ -272,7 +273,8 @@ func execCreateCharacter(g *game.Game, in map[string]any) (string, *game.WorldEv
 	}
 	// Visible if placed in player's current room
 	var ev *game.WorldEvent
-	if room.ID == g.Player.LocationID {
+	owner, _ := g.OwnerCharacter()
+	if room.ID == owner.LocationID {
 		ev = &game.WorldEvent{Type: "character_arrived", Message: fmt.Sprintf("%s appears.", name)}
 	}
 	return fmt.Sprintf("Created character %q in room %q", name, roomName), ev, nil
@@ -294,8 +296,9 @@ func execMoveCharacter(g *game.Game, in map[string]any) (string, *game.WorldEven
 		return "", nil, err
 	}
 	// Visible if NPC arrives at or departs from player's current room
+	owner, _ := g.OwnerCharacter()
+	playerRoom := owner.LocationID
 	var ev *game.WorldEvent
-	playerRoom := g.Player.LocationID
 	if room.ID == playerRoom {
 		ev = &game.WorldEvent{Type: "character_arrived", Message: fmt.Sprintf("%s arrives.", charName)}
 	} else if fromRoomID == playerRoom {
@@ -324,7 +327,8 @@ func execTakeItemFromPlayer(g *game.Game, in map[string]any) (string, *game.Worl
 	if err != nil {
 		return "", nil, err
 	}
-	room, err := g.GetRoom(g.Player.LocationID)
+	owner, _ := g.OwnerCharacter()
+	room, err := g.GetRoom(owner.LocationID)
 	if err != nil {
 		return "", nil, err
 	}
@@ -351,8 +355,9 @@ func execPlaceItemInRoom(g *game.Game, in map[string]any) (string, *game.WorldEv
 		return "", nil, err
 	}
 	// Visible only if placed in player's current room
+	owner, _ := g.OwnerCharacter()
 	var ev *game.WorldEvent
-	if room.ID == g.Player.LocationID {
+	if room.ID == owner.LocationID {
 		ev = &game.WorldEvent{Type: "item_appeared", Message: fmt.Sprintf("A %s appears nearby.", itemName)}
 	}
 	return fmt.Sprintf("Placed %q in %q", itemName, roomName), ev, nil
@@ -362,11 +367,15 @@ func execDamageCharacter(g *game.Game, in map[string]any) (string, *game.WorldEv
 	charName := strArg(in, "character_name")
 	amount := int(numArg(in, "amount"))
 	if charName == "player" {
-		err := g.Player.TakeDamage(amount)
-		result := fmt.Sprintf("Player health: %d", g.Player.Health)
+		owner, _ := g.OwnerCharacter()
+		if err := owner.TakeDamage(amount); err != nil {
+			return "", nil, err
+		}
+		g.SetPlayerCharacter(g.OwnerID, owner)
+		result := fmt.Sprintf("Player health: %d", owner.Health)
 		// Always visible
-		ev := &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. \u2764 %d", amount, g.Player.Health)}
-		return result, ev, err
+		ev := &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. \u2764 %d", amount, owner.Health)}
+		return result, ev, nil
 	}
 	c, err := g.GetNPCByName(charName)
 	if err != nil {
@@ -378,8 +387,9 @@ func execDamageCharacter(g *game.Game, in map[string]any) (string, *game.WorldEv
 	g.NPCs[c.ID] = c
 	result := fmt.Sprintf("%q health: %d", charName, c.Health)
 	// Visible only if NPC is in player's current room
+	owner, _ := g.OwnerCharacter()
 	var ev *game.WorldEvent
-	if c.LocationID == g.Player.LocationID {
+	if c.LocationID == owner.LocationID {
 		ev = &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("%s takes %d damage. \u2764 %d", charName, amount, c.Health)}
 	}
 	return result, ev, nil
@@ -389,11 +399,15 @@ func execHealCharacter(g *game.Game, in map[string]any) (string, *game.WorldEven
 	charName := strArg(in, "character_name")
 	amount := int(numArg(in, "amount"))
 	if charName == "player" {
-		err := g.Player.Heal(amount)
-		result := fmt.Sprintf("Player health: %d", g.Player.Health)
+		owner, _ := g.OwnerCharacter()
+		if err := owner.Heal(amount); err != nil {
+			return "", nil, err
+		}
+		g.SetPlayerCharacter(g.OwnerID, owner)
+		result := fmt.Sprintf("Player health: %d", owner.Health)
 		// Always visible
-		ev := &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. \u2764 %d", amount, g.Player.Health)}
-		return result, ev, err
+		ev := &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. \u2764 %d", amount, owner.Health)}
+		return result, ev, nil
 	}
 	c, err := g.GetNPCByName(charName)
 	if err != nil {
@@ -405,8 +419,9 @@ func execHealCharacter(g *game.Game, in map[string]any) (string, *game.WorldEven
 	g.NPCs[c.ID] = c
 	result := fmt.Sprintf("%q health: %d", charName, c.Health)
 	// Visible only if NPC is in player's current room
+	owner, _ := g.OwnerCharacter()
 	var ev *game.WorldEvent
-	if c.LocationID == g.Player.LocationID {
+	if c.LocationID == owner.LocationID {
 		ev = &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("%s recovers %d health.", charName, amount)}
 	}
 	return result, ev, nil
@@ -416,13 +431,16 @@ func execSetCharacterAlive(g *game.Game, in map[string]any) (string, *game.World
 	charName := strArg(in, "character_name")
 	alive, _ := in["alive"].(bool)
 	if charName == "player" {
+		owner, _ := g.OwnerCharacter()
 		if alive {
-			err := g.Player.Revive(50)
+			err := owner.Revive(50)
+			g.SetPlayerCharacter(g.OwnerID, owner)
 			ev := &game.WorldEvent{Type: "revive", Message: "You have been revived. \u2764 50"}
 			return "Player revived", ev, err
 		}
-		g.Player.Alive = false
-		g.Player.Health = 0
+		owner.Alive = false
+		owner.Health = 0
+		g.SetPlayerCharacter(g.OwnerID, owner)
 		ev := &game.WorldEvent{Type: "death", Message: "You have been slain."}
 		return "Player killed", ev, nil
 	}
@@ -440,8 +458,9 @@ func execSetCharacterAlive(g *game.Game, in map[string]any) (string, *game.World
 	g.NPCs[c.ID] = c
 	result := fmt.Sprintf("%q alive=%v", charName, alive)
 	// Visible if NPC is in player's current room
+	owner, _ := g.OwnerCharacter()
 	var ev *game.WorldEvent
-	if c.LocationID == g.Player.LocationID {
+	if c.LocationID == owner.LocationID {
 		if alive {
 			ev = &game.WorldEvent{Type: "revive", Message: fmt.Sprintf("%s stirs back to life.", charName)}
 		} else {

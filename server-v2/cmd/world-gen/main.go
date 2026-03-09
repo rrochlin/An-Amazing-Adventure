@@ -37,31 +37,31 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 		return err
 	}
 
-	// Best-effort WebSocket push — if the client isn't connected we just log
+	// Best-effort WebSocket push — if no clients are connected we just log
 	// and skip the push rather than failing the whole job.
 	var sender *wsutil.Sender
-	var connID string
+	var gameConns []db.Connection
 	if ws, wsErr := wsutil.New(ctx); wsErr == nil {
-		conn, connErr := dbClient.GetConnectionByUserID(ctx, evt.UserID)
-		if connErr == nil {
-			sender = ws
-			connID = conn.ConnectionID
-			log.Printf("world-gen: will push progress to connection %s", connID)
+		sender = ws
+		conns, connErr := dbClient.GetConnectionsByGameID(ctx, evt.SessionID)
+		if connErr == nil && len(conns) > 0 {
+			gameConns = conns
+			log.Printf("world-gen: will push progress to %d connection(s)", len(gameConns))
 		} else {
-			log.Printf("world-gen: no active connection for user, skipping WS push: %v", connErr)
+			log.Printf("world-gen: no active connections for session, skipping WS push: %v", connErr)
 		}
 	} else {
 		log.Printf("world-gen: WS sender unavailable (WEBSOCKET_API_ENDPOINT not set?): %v", wsErr)
 	}
 
-	// emit pushes a log line to the terminal (non-fatal on WS error).
+	// emit pushes a log line to the terminal for all connected party members.
 	emit := func(line string) {
 		log.Printf("world-gen: %s", line)
 		if sender != nil {
-			if err := sender.SendWorldGenLog(ctx, connID, line); err != nil {
-				log.Printf("world-gen: send log frame: %v", err)
-				// Stale connection — stop trying to push
-				sender = nil
+			for _, gc := range gameConns {
+				if err := sender.SendWorldGenLog(ctx, gc.ConnectionID, line); err != nil {
+					log.Printf("world-gen: send log frame to %s: %v", gc.ConnectionID, err)
+				}
 			}
 		}
 	}
@@ -106,22 +106,26 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	emit(fmt.Sprintf("Theme: %s", blueprint.Theme))
 	emit(fmt.Sprintf("Quest: %s", blueprint.QuestGoal))
 
-	// If the AI invented a player name (player left it blank), write it back
+	// If the AI invented a player name (player left it blank), write it back.
+	// Apply player-supplied character details (may override stub values).
+	owner, hasOwner := g.GetPlayerCharacter(g.OwnerID)
+	if !hasOwner {
+		owner = game.NewCharacter("Adventurer", "")
+	}
 	if evt.PlayerName == "" && blueprint.PlayerName != "" {
-		g.Player.Name = blueprint.PlayerName
+		owner.Name = blueprint.PlayerName
 		emit(fmt.Sprintf("Character named: %q", blueprint.PlayerName))
 	}
-
-	// Apply player-supplied character details (may override stub values)
 	if evt.PlayerDescription != "" {
-		g.Player.Description = evt.PlayerDescription
+		owner.Description = evt.PlayerDescription
 	}
 	if evt.PlayerAge != "" {
-		g.Player.Age = evt.PlayerAge
+		owner.Age = evt.PlayerAge
 	}
 	if evt.PlayerBackstory != "" {
-		g.Player.Backstory = evt.PlayerBackstory
+		owner.Backstory = evt.PlayerBackstory
 	}
+	g.SetPlayerCharacter(g.OwnerID, owner)
 
 	// Step 2: Build world deterministically
 	emit("Constructing world...")
@@ -187,10 +191,12 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	emit("Your adventure awaits.")
 	log.Printf("world-gen: complete for session %s — %d rooms", evt.SessionID, len(g.Rooms))
 
-	// Signal the client to transition to the game
+	// Signal all connected party members to transition to the game
 	if sender != nil {
-		if err := sender.SendWorldGenReady(ctx, connID); err != nil {
-			log.Printf("world-gen: send world_ready frame: %v", err)
+		for _, gc := range gameConns {
+			if err := sender.SendWorldGenReady(ctx, gc.ConnectionID); err != nil {
+				log.Printf("world-gen: send world_ready to %s: %v", gc.ConnectionID, err)
+			}
 		}
 	}
 
