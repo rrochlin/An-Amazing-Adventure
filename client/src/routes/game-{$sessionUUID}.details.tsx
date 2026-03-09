@@ -131,8 +131,8 @@ function GameDetailsPage() {
     );
   }
 
-  const player = data.state?.player;
-  const params = data.creation_params ?? {};
+  const player = data.state?.self ?? data.state?.player;
+  const params = data.creation_params;
   const roomCount = data.state ? Object.keys(data.state.rooms).length : 0;
   const enemyCount = data.state
     ? Object.values(data.state.rooms).reduce(
@@ -206,16 +206,32 @@ function GameDetailsPage() {
           {/* Character */}
           <Section title="Character">
             <DetailRow label="Name" value={player?.name} />
-            <DetailRow label="Age" value={(player as any)?.age} />
-            <DetailRow label="Description" value={player?.description || params.player_description} />
-            <DetailRow label="Backstory" value={(player as any)?.backstory || params.player_backstory} />
-            {!player?.name && !params.player_description && !params.player_backstory && (
-              <Typography
-                variant="body2"
-                sx={{ color: "text.secondary", fontStyle: "italic" }}
-              >
-                Character details were fully AI-generated.
-              </Typography>
+            {/* D&D 5e stats — present for v3+ characters */}
+            {player?.dnd && (
+              <>
+                <DetailRow label="Race" value={player.dnd.race_id} />
+                <DetailRow label="Class" value={player.dnd.class_id} />
+                <DetailRow label="Level" value={player.dnd.level} />
+                <DetailRow label="HP" value={`${player.health} / ${player.dnd.max_hp}`} />
+                <DetailRow label="AC" value={player.dnd.ac} />
+                <DetailRow label="Speed" value={`${player.dnd.speed} ft`} />
+                {player.dnd.abilities && (
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="caption" sx={{ color: "text.secondary", textTransform: "uppercase", letterSpacing: "0.05em" }}>Ability Scores</Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
+                      {Object.entries(player.dnd.abilities).map(([ab, score]) => (
+                        <Chip key={ab} size="small" label={`${ab.toUpperCase()} ${score}`} variant="outlined" />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+              </>
+            )}
+            {/* Legacy fields — shown for v1/v2 records */}
+            {!player?.dnd && (
+              <>
+                <DetailRow label="Description" value={player?.description} />
+              </>
             )}
           </Section>
 
@@ -223,12 +239,12 @@ function GameDetailsPage() {
 
           {/* Adventure Preferences */}
           <Section title="Adventure Preferences">
-            {params.theme_hint && (
+            {params?.theme_hint && (
               <DetailRow label="Theme hint" value={params.theme_hint} />
             )}
-            {params.preferences && params.preferences.length > 0 ? (
+            {params?.preferences && params.preferences.length > 0 ? (
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
-                {params.preferences.map((p) => (
+                {params.preferences.map((p: string) => (
                   <Chip
                     key={p}
                     label={PREFERENCE_LABELS[p] ?? p}

@@ -45,43 +45,42 @@ describe("ListGames", () => {
 });
 
 describe("CreateGame", () => {
-  it("calls POST api/games with params object and returns session data", async () => {
+  it("calls POST api/games with D&D creation params and returns session data", async () => {
     mockPost.mockResolvedValueOnce({
       data: { session_id: "sess-1", ready: false },
       status: 201,
     });
-    const result = await CreateGame({ player_name: "Legolas" });
-    expect(mockPost).toHaveBeenCalledWith("api/games", { player_name: "Legolas" });
+    const params = {
+      name: "Legolas",
+      race_id: "elf",
+      subrace_id: "high-elf",
+      class_id: "fighter",
+      ability_scores: { str: 15, dex: 14, con: 13, int: 12, wis: 10, cha: 8 },
+      selected_skills: ["athletics", "perception"],
+    };
+    const result = await CreateGame(params);
+    expect(mockPost).toHaveBeenCalledWith("api/games", params);
     expect(result.session_id).toBe("sess-1");
     expect(result.ready).toBe(false);
   });
 
-  it("calls POST api/games with all creation params", async () => {
+  it("calls POST api/games with optional world preferences", async () => {
     mockPost.mockResolvedValueOnce({
       data: { session_id: "sess-2", ready: false },
       status: 201,
     });
     const params = {
-      player_name: "Aria",
-      player_age: "mid 20s",
-      player_description: "A nimble rogue",
-      player_backstory: "Raised by thieves",
+      name: "Aria",
+      race_id: "half-orc",
+      class_id: "barbarian",
+      ability_scores: { str: 15, dex: 14, con: 13, int: 10, wis: 12, cha: 8 },
+      selected_skills: ["athletics", "intimidation"],
       theme_hint: "gritty noir",
       preferences: ["stealth", "mystery"],
     };
     const result = await CreateGame(params);
     expect(mockPost).toHaveBeenCalledWith("api/games", params);
     expect(result.session_id).toBe("sess-2");
-  });
-
-  it("calls POST api/games with empty params (AI generates everything)", async () => {
-    mockPost.mockResolvedValueOnce({
-      data: { session_id: "sess-3", ready: false },
-      status: 201,
-    });
-    const result = await CreateGame({});
-    expect(mockPost).toHaveBeenCalledWith("api/games", {});
-    expect(result.session_id).toBe("sess-3");
   });
 });
 
@@ -120,13 +119,14 @@ describe("LoadGame", () => {
         quest_goal: "Defeat the dark lord",
         total_tokens: 5000,
         conversation_count: 10,
-        creation_params: { preferences: ["combat"] },
+        creation_params: { name: "Hero", race_id: "human", class_id: "fighter", ability_scores: {}, selected_skills: [], preferences: ["combat"] },
       },
       status: 200,
     });
     const result = await LoadGame("sess-1");
     expect(result.title).toBe("The Shattered Kingdom");
     expect(result.total_tokens).toBe(5000);
+    expect(result.creation_params?.class_id).toBe("fighter");
     expect(result.creation_params?.preferences).toEqual(["combat"]);
   });
 });
