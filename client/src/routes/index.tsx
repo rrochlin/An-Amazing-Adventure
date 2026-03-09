@@ -62,7 +62,13 @@ export const Route = createFileRoute("/")({
     }
   },
   loader: async (): Promise<ListGamesResponse> => {
-    return await ListGames();
+    try {
+      return await ListGames();
+    } catch {
+      // Return empty state rather than crashing the page — the error boundary
+      // would show a full-page error for what may be a transient issue.
+      return { games: [], user_quota: { tokens_used: 0, token_limit: 0, ai_enabled: true, role: "user" } };
+    }
   },
 });
 
@@ -180,6 +186,7 @@ function RouteComponent() {
                 p: 3,
                 cursor: "pointer",
                 transition: "all 0.2s ease-in-out",
+                opacity: game.ready ? 1 : 0.7,
                 backgroundColor: isDark
                   ? "rgba(201, 169, 98, 0.05)"
                   : "rgba(160, 130, 109, 0.15)",
@@ -192,6 +199,7 @@ function RouteComponent() {
                     : "rgba(160, 130, 109, 0.25)",
                   transform: "translateY(-2px)",
                   boxShadow: "0 4px 12px rgba(201, 169, 98, 0.3)",
+                  opacity: 1,
                 },
               }}
               onClick={() =>
@@ -234,7 +242,7 @@ function RouteComponent() {
                   )}
                   {!game.ready && (
                     <Chip
-                      label="Generating..."
+                      label="World generating — click to watch"
                       size="small"
                       color="secondary"
                       sx={{ mt: 0.75, fontSize: "0.75rem" }}

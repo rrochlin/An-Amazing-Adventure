@@ -129,11 +129,13 @@ const CLASSES: ClassCardData[] = [
       id: "barbarian", name: "Barbarian", hitDie: "d12",
       primaryAbility: "Strength",
       armorNote: "Light & Medium armor, Shields",
-      flavor: "A fierce warrior driven by primal rage, the Barbarian shrugs off wounds that would fell lesser fighters.",
+      flavor: "A fierce warrior driven by primal rage. The Barbarian trades finesse for raw power — shrugging off wounds that would fell lesser fighters and unleashing devastating attacks while enraged.",
       features: [
-         "Rage — Bonus damage, resistance to physical damage (2/day)",
-         "Reckless Attack — Advantage on attacks (enemies also attack you with advantage)",
-         "Extra Attack at level 5",
+         "Rage — +2 bonus damage, resistance to bludgeoning/piercing/slashing (2 rages/day, 1 min)",
+         "Unarmored Defense — AC = 10 + DEX modifier + CON modifier (no armor needed)",
+         "Reckless Attack — Advantage on STR attacks; enemies also gain advantage against you",
+         "Danger Sense — Advantage on DEX saves against visible effects",
+         "Extra Attack at level 5 — Attack twice per Attack action",
       ],
       skillCount: 2,
       skills: [
@@ -148,12 +150,13 @@ const CLASSES: ClassCardData[] = [
    {
       id: "fighter", name: "Fighter", hitDie: "d10",
       primaryAbility: "Strength or Dexterity",
-      armorNote: "All armor, Shields",
-      flavor: "Master of weapons and armor, the Fighter is a versatile warrior capable of multiple attacks and tactical recovery.",
+      armorNote: "All armor & Shields",
+      flavor: "The most versatile warrior on the battlefield. Fighters combine superior weapon mastery with tactical recovery abilities — equally effective with a greatsword or a longbow.",
       features: [
-         "Second Wind — Heal 1d10+level HP as a bonus action (1/short rest)",
-         "Action Surge — Take an extra action on your turn (1/short rest)",
-         "Extra Attack at level 5",
+         "Fighting Style — Choose a specialty (Defense, Dueling, Great Weapon, Archery, etc.)",
+         "Second Wind — Heal 1d10 + Fighter level HP as a bonus action (1/short rest)",
+         "Action Surge — Take one extra full action on your turn (1/short rest)",
+         "Extra Attack at level 5 — Attack twice per Attack action",
       ],
       skillCount: 2,
       skills: [
@@ -170,13 +173,15 @@ const CLASSES: ClassCardData[] = [
    {
       id: "monk", name: "Monk", hitDie: "d8",
       primaryAbility: "Dexterity & Wisdom",
-      armorNote: "No armor (Unarmored Defense)",
-      flavor: "A master of martial arts, the Monk harnesses ki energy to perform extraordinary feats of speed and power.",
+      armorNote: "No armor (AC = 10 + DEX + WIS)",
+      flavor: "A master of unarmed combat and ki energy. The Monk excels at speed and precision — striking multiple times, deflecting missiles, and moving faster than any armored fighter.",
       features: [
-         "Flurry of Blows — 2 extra unarmed strikes (costs 1 Ki point)",
-         "Patient Defense — Take Dodge action as bonus action (costs 1 Ki point)",
-         "Step of the Wind — Dash or Disengage as bonus action (costs 1 Ki point)",
-         "Extra Attack at level 5",
+         "Martial Arts — Unarmed strikes deal 1d6 damage and use DEX instead of STR",
+         "Ki Points (2/day) — Fuel special abilities; recharge on short rest",
+         "Flurry of Blows — 2 bonus unarmed strikes after Attack action (1 Ki)",
+         "Patient Defense — Take Dodge as a bonus action (1 Ki)",
+         "Step of the Wind — Dash or Disengage as a bonus action, double jump distance (1 Ki)",
+         "Extra Attack at level 5 — Attack twice per Attack action",
       ],
       skillCount: 2,
       skills: [
@@ -338,12 +343,24 @@ export function CreateRoute() {
    // ── Ability score helpers ──
    const assignValue = (ability: AbilityKey, value: number) => {
       const oldValue = abilityScores[ability];
+      setAbilityScores((prev) => {
+         const next = { ...prev };
+         // If the chosen value is already assigned to another ability, swap: clear that slot.
+         if (value !== 0) {
+            for (const key of ABILITY_KEYS) {
+               if (key !== ability && next[key] === value) {
+                  next[key] = 0;
+               }
+            }
+         }
+         next[ability] = value;
+         return next;
+      });
       setUsedValues((prev) => {
          const next = prev.filter((v) => v !== oldValue);
          if (value !== 0) next.push(value);
          return next;
       });
-      setAbilityScores((prev) => ({ ...prev, [ability]: value }));
    };
 
    // ── Skill helpers ──
@@ -592,43 +609,45 @@ export function CreateRoute() {
                      ))}
                   </Box>
 
-                  {ABILITY_KEYS.map((ab) => {
-                     const racial  = racialBonuses[ab] ?? 0;
-                     const base    = abilityScores[ab];
-                     const total   = base + racial;
-                     return (
-                        <Box key={ab} sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-                           <Typography variant="body2" sx={{ width: 110, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0 }}>
-                              {ABILITY_LABELS[ab]}
-                           </Typography>
-                           <FormControl size="small" sx={{ minWidth: 90 }}>
-                              <InputLabel>{ab.toUpperCase()}</InputLabel>
-                              <Select
-                                 value={base !== 0 ? base : ""}
-                                 label={ab.toUpperCase()}
-                                 onChange={(e) => assignValue(ab, Number(e.target.value))}
-                              >
-                                 <MenuItem value=""><em>—</em></MenuItem>
-                                 {STANDARD_ARRAY.map((v) => (
-                                    <MenuItem key={v} value={v} disabled={usedValues.includes(v) && base !== v}>
-                                       {v}
-                                    </MenuItem>
-                                 ))}
-                              </Select>
-                           </FormControl>
-                           {racial > 0 && (
-                              <Typography variant="caption" color="primary.light">
-                                 +{racial} racial
-                              </Typography>
-                           )}
-                           {base !== 0 && (
-                              <Typography variant="caption" color="text.secondary">
-                                 = {total} ({abilityModifier(total)})
-                              </Typography>
-                           )}
-                        </Box>
-                     );
-                  })}
+                   {ABILITY_KEYS.map((ab) => {
+                      const racial  = racialBonuses[ab] ?? 0;
+                      const base    = abilityScores[ab];
+                      const total   = base + racial;
+                      return (
+                         <Box key={ab} sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "nowrap", minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ width: 100, minWidth: 100, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0, fontSize: "0.85rem" }}>
+                               {ABILITY_LABELS[ab]}
+                            </Typography>
+                            <FormControl size="small" sx={{ width: 80, flexShrink: 0 }}>
+                               <InputLabel>{ab.toUpperCase()}</InputLabel>
+                               <Select
+                                  value={base !== 0 ? base : ""}
+                                  label={ab.toUpperCase()}
+                                  onChange={(e) => assignValue(ab, Number(e.target.value))}
+                               >
+                                  <MenuItem value=""><em>—</em></MenuItem>
+                                  {STANDARD_ARRAY.map((v) => (
+                                     <MenuItem key={v} value={v}>
+                                        {v}{usedValues.includes(v) && base !== v ? " ↔" : ""}
+                                     </MenuItem>
+                                  ))}
+                               </Select>
+                            </FormControl>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexShrink: 0 }}>
+                               {racial > 0 && (
+                                  <Typography variant="caption" color="primary.light" sx={{ whiteSpace: "nowrap" }}>
+                                     +{racial}
+                                  </Typography>
+                               )}
+                               {base !== 0 && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                                     = {total} ({abilityModifier(total)})
+                                  </Typography>
+                               )}
+                            </Box>
+                         </Box>
+                      );
+                   })}
 
                   <FormHelperText sx={{ color: usedValues.length === 6 ? "success.main" : "text.secondary" }}>
                      {usedValues.length}/6 values assigned
