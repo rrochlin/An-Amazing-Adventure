@@ -753,6 +753,99 @@ func BuildWorldFromBlueprint(g *game.Game, bp WorldBlueprint) error {
 	return nil
 }
 
+// NarrativeFraming holds the Claude-generated narrative wrapping for a
+// procedurally generated dungeon. It is the output of GenerateNarrativeFraming.
+type NarrativeFraming struct {
+	Title        string            `json:"title"`
+	Theme        string            `json:"theme"`
+	QuestGoal    string            `json:"quest_goal"`
+	OpeningScene string            `json:"opening_scene"`
+	RoomNames    map[string]string `json:"room_names"` // zoneID → display name
+}
+
+// GenerateNarrativeFraming sends a dungeon summary to Claude Sonnet and gets
+// back the narrative framing (title, theme, quest, opening scene, room names).
+// This is a single non-streaming Converse call — same pattern as GenerateBlueprint
+// but much narrower scope: Claude only writes narrative, not world layout.
+func (c *Client) GenerateNarrativeFraming(
+	ctx context.Context,
+	dungeonSummary string,
+	creationParams game.CharacterCreationData,
+) (NarrativeFraming, TokenUsage, error) {
+	themeHint := ""
+	if creationParams.ThemeHint != "" {
+		themeHint = fmt.Sprintf("\nDesired tone/theme: %s", creationParams.ThemeHint)
+	}
+	prefHint := ""
+	if len(creationParams.Preferences) > 0 {
+		prefHint = fmt.Sprintf("\nPreferred gameplay elements: %s", strings.Join(creationParams.Preferences, ", "))
+	}
+
+	prompt := fmt.Sprintf(`You are creating the narrative framing for a D&D 5e dungeon.
+Given this procedurally generated dungeon layout, write:
+1. An evocative dungeon TITLE (4-8 words)
+2. A dark fantasy THEME (1 sentence)
+3. A QUEST GOAL that fits the dungeon's structure (1-2 sentences)
+4. An OPENING SCENE narrative (2-3 paragraphs) that establishes the atmosphere and hooks the player
+5. A display NAME for each room (short, evocative, 2-5 words)
+
+Dungeon layout:
+%s
+
+Player character: %s the %s (race: %s)%s%s
+
+Respond in JSON only — no markdown fences, no commentary:
+{
+  "title": "...",
+  "theme": "...",
+  "quest_goal": "...",
+  "opening_scene": "...",
+  "room_names": {"<room_id>": "<display name>", ...}
+}`,
+		dungeonSummary,
+		creationParams.Name, creationParams.ClassID, creationParams.RaceID,
+		themeHint, prefHint,
+	)
+
+	resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
+		ModelId: aws.String(ModelNarrator),
+		Messages: []types.Message{
+			{
+				Role:    types.ConversationRoleUser,
+				Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: prompt}},
+			},
+		},
+		InferenceConfig: &types.InferenceConfiguration{
+			MaxTokens:   aws.Int32(2048),
+			Temperature: aws.Float32(0.8),
+		},
+	})
+	if err != nil {
+		return NarrativeFraming{}, TokenUsage{}, fmt.Errorf("generate narrative framing: %w", err)
+	}
+
+	var usage TokenUsage
+	if resp.Usage != nil {
+		usage.InputTokens = int(aws.ToInt32(resp.Usage.InputTokens))
+		usage.OutputTokens = int(aws.ToInt32(resp.Usage.OutputTokens))
+	}
+
+	text := extractText(resp.Output)
+	text = strings.TrimSpace(text)
+	if strings.HasPrefix(text, "```") {
+		text = strings.TrimPrefix(text, "```json")
+		text = strings.TrimPrefix(text, "```")
+		text = strings.TrimSuffix(text, "```")
+		text = strings.TrimSpace(text)
+	}
+
+	var framing NarrativeFraming
+	if err := json.Unmarshal([]byte(text), &framing); err != nil {
+		return NarrativeFraming{}, usage, fmt.Errorf("parse narrative framing JSON: %w (raw: %.200s)", err, text)
+	}
+	return framing, usage, nil
+}
+
 // ---- History conversion helpers ----
 
 // toBedrockMessages converts our storage format to Bedrock API messages.
