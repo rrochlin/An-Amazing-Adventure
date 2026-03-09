@@ -62,8 +62,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const seeded = new Set<string>();
     seeded.add(state.current_room.id);
     Object.values(state.current_room.connections).forEach((id) => seeded.add(id));
+    // Normalise: ensure self/party are populated even for old server responses
+    const normalised = {
+      ...state,
+      self: state.self ?? state.player,
+      party: state.party ?? [],
+    };
     set({
-      gameState: state,
+      gameState: normalised,
       chatMessages: state.chat_history ?? [],
       visitedRooms: seeded,
     });
@@ -88,13 +94,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
       Object.values(delta.current_room.connections).forEach((id) => newVisited.add(id));
       set({ gameState: updated, visitedRooms: newVisited });
       // Handle remaining delta fields below without re-reading gameState
-      if (delta.player) updated.player = delta.player;
+      if (delta.self) { updated.self = delta.self; updated.player = delta.self; }
+      else if (delta.player) { updated.player = delta.player; updated.self = delta.player; }
+      if (delta.party) updated.party = delta.party;
       if (delta.updated_rooms) updated.rooms = { ...updated.rooms, ...delta.updated_rooms };
       set({ gameState: updated });
       return;
     }
-    if (delta.player) {
+    if (delta.self) {
+      updated.self = delta.self;
+      updated.player = delta.self; // keep backward compat
+    } else if (delta.player) {
       updated.player = delta.player;
+      updated.self = delta.player;
+    }
+    if (delta.party) {
+      updated.party = delta.party;
     }
     if (delta.updated_rooms) {
       updated.rooms = { ...updated.rooms, ...delta.updated_rooms };

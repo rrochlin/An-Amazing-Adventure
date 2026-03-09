@@ -9,9 +9,14 @@ import {
   Tooltip,
   Chip,
   LinearProgress,
+  Alert,
+  Snackbar,
 } from "@mui/material";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { type GameStateView, type ItemView, type RoomView } from "../types/types";
+import type { CreateInviteResponse } from "../types/types";
 import { useState } from "react";
+import { CreateInvite } from "../services/api.invites";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -50,15 +55,42 @@ interface GameInfoProps {
   sendAction: (subAction: string, payload: string) => void;
   /** When non-null, the Location tab displays this room instead of the current room (UI-FUT-4). */
   focusedRoom?: RoomView | null;
+  /** Session UUID — used for invite generation */
+  sessionId?: string;
+  /** Whether the current user is the session owner */
+  isOwner?: boolean;
 }
 
-export const GameInfo = ({ gameState, sendAction, focusedRoom }: GameInfoProps) => {
+export const GameInfo = ({ gameState, sendAction, focusedRoom, sessionId, isOwner }: GameInfoProps) => {
   // UI-FUT-4: show focusedRoom when hovering/clicking map, otherwise fall back to current room
   const displayRoom = focusedRoom ?? gameState?.current_room;
   const currentRoom = displayRoom;
   const isFocusingOtherRoom =
     focusedRoom != null && focusedRoom.id !== gameState?.current_room?.id;
   const [tabValue, setTabValue] = useState(0);
+  const [invite, setInvite] = useState<CreateInviteResponse | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [copyToast, setCopyToast] = useState(false);
+
+  const handleGenerateInvite = async () => {
+    if (!sessionId) return;
+    setInviteLoading(true);
+    setInviteError(null);
+    try {
+      const resp = await CreateInvite({ session_id: sessionId, max_uses: 10, ttl_days: 7 });
+      setInvite(resp);
+    } catch {
+      setInviteError("Failed to create invite");
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleCopyInvite = () => {
+    if (!invite) return;
+    navigator.clipboard.writeText(invite.url).then(() => setCopyToast(true));
+  };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -169,6 +201,7 @@ export const GameInfo = ({ gameState, sendAction, focusedRoom }: GameInfoProps) 
         <Tab label="Inventory" />
         <Tab label="Equipment" />
         <Tab label="Room" />
+        <Tab label="Party" />
       </Tabs>
 
       <Box
@@ -443,6 +476,109 @@ export const GameInfo = ({ gameState, sendAction, focusedRoom }: GameInfoProps) 
               );
             })}
           </Box>
+        </TabPanel>
+
+        {/* Party Tab */}
+        <TabPanel value={tabValue} index={4}>
+          <SectionHeader>Party</SectionHeader>
+          <Divider sx={{ mb: 1, borderColor: "rgba(201,169,98,0.3)" }} />
+
+          {/* Self */}
+          {gameState?.self && (
+            <Box sx={{ mb: 2 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                <Typography variant="caption" sx={{ color: "primary.main", fontWeight: "bold" }}>
+                  {gameState.self.name} (you)
+                </Typography>
+                <Typography variant="caption" sx={{ color: gameState.self.alive ? "success.main" : "error.main" }}>
+                  {gameState.self.alive ? `${gameState.self.health} HP` : "DEAD"}
+                </Typography>
+              </Box>
+              <LinearProgress
+                variant="determinate"
+                value={gameState.self.alive ? gameState.self.health : 0}
+                color={gameState.self.health > 50 ? "success" : gameState.self.health > 20 ? "warning" : "error"}
+                sx={{ height: 6, borderRadius: 3 }}
+              />
+            </Box>
+          )}
+
+          {/* Other party members */}
+          {gameState?.party && gameState.party.length > 0 ? (
+            gameState.party.map((member) => (
+              <Box key={member.id} sx={{ mb: 2 }}>
+                <Box sx={{ display: "flex", justifyContent: "space-between", mb: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    {member.name}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: member.alive ? "success.main" : "error.main" }}>
+                    {member.alive ? `${member.health} HP` : "DEAD"}
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={member.alive ? member.health : 0}
+                  color={member.health > 50 ? "success" : member.health > 20 ? "warning" : "error"}
+                  sx={{ height: 6, borderRadius: 3 }}
+                />
+              </Box>
+            ))
+          ) : (
+            <Typography variant="body2" sx={{ color: "text.secondary", fontStyle: "italic", mb: 2 }}>
+              No other party members
+            </Typography>
+          )}
+
+          {/* Invite section — owner only */}
+          {isOwner && sessionId && (
+            <Box sx={{ mt: 2 }}>
+              <SectionHeader>Invite</SectionHeader>
+              <Divider sx={{ mb: 1, borderColor: "rgba(201,169,98,0.3)" }} />
+              {invite ? (
+                <Box>
+                  <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 1, wordBreak: "break-all" }}>
+                    Code: <strong>{invite.code}</strong>
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<ContentCopyIcon fontSize="small" />}
+                      onClick={handleCopyInvite}
+                    >
+                      Copy Link
+                    </Button>
+                    <Button size="small" variant="text" onClick={() => setInvite(null)}>
+                      New
+                    </Button>
+                  </Box>
+                </Box>
+              ) : (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleGenerateInvite}
+                  disabled={inviteLoading}
+                >
+                  {inviteLoading ? "Generating..." : "Generate Invite Link"}
+                </Button>
+              )}
+              {inviteError && (
+                <Alert severity="error" sx={{ mt: 1 }}>
+                  {inviteError}
+                </Alert>
+              )}
+            </Box>
+          )}
+
+          {/* Copy success toast */}
+          <Snackbar
+            open={copyToast}
+            autoHideDuration={2500}
+            onClose={() => setCopyToast(false)}
+            message="Invite link copied!"
+            anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+          />
         </TabPanel>
 
         {/* Room Tab */}

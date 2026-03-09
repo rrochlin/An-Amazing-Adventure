@@ -5,7 +5,7 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import { RoomMap } from "../components/RoomMap";
 import { GameInfo } from "../components/GameInfo";
 import { Chat } from "../components/Chat";
-import { isAuthenticated } from "../services/auth.service";
+import { isAuthenticated, getIdTokenClaims } from "../services/auth.service";
 import { LoadGame } from "../services/api.game";
 import { useGameStore } from "../store/gameStore";
 import { useGameSocket } from "../hooks/useGameSocket";
@@ -54,6 +54,10 @@ function GamePage() {
   const [mapExpanded, setMapExpanded] = useState(false);
   // UI-FUT-8: reconnection toast — show when WS reconnects after a drop
   const [reconnectToast, setReconnectToast] = useState(false);
+  const [ownerID, setOwnerID] = useState<string | null>(null);
+
+  const claims = getIdTokenClaims();
+  const currentUserID = claims?.sub ?? null;
 
   const { gameState, chatMessages, streamingMessage, isStreaming, wsError, wsStatus, worldGenLog, worldGenReady, addChatMessage, setGameState, reset } =
     useGameStore();
@@ -69,6 +73,10 @@ function GamePage() {
       const data = await LoadGame(sessionUUID);
       if (data.ready && data.state) {
         setGameState(data.state);
+      }
+      // Capture owner ID for party panel
+      if ((data as { owner_id?: string }).owner_id) {
+        setOwnerID((data as { owner_id?: string }).owner_id ?? null);
       }
       // If not ready, the WebSocket will deliver world_gen_ready when done
     } catch {
@@ -318,7 +326,15 @@ function GamePage() {
           transition: "all 0.3s ease-in-out",
           "&:hover": { boxShadow: "0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)" },
         }}>
-          <GameInfo gameState={gameState} sendAction={sendAction} focusedRoom={focusedRoom} />
+          <GameInfo
+            gameState={gameState}
+            sendAction={sendAction}
+            focusedRoom={focusedRoom}
+            sessionId={sessionUUID}
+            isOwner={ownerID != null
+              ? ownerID === currentUserID
+              : currentUserID != null && gameState != null}
+          />
         </Paper>
         <Box sx={{ width: "4px", backgroundColor: "#000", opacity: 0.5, borderRadius: "2px" }} />
       </Box>

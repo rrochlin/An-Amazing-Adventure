@@ -55,7 +55,9 @@ export interface RoomView {
 
 export interface GameStateView {
   current_room: RoomView;
-  player: CharacterView;
+  player: CharacterView;   // backward compat — same as self
+  self?: CharacterView;    // calling user's own character (v2+)
+  party?: CharacterView[]; // other party members (v2+)
   rooms: Record<string, RoomView>;
   chat_history: ChatMessage[];
 }
@@ -99,10 +101,27 @@ export interface WorldGenLogPayload {
 
 export interface StateDelta {
   current_room?: RoomView;
-  player?: CharacterView;
+  player?: CharacterView;   // backward compat — same as self
+  self?: CharacterView;     // calling user's own character
+  party?: CharacterView[];  // updated party member views
   updated_rooms?: Record<string, RoomView>;
   events?: WorldEvent[]; // player-visible world events this turn
   // new_message removed — narrative arrives via streaming frames, not state_delta
+}
+
+// Invite / party types
+export interface InviteInfo {
+  code: string;
+  game_title: string;
+  party_current: number;
+  party_max: number;
+  expired: boolean;
+}
+
+export interface CreateInviteResponse {
+  code: string;
+  url: string;
+  expires: number; // Unix ms
 }
 
 // Legacy — kept for backward compat during transition
