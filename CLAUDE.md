@@ -186,6 +186,22 @@ Always create a feature branch (`git checkout -b feat/...`) before starting any 
   ```
 - **Never commit compiled Lambda binaries** (`server-v2/http-games`, `server-v2/world-gen`, etc.) — they are in `.gitignore`. CI builds them from source on every deploy.
 
+### Infrastructure discipline — MANDATORY
+**All infrastructure changes must go through Terraform.** Never use the AWS CLI or Console to create or modify resources (IAM policies, Lambda env vars, DynamoDB tables, API Gateway routes, Cognito config, etc.). Direct AWS changes create drift that is invisible to Terraform and breaks future applies.
+
+**AWS CLI is permitted only for:**
+- Reading logs (`aws logs filter-log-events ...`)
+- Inspecting current state for debugging (`aws lambda get-function-configuration`, `aws dynamodb describe-table`, etc.)
+- One-time data operations (`aws dynamodb put-item` to seed a record, etc.)
+
+**When adding a new Lambda or table, the checklist is:**
+1. Add the `aws_dynamodb_table` resource + outputs to `modules/dynamodb/main.tf`
+2. Add new variables + `aws_iam_role` + `aws_iam_role_policy` + `aws_lambda_function` to `modules/lambdas/main.tf`
+3. Add integrations, routes, permissions to `modules/api-gateway/main.tf` if HTTP-facing
+4. Wire new outputs through `main.tf`
+5. Add `handler_test.go` with `TestAllRequiredEnvVarsPanic` covering every env var the Lambda reads
+6. Push subtree and open PR on `rrochlin/terraform-infrastructure`
+
 ## CI/CD
 
 Two GitHub Actions workflows:
@@ -207,3 +223,25 @@ Branch protection: all changes must go through PRs. Direct push to `main` is blo
 - WS tests: use `act(() => Promise.resolve())` to flush `useEffect`, not `setTimeout`-based `flushPromises`
 - `vi.mock` factories are hoisted — use `vi.hoisted()` for mock functions needed in factory scope
 - `scrollIntoView` is not available in jsdom — guard with `typeof ... === "function"`
+
+### Required env var tests (Go Lambdas)
+Every Lambda handler must have a `TestAllRequiredEnvVarsPanic` test that asserts each required env var causes a panic when absent. This is the primary guard against Terraform drift — if an env var is needed by the code but missing from the Lambda's Terraform config, this test documents it and will catch the mismatch during code review.
+
+Pattern:
+```go
+var requiredEnvVars = []string{"SESSIONS_TABLE", "USERS_TABLE", "MEMBERSHIPS_TABLE"}
+
+func TestAllRequiredEnvVarsPanic(t *testing.T) {
+    req := makeValidReq()
+    for _, env := range requiredEnvVars {
+        env := env
+        t.Run(env, func(t *testing.T) {
+            assertPanicsWithEnvAbsent(t, env, func() {
+                handler(context.Background(), req) //nolint:errcheck
+            })
+        })
+    }
+}
+```
+
+The `assertPanicsWithEnvAbsent` helper sets the env var to `""`, calls the function, and asserts a panic whose message mentions the var name. It lives in each `cmd/*/handler_test.go`.

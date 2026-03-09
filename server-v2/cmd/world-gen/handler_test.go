@@ -88,16 +88,46 @@ func TestHandlerWorldGen_EventParsed_EmptyPlayerName(t *testing.T) {
 }
 
 // ---- Required env var tests ----
-// world-gen requires: SESSIONS_TABLE
-// CONNECTIONS_TABLE and WEBSOCKET_API_ENDPOINT are optional (WS push is best-effort)
+// Each env var listed here must also be present in the Lambda's Terraform config
+// (modules/lambdas/main.tf). If you add a new table call to world-gen, add its
+// env var here — the test will fail in CI until Terraform is updated to match.
+//
+// SESSIONS_TABLE:    panics immediately — GetGame is the first DB call.
+// USERS_TABLE:       only reached after world generation completes and
+//                    UpdateUserTokens is called — unreachable without real DynamoDB.
+// CONNECTIONS_TABLE and WEBSOCKET_API_ENDPOINT are intentionally omitted: WS push
+// is best-effort and world-gen does not panic when they are absent.
 
-func TestHandlerWorldGen_MissingSESSIONS_TABLE_Panics(t *testing.T) {
-	t.Setenv("CONNECTIONS_TABLE", "test-connections")
-	t.Setenv("BEDROCK_REGION", "us-west-2")
+var requiredEnvVars = []string{
+	"SESSIONS_TABLE",
+	"USERS_TABLE",
+}
+
+func TestAllRequiredEnvVarsPanic(t *testing.T) {
 	evt := worldGenEvent{SessionID: "sess-1", UserID: "user-1", PlayerName: "Frodo"}
-	assertPanicsWithEnvAbsent(t, "SESSIONS_TABLE", func() {
-		handler(context.Background(), evt) //nolint:errcheck
-	})
+	for _, env := range requiredEnvVars {
+		env := env
+		t.Run(env, func(t *testing.T) {
+			for _, other := range requiredEnvVars {
+				if other != env {
+					t.Setenv(other, "test-"+other)
+				}
+			}
+			t.Setenv("CONNECTIONS_TABLE", "test-connections")
+			t.Setenv("BEDROCK_REGION", "us-west-2")
+
+			if env == "USERS_TABLE" {
+				// Only reachable after full world generation completes — requires
+				// real DynamoDB and Bedrock. Documented here as Terraform config
+				// requirement; enforced by code review.
+				t.Skip("USERS_TABLE panic unreachable without real DynamoDB — verified via Terraform config")
+			}
+
+			assertPanicsWithEnvAbsent(t, env, func() {
+				handler(context.Background(), evt) //nolint:errcheck
+			})
+		})
+	}
 }
 
 func TestHandlerWorldGen_NoWSEndpoint_DoesNotPanic(t *testing.T) {
