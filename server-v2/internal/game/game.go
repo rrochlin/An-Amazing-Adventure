@@ -15,7 +15,7 @@ import (
 // SchemaVersion is incremented whenever SaveState's structure changes
 // in a backward-incompatible way. FromSaveState handles migration from
 // older versions.
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 // AdventureCreationParams holds the player-provided setup choices that were
 // used when the game was created. All fields are optional — the AI fills in
@@ -62,6 +62,10 @@ type Game struct {
 	// InitiativeOrder is set when a combat encounter begins and cleared when all
 	// monsters in the current room are dead.
 	InitiativeOrder []combat.InitiativeEntry
+
+	// DungeonData is the procedurally generated dungeon layout (v4+).
+	// Nil for games created before SchemaVersion 4 (they use the legacy Rooms map).
+	DungeonData *DungeonData
 }
 
 // NewGame creates a blank Game with server-generated IDs.
@@ -633,6 +637,9 @@ type SaveState struct {
 	RoomMonsters         map[string][]*monster.Data `json:"room_monsters,omitempty" dynamodbav:"room_monsters,omitempty"`
 	PendingCombatContext string                     `json:"pending_combat_context,omitempty" dynamodbav:"pending_combat_context,omitempty"`
 	InitiativeOrder      []combat.InitiativeEntry   `json:"initiative_order,omitempty" dynamodbav:"initiative_order,omitempty"`
+
+	// Dungeon layout (v4+)
+	DungeonData *DungeonData `json:"dungeon_data,omitempty" dynamodbav:"dungeon_data,omitempty"`
 }
 
 // NarrativeMessage stores a single turn of Bedrock conversation history.
@@ -722,6 +729,7 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 		RoomMonsters:         g.RoomMonsters,
 		PendingCombatContext: g.PendingCombatContext,
 		InitiativeOrder:      g.InitiativeOrder,
+		DungeonData:          g.DungeonData,
 	}
 }
 
@@ -768,6 +776,7 @@ func FromSaveState(s SaveState) (*Game, error) {
 		RoomMonsters:         roomMonsters,
 		PendingCombatContext: s.PendingCombatContext,
 		InitiativeOrder:      s.InitiativeOrder,
+		DungeonData:          s.DungeonData,
 	}
 
 	switch {
@@ -787,6 +796,7 @@ func FromSaveState(s SaveState) (*Game, error) {
 	default:
 		// v3+: full D&D characters stored in PlayersData; Players kept as stubs for
 		// room placement / movement tracking (LocationID lives on the legacy Character).
+		// v4+: DungeonData replaces the legacy Rooms map for newly created games.
 		g.Players = s.Players
 		if g.Players == nil {
 			g.Players = make(map[string]Character)

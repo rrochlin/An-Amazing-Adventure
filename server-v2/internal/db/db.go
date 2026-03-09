@@ -8,12 +8,14 @@ import (
 	"os"
 
 	dnd5echar "github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/character"
+	dnd5emonster "github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/monster"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/expression"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/rrochlin/an-amazing-adventure/internal/combat"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
@@ -121,6 +123,14 @@ type saveStateDB struct {
 	ConversationCount    int                          `dynamodbav:"conversation_count,omitempty"`
 	CreationParams       game.CharacterCreationData   `dynamodbav:"creation_params,omitempty"`        // v3+
 	LegacyCreationParams game.AdventureCreationParams `dynamodbav:"legacy_creation_params,omitempty"` // v1/v2
+
+	// Combat state (v3+) — previously missing from saveStateDB, fixed in v4.
+	RoomMonsters         map[string][]*dnd5emonster.Data `dynamodbav:"room_monsters,omitempty"`
+	PendingCombatContext string                          `dynamodbav:"pending_combat_context,omitempty"`
+	InitiativeOrder      []combat.InitiativeEntry        `dynamodbav:"initiative_order,omitempty"`
+
+	// Dungeon layout (v4+)
+	DungeonData *game.DungeonData `dynamodbav:"dungeon_data,omitempty"`
 }
 
 func toDBState(s game.SaveState) saveStateDB {
@@ -148,6 +158,10 @@ func toDBState(s game.SaveState) saveStateDB {
 		ConversationCount:    s.ConversationCount,
 		CreationParams:       s.CreationParams,
 		LegacyCreationParams: s.LegacyCreationParams,
+		RoomMonsters:         s.RoomMonsters,
+		PendingCombatContext: s.PendingCombatContext,
+		InitiativeOrder:      s.InitiativeOrder,
+		DungeonData:          s.DungeonData,
 	}
 }
 
@@ -176,6 +190,10 @@ func fromDBState(d saveStateDB) game.SaveState {
 		ConversationCount:    d.ConversationCount,
 		CreationParams:       d.CreationParams,
 		LegacyCreationParams: d.LegacyCreationParams,
+		RoomMonsters:         d.RoomMonsters,
+		PendingCombatContext: d.PendingCombatContext,
+		InitiativeOrder:      d.InitiativeOrder,
+		DungeonData:          d.DungeonData,
 	}
 }
 
