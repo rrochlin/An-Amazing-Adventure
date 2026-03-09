@@ -20,9 +20,11 @@ import (
 
 // worldGenPayload is passed to the world-gen Lambda as its event.
 type worldGenPayload struct {
-	SessionID         string   `json:"session_id"`
-	UserID            string   `json:"user_id"`
-	PlayerName        string   `json:"player_name"`
+	SessionID      string                     `json:"session_id"`
+	UserID         string                     `json:"user_id"`
+	CreationParams game.CharacterCreationData `json:"creation_params"`
+	// Legacy fields — preserved for backward-compat with old world-gen code path
+	PlayerName        string   `json:"player_name,omitempty"`
 	PlayerDescription string   `json:"player_description,omitempty"`
 	PlayerAge         string   `json:"player_age,omitempty"`
 	PlayerBackstory   string   `json:"player_backstory,omitempty"`
@@ -113,15 +115,20 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 
 	results := make([]gameListItem, 0, len(saves))
 	for _, s := range saves {
-		// Determine player name: prefer Players map (v2), fall back to legacy Player field.
+		// Determine player name: prefer PlayersData (v3) → Players map (v2) → legacy Player field.
+		ownerKey := s.OwnerID
+		if ownerKey == "" {
+			ownerKey = s.UserID
+		}
 		playerName := s.Player.Name
 		if s.Players != nil {
-			ownerKey := s.OwnerID
-			if ownerKey == "" {
-				ownerKey = s.UserID
-			}
 			if pc, ok := s.Players[ownerKey]; ok && pc.Name != "" {
 				playerName = pc.Name
+			}
+		}
+		if s.PlayersData != nil {
+			if pd, ok := s.PlayersData[ownerKey]; ok && pd != nil && pd.Name != "" {
+				playerName = pd.Name
 			}
 		}
 		results = append(results, gameListItem{
@@ -154,14 +161,7 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 }
 
 func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
-	var body struct {
-		PlayerName        string   `json:"player_name"`
-		PlayerDescription string   `json:"player_description"`
-		PlayerAge         string   `json:"player_age"`
-		PlayerBackstory   string   `json:"player_backstory"`
-		ThemeHint         string   `json:"theme_hint"`
-		Preferences       []string `json:"preferences"`
-	}
+	var body game.CharacterCreationData
 	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
 		return jsonResponse(400, map[string]string{"error": "invalid request body"}), nil
 	}
@@ -195,23 +195,28 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	previewMode := !userRecord.AIEnabled
 
 	sessionID := game.NewSessionID()
-	// Player name may be blank — world-gen will invent one if so
-	playerName := body.PlayerName
-	if playerName == "" {
-		playerName = "Adventurer" // placeholder until world-gen writes back the AI name
-	}
-	player := game.NewCharacter(playerName, body.PlayerDescription)
-	player.Age = body.PlayerAge
-	player.Backstory = body.PlayerBackstory
 
+	// Build the D&D character from creation data (validates class/race/skills).
+	// In preview mode, skip character creation (no AI, no D&D mechanics).
+	playerName := body.Name
+	if playerName == "" {
+		playerName = "Adventurer"
+	}
+
+	// Always create the legacy stub for room placement tracking
+	player := game.NewCharacter(playerName, "")
 	g := game.NewGame(sessionID, userID)
 	g.SetPlayerCharacter(userID, player)
-	g.CreationParams = game.AdventureCreationParams{
-		PlayerDescription: body.PlayerDescription,
-		PlayerAge:         body.PlayerAge,
-		PlayerBackstory:   body.PlayerBackstory,
-		ThemeHint:         body.ThemeHint,
-		Preferences:       body.Preferences,
+	g.CreationParams = body
+
+	// Build the full D&D character if we have enough data
+	if body.ClassID != "" && body.RaceID != "" && len(body.AbilityScores) == 6 {
+		dndChar, err := game.BuildDnDCharacter(ctx, body)
+		if err != nil {
+			log.Printf("http-games POST: BuildDnDCharacter error: %v", err)
+			return jsonResponse(400, map[string]string{"error": fmt.Sprintf("character creation failed: %v", err)}), nil
+		}
+		g.SetDnDCharacter(userID, dndChar)
 	}
 
 	// Save the initial (not-ready) game record
@@ -234,14 +239,13 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	// Kick off world generation asynchronously (skipped in preview mode)
 	if !previewMode {
 		payload, _ := json.Marshal(worldGenPayload{
-			SessionID:         sessionID,
-			UserID:            userID,
-			PlayerName:        body.PlayerName, // pass original (possibly empty) name to world-gen
-			PlayerDescription: body.PlayerDescription,
-			PlayerAge:         body.PlayerAge,
-			PlayerBackstory:   body.PlayerBackstory,
-			ThemeHint:         body.ThemeHint,
-			Preferences:       body.Preferences,
+			SessionID:      sessionID,
+			UserID:         userID,
+			CreationParams: body,
+			// Legacy fields for backward-compat
+			PlayerName:  playerName,
+			ThemeHint:   body.ThemeHint,
+			Preferences: body.Preferences,
 		})
 		if err := invokeWorldGen(ctx, payload); err != nil {
 			log.Printf("invoke world-gen: %v (game still created)", err)
@@ -272,17 +276,29 @@ func handleGetGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, user
 	if err != nil {
 		return serverError(), nil
 	}
+
+	// Load DnD characters from SaveState for enriched CharacterView
+	if saveState.PlayersData != nil {
+		bus, loadErr := g.LoadDnDCharacters(ctx, saveState.PlayersData)
+		if loadErr != nil {
+			log.Printf("handleGetGame LoadDnDCharacters (non-fatal): %v", loadErr)
+		} else {
+			_ = bus
+		}
+	}
+
 	stateView := g.BuildGameStateView(userID, saveState.ChatHistory)
 	return jsonResponse(200, map[string]any{
-		"session_id":         sessionID,
-		"ready":              saveState.Ready,
-		"state":              stateView,
-		"title":              saveState.Title,
-		"theme":              saveState.Theme,
-		"quest_goal":         saveState.QuestGoal,
-		"total_tokens":       saveState.TotalTokens,
-		"conversation_count": saveState.ConversationCount,
-		"creation_params":    saveState.CreationParams,
+		"session_id":            sessionID,
+		"ready":                 saveState.Ready,
+		"state":                 stateView,
+		"title":                 saveState.Title,
+		"theme":                 saveState.Theme,
+		"quest_goal":            saveState.QuestGoal,
+		"total_tokens":          saveState.TotalTokens,
+		"conversation_count":    saveState.ConversationCount,
+		"creation_params":       saveState.CreationParams,
+		"needs_character_reset": g.NeedsCharacterReset,
 	}), nil
 }
 
@@ -367,12 +383,7 @@ func handleJoinCharacter(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return jsonResponse(400, map[string]string{"error": "missing session id"}), nil
 	}
 
-	var body struct {
-		PlayerName        string `json:"player_name"`
-		PlayerDescription string `json:"player_description"`
-		PlayerAge         string `json:"player_age"`
-		PlayerBackstory   string `json:"player_backstory"`
-	}
+	var body game.CharacterCreationData
 	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
 		return jsonResponse(400, map[string]string{"error": "invalid body"}), nil
 	}
@@ -395,14 +406,34 @@ func handleJoinCharacter(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return serverError(), nil
 	}
 
-	playerName := body.PlayerName
+	// Load existing DnD players from SaveState so ToSaveState doesn't lose them
+	if saveState.PlayersData != nil {
+		bus, loadErr := g.LoadDnDCharacters(ctx, saveState.PlayersData)
+		if loadErr != nil {
+			log.Printf("handleJoinCharacter LoadDnDCharacters (non-fatal): %v", loadErr)
+		} else {
+			_ = bus // bus scoped to this invocation
+		}
+	}
+
+	playerName := body.Name
 	if playerName == "" {
 		playerName = "Adventurer"
 	}
-	char := game.NewCharacter(playerName, body.PlayerDescription)
-	char.Age = body.PlayerAge
-	char.Backstory = body.PlayerBackstory
+	// Legacy stub for room placement
+	char := game.NewCharacter(playerName, "")
 	g.SetPlayerCharacter(userID, char)
+
+	// Build D&D character if creation data is complete
+	if body.ClassID != "" && body.RaceID != "" && len(body.AbilityScores) == 6 {
+		dndChar, charErr := game.BuildDnDCharacter(ctx, body)
+		if charErr != nil {
+			log.Printf("handleJoinCharacter BuildDnDCharacter: %v", charErr)
+			return jsonResponse(400, map[string]string{"error": fmt.Sprintf("character creation failed: %v", charErr)}), nil
+		}
+		g.SetDnDCharacter(userID, dndChar)
+	}
+
 	g.Version++
 
 	updated := g.ToSaveState(saveState.Narrative, saveState.ChatHistory)
