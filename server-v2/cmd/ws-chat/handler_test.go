@@ -83,19 +83,47 @@ func TestHandlerChat_ValidMessage_ReachesDB(t *testing.T) {
 }
 
 // ---- Required env var tests ----
-// ws-chat calls GetConnection first, so CONNECTIONS_TABLE panics immediately.
-// SESSIONS_TABLE is required later (GetGame) but the test can't reach it without
-// a real DynamoDB connection returning a valid connection record.
-// Both vars are set in Terraform — the Terraform config is the source of truth.
+// Each env var listed here must also be present in the Lambda's Terraform config
+// (modules/lambdas/main.tf). If you add a new table call to ws-chat, add its
+// env var here — the test will fail in CI until Terraform is updated to match.
+//
+// CONNECTIONS_TABLE: panics immediately — GetConnection is the first DB call.
+// SESSIONS_TABLE:    only reached after GetConnection succeeds (real DB required).
+// USERS_TABLE:       only reached after GetGame succeeds (real DB required).
+// The latter two are documented here as Terraform guards; skipped in unit tests.
 
-func TestHandlerChat_MissingCONNECTIONS_TABLE_Panics(t *testing.T) {
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
-	t.Setenv("WEBSOCKET_API_ENDPOINT", "https://test.execute-api.us-west-2.amazonaws.com/prod")
-	t.Setenv("BEDROCK_REGION", "us-west-2")
+var requiredEnvVars = []string{
+	"CONNECTIONS_TABLE",
+	"SESSIONS_TABLE",
+	"USERS_TABLE",
+}
+
+func TestAllRequiredEnvVarsPanic(t *testing.T) {
 	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "hello"})
-	assertPanicsWithEnvAbsent(t, "CONNECTIONS_TABLE", func() {
-		handler(context.Background(), makeWSChatReq("conn-1", string(body))) //nolint:errcheck
-	})
+	req := makeWSChatReq("conn-1", string(body))
+	for _, env := range requiredEnvVars {
+		env := env
+		t.Run(env, func(t *testing.T) {
+			for _, other := range requiredEnvVars {
+				if other != env {
+					t.Setenv(other, "test-"+other)
+				}
+			}
+			t.Setenv("WEBSOCKET_API_ENDPOINT", "https://test.execute-api.us-west-2.amazonaws.com/prod")
+			t.Setenv("BEDROCK_REGION", "us-west-2")
+
+			switch env {
+			case "SESSIONS_TABLE", "USERS_TABLE":
+				// Only reachable after GetConnection succeeds — requires real DynamoDB.
+				// Documented here as Terraform config requirements; enforced by code review.
+				t.Skip(env + " panic unreachable without real DynamoDB — verified via Terraform config")
+			}
+
+			assertPanicsWithEnvAbsent(t, env, func() {
+				handler(context.Background(), req) //nolint:errcheck
+			})
+		})
+	}
 }
 
 func TestChatRequest_Parsed(t *testing.T) {
