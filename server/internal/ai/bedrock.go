@@ -356,9 +356,17 @@ func engineerUserMessage(g *game.Game, narrative string) string {
 	sb.WriteString(narrative)
 	sb.WriteString("\n\n## Current Game State\n\n")
 
-	// Player (owner character for backward compat)
+	// Player — use DnD HP when available (authoritative), fall back to legacy stub
 	owner, _ := g.OwnerCharacter()
-	sb.WriteString(fmt.Sprintf("Player: %s (health %d, alive %v)\n", owner.Name, owner.Health, owner.Alive))
+	playerHP := owner.Health
+	playerAlive := owner.Alive
+	playerMaxHP := 100
+	if dndChar, hasDnD := g.GetDnDCharacter(g.OwnerID); hasDnD && dndChar != nil {
+		playerHP = dndChar.GetHitPoints()
+		playerAlive = playerHP > 0
+		playerMaxHP = dndChar.ToData().MaxHitPoints
+	}
+	sb.WriteString(fmt.Sprintf("Player: %s (health %d/%d, alive %v)\n", owner.Name, playerHP, playerMaxHP, playerAlive))
 	sb.WriteString("Player inventory: ")
 	if len(owner.Inventory) == 0 {
 		sb.WriteString("empty")
@@ -756,11 +764,12 @@ func BuildWorldFromBlueprint(g *game.Game, bp WorldBlueprint) error {
 // NarrativeFraming holds the Claude-generated narrative wrapping for a
 // procedurally generated dungeon. It is the output of GenerateNarrativeFraming.
 type NarrativeFraming struct {
-	Title        string            `json:"title"`
-	Theme        string            `json:"theme"`
-	QuestGoal    string            `json:"quest_goal"`
-	OpeningScene string            `json:"opening_scene"`
-	RoomNames    map[string]string `json:"room_names"` // zoneID → display name
+	Title            string            `json:"title"`
+	Theme            string            `json:"theme"`
+	QuestGoal        string            `json:"quest_goal"`
+	OpeningScene     string            `json:"opening_scene"`
+	RoomNames        map[string]string `json:"room_names"`        // zoneID → display name
+	RoomDescriptions map[string]string `json:"room_descriptions"` // zoneID → 1-2 sentence atmospheric description
 }
 
 // GenerateNarrativeFraming sends a dungeon summary to Claude Sonnet and gets
@@ -788,6 +797,7 @@ Given this procedurally generated dungeon layout, write:
 3. A QUEST GOAL that fits the dungeon's structure (1-2 sentences)
 4. An OPENING SCENE narrative (2-3 paragraphs) that establishes the atmosphere and hooks the player
 5. A display NAME for each room (short, evocative, 2-5 words)
+6. A short DESCRIPTION for each room (1-2 sentences of atmospheric, sensory detail — what the player sees, hears, smells on first entry)
 
 Dungeon layout:
 %s
@@ -800,7 +810,8 @@ Respond in JSON only — no markdown fences, no commentary:
   "theme": "...",
   "quest_goal": "...",
   "opening_scene": "...",
-  "room_names": {"<room_id>": "<display name>", ...}
+  "room_names": {"<room_id>": "<display name>", ...},
+  "room_descriptions": {"<room_id>": "<1-2 sentence description>", ...}
 }`,
 		dungeonSummary,
 		creationParams.Name, creationParams.ClassID, creationParams.RaceID,
@@ -816,7 +827,7 @@ Respond in JSON only — no markdown fences, no commentary:
 			},
 		},
 		InferenceConfig: &types.InferenceConfiguration{
-			MaxTokens:   aws.Int32(2048),
+			MaxTokens:   aws.Int32(3000),
 			Temperature: aws.Float32(0.8),
 		},
 	})

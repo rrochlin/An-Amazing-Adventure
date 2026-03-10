@@ -41,8 +41,16 @@ type DungeonRoomData struct {
 	// Type classifies the room for encounter/loot seeding.
 	Type DungeonRoomType `json:"type" dynamodbav:"type"`
 
-	// ConnectedRoomIDs lists rooms reachable from this one (bidirectional).
+	// ConnectedRoomIDs lists rooms reachable from this one (undirected graph edges).
 	ConnectedRoomIDs []string `json:"connected_room_ids,omitempty" dynamodbav:"connected_room_ids,omitempty"`
+
+	// Connections is the directional map used by the runtime (direction → roomID).
+	// Derived from ConnectedRoomIDs during world-gen via BFS spatial layout.
+	Connections map[string]string `json:"connections,omitempty" dynamodbav:"connections,omitempty"`
+
+	// Coordinates are the 2D map coordinates assigned during world-gen.
+	// X increases east, Y increases south, Z is floor level.
+	Coordinates Coordinates `json:"coordinates" dynamodbav:"coordinates"`
 }
 
 // DungeonData is the persistent dungeon layout produced by world-gen.

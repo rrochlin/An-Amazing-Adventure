@@ -522,9 +522,11 @@ func buildDungeonData(
 		if name == "" {
 			name = fallbackRoomName(zone.Type)
 		}
+		desc := framing.RoomDescriptions[zone.ID] // may be empty for legacy framing calls
 		rooms[zone.ID] = &game.DungeonRoomData{
 			ID:               zone.ID,
 			Name:             name,
+			Description:      desc,
 			Type:             mapRoomType(zone.Type),
 			ConnectedRoomIDs: connectedTo[zone.ID],
 		}
@@ -579,20 +581,114 @@ func fallbackRoomName(roomType string) string {
 
 // ── Legacy room bridge ────────────────────────────────────────────────────────
 
-// buildLegacyRooms populates g.Rooms from DungeonData so existing navigation
-// and narrator code continues to work. For v4 games, DungeonData is authoritative;
-// g.Rooms is a convenience projection.
+// buildLegacyRooms populates g.Rooms from DungeonData using a BFS spatial
+// layout starting from the entrance. Each unvisited neighbour is assigned the
+// next available compass direction (clockwise: north, east, south, west) from
+// its parent, avoiding direction conflicts. Coordinates are computed from the
+// assigned directions so the visual map reflects a meaningful topology.
+// The resolved Connections and Coordinates are also written back into
+// DungeonData.Rooms so they are persisted and don't need recomputation.
 func buildLegacyRooms(g *game.Game, dd *game.DungeonData) {
-	dirs := []string{"north", "south", "east", "west"}
+	if len(dd.Rooms) == 0 {
+		return
+	}
+
+	// First pass: add all rooms with no connections.
 	for _, r := range dd.Rooms {
 		area := game.NewArea(r.Name, r.Description)
 		area.ID = r.ID
 		_ = g.AddRoom(area)
 	}
-	for _, r := range dd.Rooms {
-		for i, connID := range r.ConnectedRoomIDs {
-			dir := dirs[i%len(dirs)]
-			_ = g.ConnectRooms(r.ID, connID, dir)
+
+	// BFS from the entrance to assign spatially meaningful compass directions.
+	// State: for each visited room, track which directions are already taken.
+	takenDirs := make(map[string]map[string]bool) // roomID → set of taken directions
+	for id := range dd.Rooms {
+		takenDirs[id] = make(map[string]bool)
+	}
+
+	// Preferred direction order: clockwise from north.
+	dirOrder := []string{"north", "east", "south", "west"}
+
+	startID := dd.StartRoomID
+	if startID == "" {
+		for id := range dd.Rooms {
+			startID = id
+			break
+		}
+	}
+
+	visited := map[string]bool{startID: true}
+	queue := []string{startID}
+
+	// Set start room at origin.
+	if start, err := g.GetRoom(startID); err == nil {
+		start.Coordinates = game.Coordinates{}
+		g.UpdateRoom(start)
+		if dr, ok := dd.Rooms[startID]; ok {
+			dr.Coordinates = game.Coordinates{}
+		}
+	}
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+
+		r, ok := dd.Rooms[cur]
+		if !ok {
+			continue
+		}
+
+		for _, connID := range r.ConnectedRoomIDs {
+			// Find a direction that is free on both sides.
+			var chosenDir string
+			for _, d := range dirOrder {
+				if takenDirs[cur][d] {
+					continue
+				}
+				opp := game.OppositeDirection[d]
+				if takenDirs[connID][opp] {
+					continue
+				}
+				chosenDir = d
+				break
+			}
+			if chosenDir == "" {
+				// All preferred directions exhausted — skip this edge.
+				// The room will still be reachable via another path if the graph
+				// is connected; log and continue gracefully.
+				log.Printf("buildLegacyRooms: no free direction for edge %s→%s, skipping", cur, connID)
+				continue
+			}
+
+			// Mark directions as taken on both sides.
+			takenDirs[cur][chosenDir] = true
+			takenDirs[connID][game.OppositeDirection[chosenDir]] = true
+
+			// Wire the connection (also updates coordinates of connID based on cur).
+			if err := g.ConnectRooms(cur, connID, chosenDir); err != nil {
+				log.Printf("buildLegacyRooms: ConnectRooms %s→%s (%s): %v", cur, connID, chosenDir, err)
+				continue
+			}
+
+			// Persist connections and coordinates back into DungeonData.
+			if curArea, err := g.GetRoom(cur); err == nil {
+				if dr, ok := dd.Rooms[cur]; ok {
+					dr.Connections = curArea.Connections
+					dr.Coordinates = curArea.Coordinates
+				}
+			}
+			if connArea, err := g.GetRoom(connID); err == nil {
+				if dr, ok := dd.Rooms[connID]; ok {
+					dr.Connections = connArea.Connections
+					dr.Coordinates = connArea.Coordinates
+				}
+			}
+
+			if !visited[connID] {
+				visited[connID] = true
+				queue = append(queue, connID)
+			}
 		}
 	}
 }

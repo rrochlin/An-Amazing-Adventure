@@ -4,22 +4,22 @@ on:
   push:
     branches: [main]
     paths:
-      - 'server-v2/**'
-      - '.github/workflows/deploy-server.yml'
+      - "server/**"
+      - ".github/workflows/deploy-server.yml"
   pull_request:
     branches: [main]
     paths:
-      - 'server-v2/**'
-      - '.github/workflows/deploy-server.yml'
+      - "server/**"
+      - ".github/workflows/deploy-server.yml"
   workflow_dispatch:
 
 permissions:
-  id-token: write  # required for OIDC
+  id-token: write # required for OIDC
   contents: read
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
-  GO_VERSION: '1.24'
+  GO_VERSION: "1.24"
 
 jobs:
   test:
@@ -34,10 +34,10 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: server-v2/go.sum
+          cache-dependency-path: server/go.sum
 
       - name: Run all tests
-        working-directory: server-v2
+        working-directory: server
         run: go test ./... -race -timeout 120s
 
   deploy:
@@ -55,7 +55,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: server-v2/go.sum
+          cache-dependency-path: server/go.sum
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -64,7 +64,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Build and zip all Lambdas
-        working-directory: server-v2
+        working-directory: server
         run: |
           set -e
           LAMBDAS=(ws-connect ws-disconnect ws-chat ws-game-action http-games http-users http-admin http-invites cognito-post-confirm world-gen)

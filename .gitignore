@@ -8,10 +8,13 @@ server-cpp/.idea/
 server-cpp/*.log
 
 # Go Lambda build artifacts (local dev builds; CI builds in /tmp)
-server-v2/http-users
-server-v2/http-games
-server-v2/world-gen
-server-v2/ws-connect
-server-v2/ws-disconnect
-server-v2/ws-chat
-server-v2/ws-game-action
+server/http-users
+server/http-games
+server/world-gen
+server/ws-connect
+server/ws-disconnect
+server/ws-chat
+server/ws-game-action
+server/cognito-post-confirm
+server/http-admin
+server/http-invites

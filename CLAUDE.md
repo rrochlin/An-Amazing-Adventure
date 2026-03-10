@@ -10,7 +10,7 @@ An AI-powered text adventure game. Claude (via AWS Bedrock) acts as the Dungeon 
 
 ## Tech Stack
 
-### Backend (`server-v2/` — Go 1.24, AWS Lambda)
+### Backend (`server/` — Go 1.24, AWS Lambda)
 - **AI:** AWS Bedrock — `us.anthropic.claude-sonnet-4-6` (narrator + architect), `us.anthropic.claude-haiku-4-5-20251001-v1:0` (sub-agents)
 - **Database:** AWS DynamoDB (sessions + connections tables)
 - **Auth:** AWS Cognito User Pools (JWT, SRP flow)
@@ -45,7 +45,7 @@ An-Amazing-Adventure/
 │   │   ├── store/           # gameStore.ts (Zustand)
 │   │   └── types/           # types.ts
 │   └── vite.config.ts
-├── server-v2/               # Go Lambda handlers
+├── server/                  # Go Lambda handlers
 │   ├── cmd/
 │   │   ├── http-games/      # GET/POST/DELETE /api/games
 │   │   ├── http-users/      # PUT /api/users (profile update via Cognito)
@@ -77,7 +77,7 @@ pnpm test --run   # Vitest (single run, no watch)
 
 ### Server
 ```bash
-cd server-v2
+cd server
 go build ./...
 go test ./...
 ```
@@ -178,13 +178,13 @@ chore: update tests, gitignore, CLAUDE.md                ← cleanup
 Always create a feature branch (`git checkout -b feat/...`) before starting any non-trivial work.
 
 ### Deploy / PR workflow
-- **This monorepo** (client + server-v2): open a PR to `main` via `gh pr create`. GitHub Actions runs tests on every PR and deploys on merge to `main`.
+- **This monorepo** (client + server): open a PR to `main` via `gh pr create`. GitHub Actions runs tests on every PR and deploys on merge to `main`.
 - **Infrastructure changes** (new AWS resources, API Gateway routes, Lambda env vars, DynamoDB tables, etc.): these live in a **separate repo** `rrochlin/terraform-infrastructure`, linked here as a git subtree at `server/infra/`. Push changes with:
   ```bash
   git subtree push --prefix server/infra git@github.com:rrochlin/terraform-infrastructure.git <branch-name>
   gh pr create --repo rrochlin/terraform-infrastructure ...
   ```
-- **Never commit compiled Lambda binaries** (`server-v2/http-games`, `server-v2/world-gen`, etc.) — they are in `.gitignore`. CI builds them from source on every deploy.
+- **Never commit compiled Lambda binaries** (`server/http-games`, `server/world-gen`, etc.) — they are in `.gitignore`. CI builds them from source on every deploy.
 
 ### Infrastructure discipline — MANDATORY
 **All infrastructure changes must go through Terraform.** Never use the AWS CLI or Console to create or modify resources (IAM policies, Lambda env vars, DynamoDB tables, API Gateway routes, Cognito config, etc.). Direct AWS changes create drift that is invisible to Terraform and breaks future applies.
