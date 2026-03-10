@@ -1,4 +1,4 @@
-// Core domain types — mirror the server-v2 game engine view models.
+// Core domain types — mirror the server game engine view models.
 
 // Legacy creation params (v1/v2 records)
 export interface AdventureCreationParams {
@@ -71,7 +71,13 @@ export interface CharacterView {
    dnd?: DnDStatsView; // present for v3+ characters
 }
 
-export type DungeonRoomType = 'entrance' | 'chamber' | 'boss' | 'treasure' | 'corridor' | 'junction';
+export type DungeonRoomType =
+   | 'entrance'
+   | 'chamber'
+   | 'boss'
+   | 'treasure'
+   | 'corridor'
+   | 'junction';
 
 export interface RoomView {
    id: string;
