@@ -55,8 +55,8 @@ const RACES: RaceCardData[] = [
       asi: "+2 CON", speed: "25 ft",
       traits: ["Darkvision", "Dwarven Resilience", "Stonecunning"],
       subraces: [
-         { id: "hill_dwarf",     name: "Hill Dwarf",     asiBonusLabel: "+1 WIS, +1 HP/level" },
-         { id: "mountain_dwarf", name: "Mountain Dwarf", asiBonusLabel: "+2 STR, medium armor" },
+         { id: "hill-dwarf",     name: "Hill Dwarf",     asiBonusLabel: "+1 WIS, +1 HP/level" },
+         { id: "mountain-dwarf", name: "Mountain Dwarf", asiBonusLabel: "+2 STR, medium armor" },
       ],
    },
    {
@@ -64,8 +64,8 @@ const RACES: RaceCardData[] = [
       asi: "+2 DEX", speed: "30 ft",
       traits: ["Darkvision", "Fey Ancestry", "Trance"],
       subraces: [
-         { id: "high_elf",  name: "High Elf",  asiBonusLabel: "+1 INT" },
-         { id: "wood_elf",  name: "Wood Elf",  asiBonusLabel: "+1 WIS, 35 ft speed" },
+         { id: "high-elf",  name: "High Elf",  asiBonusLabel: "+1 INT" },
+         { id: "wood-elf",  name: "Wood Elf",  asiBonusLabel: "+1 WIS, 35 ft speed" },
       ],
    },
    {
@@ -73,8 +73,8 @@ const RACES: RaceCardData[] = [
       asi: "+2 DEX", speed: "25 ft",
       traits: ["Lucky", "Brave", "Halfling Nimbleness"],
       subraces: [
-         { id: "lightfoot", name: "Lightfoot", asiBonusLabel: "+1 CHA" },
-         { id: "stout",     name: "Stout",     asiBonusLabel: "+1 CON, poison resistance" },
+         { id: "lightfoot-halfling", name: "Lightfoot", asiBonusLabel: "+1 CHA" },
+         { id: "stout-halfling",     name: "Stout",     asiBonusLabel: "+1 CON, poison resistance" },
       ],
    },
    {
@@ -88,18 +88,21 @@ const RACES: RaceCardData[] = [
       asi: "+2 INT", speed: "25 ft",
       traits: ["Darkvision", "Gnome Cunning"],
       subraces: [
-         { id: "forest_gnome", name: "Forest Gnome", asiBonusLabel: "+1 DEX" },
-         { id: "rock_gnome",   name: "Rock Gnome",   asiBonusLabel: "+1 CON" },
+         { id: "forest-gnome", name: "Forest Gnome", asiBonusLabel: "+1 DEX" },
+         { id: "rock-gnome",   name: "Rock Gnome",   asiBonusLabel: "+1 CON" },
       ],
    },
+   // TODO(toolkit): Half-Elf is excluded until rpg-toolkit fixes the racial skill
+   // choice ChoiceID bug (SetRace records skills without ChoiceID="half-elf-skills"
+   // so ValidateChoices always fails). Re-enable once toolkit is updated.
+   // {
+   //    id: "half-elf", name: "Half-Elf",
+   //    asi: "+2 CHA, +1 to two others", speed: "30 ft",
+   //    traits: ["Darkvision", "Fey Ancestry", "Skill Versatility"],
+   //    subraces: [],
+   // },
    {
-      id: "half_elf", name: "Half-Elf",
-      asi: "+2 CHA, +1 to two others", speed: "30 ft",
-      traits: ["Darkvision", "Fey Ancestry", "Skill Versatility"],
-      subraces: [],
-   },
-   {
-      id: "half_orc", name: "Half-Orc",
+      id: "half-orc", name: "Half-Orc",
       asi: "+2 STR, +1 CON", speed: "30 ft",
       traits: ["Darkvision", "Menacing", "Relentless Endurance", "Savage Attacks"],
       subraces: [],
@@ -139,7 +142,7 @@ const CLASSES: ClassCardData[] = [
       ],
       skillCount: 2,
       skills: [
-         { id: "animal_handling", label: "Animal Handling (WIS)" },
+         { id: "animal-handling", label: "Animal Handling (WIS)" },
          { id: "athletics",       label: "Athletics (STR)" },
          { id: "intimidation",    label: "Intimidation (CHA)" },
          { id: "nature",          label: "Nature (INT)" },
@@ -161,7 +164,7 @@ const CLASSES: ClassCardData[] = [
       skillCount: 2,
       skills: [
          { id: "acrobatics",      label: "Acrobatics (DEX)" },
-         { id: "animal_handling", label: "Animal Handling (WIS)" },
+         { id: "animal-handling", label: "Animal Handling (WIS)" },
          { id: "athletics",       label: "Athletics (STR)" },
          { id: "history",         label: "History (INT)" },
          { id: "insight",         label: "Insight (WIS)" },
@@ -203,25 +206,26 @@ const ABILITY_LABELS: Record<AbilityKey, string> = {
    int: "Intelligence", wis: "Wisdom", cha: "Charisma",
 };
 
-// Racial ASI bonuses keyed by race_id and optional subrace_id
+// Racial ASI bonuses keyed by race_id and optional subrace_id.
+// Keys must match the toolkit's kebab-case constants exactly.
 const RACIAL_ASI: Record<string, Partial<Record<AbilityKey, number>>> = {
-   human:      { str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 },
-   dwarf:      { con: 2 },
-   hill_dwarf: { wis: 1 },
-   mountain_dwarf: { str: 2 },
-   elf:        { dex: 2 },
-   high_elf:   { int: 1 },
-   wood_elf:   { wis: 1 },
-   halfling:   { dex: 2 },
-   lightfoot:  { cha: 1 },
-   stout:      { con: 1 },
-   dragonborn: { str: 2, cha: 1 },
-   gnome:      { int: 2 },
-   forest_gnome: { dex: 1 },
-   rock_gnome:   { con: 1 },
-   half_elf:   { cha: 2 },
-   half_orc:   { str: 2, con: 1 },
-   tiefling:   { cha: 2, int: 1 },
+   "human":               { str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 },
+   "dwarf":               { con: 2 },
+   "hill-dwarf":          { wis: 1 },
+   "mountain-dwarf":      { str: 2 },
+   "elf":                 { dex: 2 },
+   "high-elf":            { int: 1 },
+   "wood-elf":            { wis: 1 },
+   "halfling":            { dex: 2 },
+   "lightfoot-halfling":  { cha: 1 },
+   "stout-halfling":      { con: 1 },
+   "dragonborn":          { str: 2, cha: 1 },
+   "gnome":               { int: 2 },
+   "forest-gnome":        { dex: 1 },
+   "rock-gnome":          { con: 1 },
+   // "half-elf" excluded — see TODO above
+   "half-orc":            { str: 2, con: 1 },
+   "tiefling":            { cha: 2, int: 1 },
 };
 
 function getRacialBonuses(raceId: string, subraceId: string): Partial<Record<AbilityKey, number>> {
