@@ -830,6 +830,7 @@ type RoomView struct {
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	Description string            `json:"description"`
+	Type        string            `json:"type,omitempty"` // DungeonRoomType when known (entrance/chamber/boss/treasure/corridor/junction)
 	Connections map[string]string `json:"connections"`
 	Coordinates Coordinates       `json:"coordinates"`
 	Items       []ItemView        `json:"items"`
@@ -994,8 +995,15 @@ func (g *Game) BuildGameStateView(callerUserID string, history []ChatMessage) Ga
 				occupantViews = append(occupantViews, g.buildCharacterView(c))
 			}
 		}
+		roomType := ""
+		if g.DungeonData != nil {
+			if dr, ok := g.DungeonData.Rooms[a.ID]; ok {
+				roomType = string(dr.Type)
+			}
+		}
 		return RoomView{
 			ID: a.ID, Name: a.Name, Description: a.Description,
+			Type:        roomType,
 			Connections: a.Connections, Coordinates: a.Coordinates,
 			Items:     g.buildItemViews(a.Items),
 			Occupants: occupantViews,

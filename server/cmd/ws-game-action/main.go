@@ -86,7 +86,15 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	var actionErr error
 	switch msg.SubAction {
 	case "move":
-		_, actionErr = g.MovePlayer(msg.Payload)
+		dest, moveErr := g.MovePlayer(msg.Payload)
+		if moveErr == nil && g.DungeonData != nil {
+			// Persist fog-of-war: mark the destination room as revealed.
+			if g.DungeonData.RevealedRooms == nil {
+				g.DungeonData.RevealedRooms = make(map[string]bool)
+			}
+			g.DungeonData.RevealedRooms[dest.ID] = true
+		}
+		actionErr = moveErr
 	case "pick_up":
 		item, findErr := g.GetItemByName(msg.Payload)
 		if findErr != nil {

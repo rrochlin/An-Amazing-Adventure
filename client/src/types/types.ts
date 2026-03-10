@@ -71,10 +71,13 @@ export interface CharacterView {
    dnd?: DnDStatsView; // present for v3+ characters
 }
 
+export type DungeonRoomType = 'entrance' | 'chamber' | 'boss' | 'treasure' | 'corridor' | 'junction';
+
 export interface RoomView {
    id: string;
    name: string;
    description: string;
+   type?: DungeonRoomType; // present for v4+ games
    connections: Record<string, string>; // direction -> room ID
    coordinates: Coordinates;
    items: ItemView[];
