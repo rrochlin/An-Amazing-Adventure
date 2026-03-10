@@ -92,10 +92,17 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	log.Printf("ws-chat: conn=%s user=%s game=%s", connID, userID, conn.GameID)
 	userRecord, err := dbClient.GetUser(ctx, userID)
 	if err != nil {
-		log.Printf("ws-chat: GetUser error user=%s (treating as restricted): %v", userID, err)
+		log.Printf("ws-chat: GetUser error user=%s: %v", userID, err)
+		_ = ws.SendError(ctx, connID, "internal_error")
+		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
-	if userRecord == nil || !userRecord.AIEnabled {
-		log.Printf("ws-chat: ai_access_not_enabled for user=%s (record=%v)", userID, userRecord != nil)
+	if userRecord == nil {
+		log.Printf("ws-chat: user record not found for user=%s — rejecting chat", userID)
+		_ = ws.SendError(ctx, connID, "user_not_found")
+		return events.APIGatewayProxyResponse{StatusCode: 403}, nil
+	}
+	if !userRecord.AIEnabled {
+		log.Printf("ws-chat: ai_access_not_enabled for user=%s role=%s", userID, userRecord.Role)
 		_ = ws.SendError(ctx, connID, "ai_access_not_enabled")
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
