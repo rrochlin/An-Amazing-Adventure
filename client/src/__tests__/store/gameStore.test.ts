@@ -25,6 +25,7 @@ const makeGameState = (
       description: 'The player',
       alive: true,
       health: 100,
+      max_health: 100,
       friendly: true,
       inventory: [],
       equipment: {},
@@ -119,11 +120,12 @@ describe('gameStore', () => {
             description: 'The player',
             alive: true,
             health: 80,
+            max_health: 100,
             friendly: true,
             inventory: [],
             equipment: {},
-         },
-      };
+          },
+       };
 
       useGameStore.getState().applyDelta(delta);
       const { gameState } = useGameStore.getState();
@@ -144,6 +146,7 @@ describe('gameStore', () => {
             description: 'The player',
             alive: true,
             health: 75,
+            max_health: 100,
             friendly: true,
             inventory: [],
             equipment: {},

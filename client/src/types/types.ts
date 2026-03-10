@@ -64,6 +64,7 @@ export interface CharacterView {
    description: string;
    alive: boolean;
    health: number;
+   max_health: number;
    friendly: boolean;
    inventory: ItemView[];
    equipment: EquipmentView;

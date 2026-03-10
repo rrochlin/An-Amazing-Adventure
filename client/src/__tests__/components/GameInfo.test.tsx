@@ -31,6 +31,7 @@ function makeGameState(overrides: Partial<GameStateView> = {}): GameStateView {
                description: 'Tired man',
                alive: true,
                health: 100,
+               max_health: 100,
                friendly: true,
                inventory: [],
                equipment: {},
@@ -43,6 +44,7 @@ function makeGameState(overrides: Partial<GameStateView> = {}): GameStateView {
          description: 'A ranger',
          alive: true,
          health: 80,
+         max_health: 100,
          friendly: true,
          inventory: [
             {

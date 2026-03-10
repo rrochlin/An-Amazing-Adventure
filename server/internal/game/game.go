@@ -876,6 +876,7 @@ type CharacterView struct {
 	Description string        `json:"description"`
 	Alive       bool          `json:"alive"`
 	Health      int           `json:"health"`
+	MaxHealth   int           `json:"max_health"` // always populated; falls back to 100 for legacy characters
 	Friendly    bool          `json:"friendly"`
 	Inventory   []ItemView    `json:"inventory"`
 	Equipment   EquipmentView `json:"equipment"`
@@ -940,6 +941,7 @@ func (g *Game) buildCharacterViewWithDnD(c Character, dnd *dnd5echar.Character) 
 		Description: c.Description,
 		Alive:       c.Alive,
 		Health:      c.Health,
+		MaxHealth:   100, // legacy default; overwritten below when DnD character is present
 		Friendly:    c.Friendly,
 		Inventory:   resolveItems(c.Inventory),
 		Equipment: EquipmentView{
@@ -956,6 +958,7 @@ func (g *Game) buildCharacterViewWithDnD(c Character, dnd *dnd5echar.Character) 
 	if dnd != nil {
 		data := dnd.ToData()
 		view.Health = dnd.GetHitPoints()
+		view.MaxHealth = data.MaxHitPoints
 		view.Alive = dnd.GetHitPoints() > 0
 		abilities := map[string]int{
 			"str": data.AbilityScores["str"],

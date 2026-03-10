@@ -356,9 +356,17 @@ func engineerUserMessage(g *game.Game, narrative string) string {
 	sb.WriteString(narrative)
 	sb.WriteString("\n\n## Current Game State\n\n")
 
-	// Player (owner character for backward compat)
+	// Player — use DnD HP when available (authoritative), fall back to legacy stub
 	owner, _ := g.OwnerCharacter()
-	sb.WriteString(fmt.Sprintf("Player: %s (health %d, alive %v)\n", owner.Name, owner.Health, owner.Alive))
+	playerHP := owner.Health
+	playerAlive := owner.Alive
+	playerMaxHP := 100
+	if dndChar, hasDnD := g.GetDnDCharacter(g.OwnerID); hasDnD && dndChar != nil {
+		playerHP = dndChar.GetHitPoints()
+		playerAlive = playerHP > 0
+		playerMaxHP = dndChar.ToData().MaxHitPoints
+	}
+	sb.WriteString(fmt.Sprintf("Player: %s (health %d/%d, alive %v)\n", owner.Name, playerHP, playerMaxHP, playerAlive))
 	sb.WriteString("Player inventory: ")
 	if len(owner.Inventory) == 0 {
 		sb.WriteString("empty")

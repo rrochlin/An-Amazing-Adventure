@@ -304,23 +304,25 @@ export const GameInfo = ({
                               fontWeight: 'bold',
                            }}
                         >
-                           {gameState.player.alive
-                              ? `${gameState.player.health}/100 HP`
-                              : 'DEAD'}
-                        </Typography>
-                     </Box>
-                     <LinearProgress
-                        variant="determinate"
-                        value={
-                           gameState.player.alive ? gameState.player.health : 0
-                        }
-                        color={
-                           gameState.player.health > 50
-                              ? 'success'
-                              : gameState.player.health > 20
-                                ? 'warning'
-                                : 'error'
-                        }
+                         {gameState.player.alive
+                               ? `${gameState.player.health}/${gameState.player.dnd?.max_hp ?? 100} HP`
+                               : 'DEAD'}
+                         </Typography>
+                      </Box>
+                      <LinearProgress
+                         variant="determinate"
+                         value={
+                            gameState.player.alive
+                               ? (gameState.player.health / (gameState.player.dnd?.max_hp ?? 100)) * 100
+                               : 0
+                         }
+                         color={
+                            gameState.player.health / (gameState.player.dnd?.max_hp ?? 100) > 0.5
+                               ? 'success'
+                               : gameState.player.health / (gameState.player.dnd?.max_hp ?? 100) > 0.2
+                                 ? 'warning'
+                                 : 'error'
+                         }
                         sx={{ height: 6, borderRadius: 3 }}
                      />
                   </Box>
@@ -587,21 +589,25 @@ export const GameInfo = ({
                                  : 'error.main',
                            }}
                         >
-                           {gameState.self.alive
-                              ? `${gameState.self.health} HP`
-                              : 'DEAD'}
-                        </Typography>
-                     </Box>
-                     <LinearProgress
-                        variant="determinate"
-                        value={gameState.self.alive ? gameState.self.health : 0}
-                        color={
-                           gameState.self.health > 50
-                              ? 'success'
-                              : gameState.self.health > 20
-                                ? 'warning'
-                                : 'error'
-                        }
+                            {gameState.self.alive
+                               ? `${gameState.self.health}/${gameState.self.dnd?.max_hp ?? 100} HP`
+                               : 'DEAD'}
+                         </Typography>
+                      </Box>
+                      <LinearProgress
+                         variant="determinate"
+                         value={
+                            gameState.self.alive
+                               ? (gameState.self.health / (gameState.self.dnd?.max_hp ?? 100)) * 100
+                               : 0
+                         }
+                         color={
+                            gameState.self.health / (gameState.self.dnd?.max_hp ?? 100) > 0.5
+                               ? 'success'
+                               : gameState.self.health / (gameState.self.dnd?.max_hp ?? 100) > 0.2
+                                 ? 'warning'
+                                 : 'error'
+                         }
                         sx={{ height: 6, borderRadius: 3 }}
                      />
                   </Box>
@@ -632,19 +638,23 @@ export const GameInfo = ({
                                     : 'error.main',
                               }}
                            >
-                              {member.alive ? `${member.health} HP` : 'DEAD'}
-                           </Typography>
-                        </Box>
-                        <LinearProgress
-                           variant="determinate"
-                           value={member.alive ? member.health : 0}
-                           color={
-                              member.health > 50
-                                 ? 'success'
-                                 : member.health > 20
-                                   ? 'warning'
-                                   : 'error'
-                           }
+                               {member.alive ? `${member.health}/${member.dnd?.max_hp ?? 100} HP` : 'DEAD'}
+                            </Typography>
+                         </Box>
+                         <LinearProgress
+                            variant="determinate"
+                            value={
+                               member.alive
+                                  ? (member.health / (member.dnd?.max_hp ?? 100)) * 100
+                                  : 0
+                            }
+                            color={
+                               member.health / (member.dnd?.max_hp ?? 100) > 0.5
+                                  ? 'success'
+                                  : member.health / (member.dnd?.max_hp ?? 100) > 0.2
+                                    ? 'warning'
+                                    : 'error'
+                            }
                            sx={{ height: 6, borderRadius: 3 }}
                         />
                      </Box>
