@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -83,26 +84,40 @@ func (c *Client) UpdateUser(ctx context.Context, userID string, u UserRecord) er
 
 // UpdateUserTokens atomically increments tokens_used by delta.
 // This is a post-hoc accounting write — limit enforcement happens before
-// calling Bedrock, not here. The write is unconditional and should always
-// succeed as long as the user record exists.
+// calling Bedrock, not here.
+//
+// The update requires the record to already exist (attribute_exists condition).
+// If the user record is missing we return ErrUserNotFound rather than silently
+// creating a skeleton item — a missing user is a fatal condition (deleted account
+// or DynamoDB error during signup) and we should not provision further resources.
 func (c *Client) UpdateUserTokens(ctx context.Context, userID string, delta int) error {
 	c.requireUsersTable()
 	key := marshalBinaryKey("user_id", userID)
 	now := time.Now().UnixMilli()
 	_, err := c.ddb.UpdateItem(ctx, &dynamodb.UpdateItemInput{
-		TableName:        aws.String(c.usersTable),
-		Key:              key,
-		UpdateExpression: aws.String("ADD tokens_used :delta SET updated_at = :now"),
+		TableName:           aws.String(c.usersTable),
+		Key:                 key,
+		UpdateExpression:    aws.String("ADD tokens_used :delta SET updated_at = :now"),
+		ConditionExpression: aws.String("attribute_exists(user_id)"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":delta": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", delta)},
 			":now":   &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", now)},
 		},
 	})
 	if err != nil {
+		var ccf *types.ConditionalCheckFailedException
+		if errors.As(err, &ccf) {
+			return fmt.Errorf("UpdateUserTokens: user %s not found: %w", userID, ErrUserNotFound)
+		}
 		return fmt.Errorf("UpdateUserTokens: %w", err)
 	}
 	return nil
 }
+
+// ErrUserNotFound is returned when a required user record does not exist in the
+// users table. Callers should treat this as a fatal condition — do not create
+// resources or proceed with the request.
+var ErrUserNotFound = errors.New("user record not found")
 
 // ListUsers returns all UserRecords via a full table scan (admin use only).
 // Handles pagination automatically.

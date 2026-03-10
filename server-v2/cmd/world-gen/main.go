@@ -191,8 +191,10 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	buildLegacyRooms(g, dungeonData)
 
 	// Account for narrative framing token usage.
+	// Non-fatal: world is already built; don't abort on accounting failure.
+	// ErrUserNotFound here means the user was deleted mid-flight — log loudly.
 	if accountErr := dbClient.UpdateUserTokens(ctx, evt.UserID, framingTokens.Total()); accountErr != nil {
-		log.Printf("world-gen: UpdateUserTokens (non-fatal): %v", accountErr)
+		log.Printf("world-gen: UpdateUserTokens FAILED (non-fatal) user=%s: %v", evt.UserID, accountErr)
 	}
 
 	// ── Step 5: Persist and mark ready ───────────────────────────────────────

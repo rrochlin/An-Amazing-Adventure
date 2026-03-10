@@ -183,14 +183,29 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		return serverError(), nil
 	}
 
-	// Load user record to enforce game limit and determine preview mode.
-	// On error or missing record, default to restricted (safe fallback).
+	// Load user record to enforce game limit and AI access.
+	// A missing or unreadable user record is fatal — we do not provision resources
+	// for users who don't exist (deleted account, transient DynamoDB error, etc.).
 	userRecord, err := dbClient.GetUser(ctx, userID)
 	if err != nil {
-		log.Printf("http-games POST: GetUser error (treating as restricted): %v", err)
+		log.Printf("http-games POST: GetUser error for user=%s: %v", userID, err)
+		return serverError(), nil
 	}
 	if userRecord == nil {
-		userRecord = &db.UserRecord{Role: "restricted", AIEnabled: false, GamesLimit: 1}
+		log.Printf("http-games POST: user record not found for user=%s — rejecting game creation", userID)
+		return jsonResponse(403, map[string]string{
+			"error":   "user_not_found",
+			"message": "No user account found. Please sign up or contact support.",
+		}), nil
+	}
+
+	// Enforce AI access — users without ai_enabled cannot create games.
+	if !userRecord.AIEnabled {
+		log.Printf("http-games POST: ai_access_not_enabled for user=%s role=%s", userID, userRecord.Role)
+		return jsonResponse(403, map[string]string{
+			"error":   "ai_access_not_enabled",
+			"message": "AI access is not enabled for your account. Contact support to request access.",
+		}), nil
 	}
 
 	// Enforce games limit
@@ -204,19 +219,15 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		}
 	}
 
-	previewMode := !userRecord.AIEnabled
-	log.Printf("http-games POST: user=%s role=%s ai_enabled=%v preview=%v", userID, userRecord.Role, userRecord.AIEnabled, previewMode)
+	log.Printf("http-games POST: user=%s role=%s ai_enabled=true", userID, userRecord.Role)
 
 	sessionID := game.NewSessionID()
 
-	// Build the D&D character from creation data (validates class/race/skills).
-	// In preview mode, skip character creation (no AI, no D&D mechanics).
 	playerName := body.Name
 	if playerName == "" {
 		playerName = "Adventurer"
 	}
 
-	// Always create the legacy stub for room placement tracking
 	player := game.NewCharacter(playerName, "")
 	g := game.NewGame(sessionID, userID)
 	g.SetPlayerCharacter(userID, player)
@@ -249,31 +260,25 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		log.Printf("create game PutMembership (non-fatal): %v", err)
 	}
 
-	// Kick off world generation asynchronously (skipped in preview mode)
-	if !previewMode {
-		log.Printf("http-games POST: invoking world-gen for session %s", sessionID)
-		payload, _ := json.Marshal(worldGenPayload{
-			SessionID:      sessionID,
-			UserID:         userID,
-			CreationParams: body,
-			// Legacy fields for backward-compat
-			PlayerName:  playerName,
-			ThemeHint:   body.ThemeHint,
-			Preferences: body.Preferences,
-		})
-		if err := invokeWorldGen(ctx, payload); err != nil {
-			log.Printf("http-games POST: invoke world-gen FAILED for session %s: %v (game still created)", sessionID, err)
-		} else {
-			log.Printf("http-games POST: world-gen invoked for session %s", sessionID)
-		}
+	log.Printf("http-games POST: invoking world-gen for session %s", sessionID)
+	payload, _ := json.Marshal(worldGenPayload{
+		SessionID:      sessionID,
+		UserID:         userID,
+		CreationParams: body,
+		// Legacy fields for backward-compat
+		PlayerName:  playerName,
+		ThemeHint:   body.ThemeHint,
+		Preferences: body.Preferences,
+	})
+	if err := invokeWorldGen(ctx, payload); err != nil {
+		log.Printf("http-games POST: invoke world-gen FAILED for session %s: %v (game still created)", sessionID, err)
 	} else {
-		log.Printf("http-games POST: skipping world-gen for session %s (preview mode)", sessionID)
+		log.Printf("http-games POST: world-gen invoked for session %s", sessionID)
 	}
 
 	return jsonResponse(201, map[string]any{
-		"session_id":   sessionID,
-		"ready":        false,
-		"preview_mode": previewMode,
+		"session_id": sessionID,
+		"ready":      false,
 	}), nil
 }
 
