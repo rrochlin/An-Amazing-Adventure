@@ -522,9 +522,11 @@ func buildDungeonData(
 		if name == "" {
 			name = fallbackRoomName(zone.Type)
 		}
+		desc := framing.RoomDescriptions[zone.ID] // may be empty for legacy framing calls
 		rooms[zone.ID] = &game.DungeonRoomData{
 			ID:               zone.ID,
 			Name:             name,
+			Description:      desc,
 			Type:             mapRoomType(zone.Type),
 			ConnectedRoomIDs: connectedTo[zone.ID],
 		}
