@@ -228,7 +228,7 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		playerName = "Adventurer"
 	}
 
-	player := game.NewCharacter(playerName, "")
+	player := game.NewCharacter(playerName, body.Backstory)
 	g := game.NewGame(sessionID, userID)
 	g.SetPlayerCharacter(userID, player)
 	g.CreationParams = body
@@ -521,7 +521,7 @@ func handleJoinCharacter(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		playerName = "Adventurer"
 	}
 	// Legacy stub for room placement
-	char := game.NewCharacter(playerName, "")
+	char := game.NewCharacter(playerName, body.Backstory)
 	g.SetPlayerCharacter(userID, char)
 
 	// Build D&D character if creation data is complete

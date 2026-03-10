@@ -360,7 +360,7 @@ describe("CreateRoute wizard — Review step", () => {
          expect.objectContaining({
             name: "Aria Silverwind",
             race_id: "dwarf",
-            subrace_id: "hill_dwarf",
+            subrace_id: "hill-dwarf",
             class_id: "barbarian",
             selected_skills: expect.arrayContaining(["athletics", "survival"]),
          }),

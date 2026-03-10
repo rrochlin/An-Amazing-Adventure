@@ -23,9 +23,10 @@ import (
 type CharacterCreationData struct {
 	// Character identity
 	Name      string `json:"name"`
-	RaceID    string `json:"race_id"`    // e.g. "dwarf"
-	SubraceID string `json:"subrace_id"` // e.g. "hill-dwarf" (empty if none)
-	ClassID   string `json:"class_id"`   // "barbarian" | "fighter" | "monk"
+	Backstory string `json:"backstory,omitempty"` // optional player-written backstory
+	RaceID    string `json:"race_id"`             // e.g. "dwarf" (kebab-case, matches toolkit)
+	SubraceID string `json:"subrace_id"`          // e.g. "hill-dwarf" (empty if none)
+	ClassID   string `json:"class_id"`            // "barbarian" | "fighter" | "monk"
 
 	// Ability scores (standard array or point buy — client resolves before sending).
 	// Keys must be the short form: "str", "dex", "con", "int", "wis", "cha"
@@ -43,12 +44,34 @@ type CharacterCreationData struct {
 // features in rpg-toolkit as of the current version.
 var SupportedClasses = []string{classes.Barbarian, classes.Fighter, classes.Monk}
 
+// SupportedRaces lists races that can be fully constructed by BuildDnDCharacter.
+// Half-Elf is excluded because rpg-toolkit v0.51.0 records its racial skill choice
+// without a ChoiceID, so ValidateChoices() always fails for Half-Elf.
+// TODO(toolkit): re-enable "half-elf" once rpg-toolkit sets ChoiceID=HalfElfSkills
+// in draft.SetRace for racial skill choices.
+var SupportedRaces = []string{
+	string(races.Human),
+	string(races.Dwarf),
+	string(races.Elf),
+	string(races.Halfling),
+	string(races.Dragonborn),
+	string(races.Gnome),
+	// races.HalfElf — excluded: toolkit bug, see TODO above
+	string(races.HalfOrc),
+	string(races.Tiefling),
+}
+
 // BuildDnDCharacter builds a full D&D 5e character from creation data.
 // The returned character has an event bus bound and is ready for use within
 // a single Lambda invocation. Call char.Cleanup(ctx) before discarding.
 //
 // Background is always FolkHero — the only fully-mechanical background that
 // does not require additional language or tool choices.
+//
+// ID format: race_id, subrace_id, and selected_skills must use kebab-case
+// (e.g. "half-orc", "hill-dwarf", "animal-handling") matching the toolkit
+// constants. The frontend is expected to send the correct format; no
+// normalization is performed here so errors surface immediately.
 func BuildDnDCharacter(ctx context.Context, input CharacterCreationData) (*dnd5echar.Character, error) {
 	if input.Name == "" {
 		return nil, fmt.Errorf("character name is required")
@@ -64,6 +87,18 @@ func BuildDnDCharacter(ctx context.Context, input CharacterCreationData) (*dnd5e
 	}
 	if !validClass {
 		return nil, fmt.Errorf("class %q is not available; supported classes: barbarian, fighter, monk", input.ClassID)
+	}
+
+	// Validate race
+	validRace := false
+	for _, r := range SupportedRaces {
+		if r == input.RaceID {
+			validRace = true
+			break
+		}
+	}
+	if !validRace {
+		return nil, fmt.Errorf("race %q is not available; supported races: human, dwarf, elf, halfling, dragonborn, gnome, half-orc, tiefling", input.RaceID)
 	}
 
 	// Map ability score keys (client may send full names or short names)
@@ -189,14 +224,36 @@ func CleanupDnDPlayers(_ context.Context, _ map[string]*dnd5echar.Character) {
 }
 
 // defaultRaceChoices returns required choices for races that need them.
-// Human gets 1 extra language; Dwarf gets 1 tool proficiency.
-// We always pick the simplest option to keep character creation non-interactive.
+// We always pick the simplest/first valid option to keep creation non-interactive.
+//
+// Known toolkit gaps (do not remove these TODOs):
+// TODO(toolkit): compileProficiencies() in rpg-toolkit draft.go does not read
+// ChoiceToolProficiency entries from d.choices — tool proficiency choices pass
+// validation but are silently absent from char.toolProficiencies. Fix requires
+// updating rpg-toolkit to iterate d.choices in compileProficiencies().
+//
+// TODO(toolkit): Half-Elf racial skill choices are recorded by SetRace without a
+// ChoiceID, so ValidateChoices() always fails (validator matches by ChoiceID ==
+// "half-elf-skills"). Half-Elf is excluded from SupportedRaces until this is fixed
+// upstream in rpg-toolkit draft.go SetRace().
+//
+// TODO(toolkit): Background grants (skills, tools) are not applied to the character.
+// FolkHero should grant Animal Handling + Survival skills and ToolVehicleLand.
+// Fix requires rpg-toolkit to implement compileSkills() and compileProficiencies()
+// background grant sections (currently marked TODO in draft.go).
 func defaultRaceChoices(raceID string) dnd5echar.RaceChoices {
 	switch raceID {
 	case "human":
 		// Human gets 1 free language — default to Elvish
 		return dnd5echar.RaceChoices{
 			Languages: []languages.Language{languages.Elvish},
+		}
+	case "dwarf":
+		// Dwarf gets proficiency with 1 artisan's tool — default to smith's tools.
+		// Note: this choice passes validation but due to a toolkit bug the proficiency
+		// is not compiled into char.toolProficiencies (see TODO above).
+		return dnd5echar.RaceChoices{
+			Tools: []shared.SelectionID{"smiths-tools"},
 		}
 	}
 	return dnd5echar.RaceChoices{}
