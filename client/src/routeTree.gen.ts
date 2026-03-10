@@ -8,261 +8,261 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignupRouteImport } from './routes/signup'
-import { Route as ProfileRouteImport } from './routes/profile'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as GameChar123sessionUUIDChar125RouteImport } from './routes/game-{$sessionUUID}'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as CreateRouteImport } from './routes/create'
-import { Route as AdminRouteImport } from './routes/admin'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as JoinCodeRouteImport } from './routes/join.$code'
-import { Route as GameChar123sessionUUIDChar125DetailsRouteImport } from './routes/game-{$sessionUUID}.details'
+import { Route as rootRouteImport } from './routes/__root';
+import { Route as SignupRouteImport } from './routes/signup';
+import { Route as ProfileRouteImport } from './routes/profile';
+import { Route as LoginRouteImport } from './routes/login';
+import { Route as GameChar123sessionUUIDChar125RouteImport } from './routes/game-{$sessionUUID}';
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password';
+import { Route as CreateRouteImport } from './routes/create';
+import { Route as AdminRouteImport } from './routes/admin';
+import { Route as IndexRouteImport } from './routes/index';
+import { Route as JoinCodeRouteImport } from './routes/join.$code';
+import { Route as GameChar123sessionUUIDChar125DetailsRouteImport } from './routes/game-{$sessionUUID}.details';
 
 const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
-  getParentRoute: () => rootRouteImport,
-} as any)
+   id: '/signup',
+   path: '/signup',
+   getParentRoute: () => rootRouteImport,
+} as any);
 const ProfileRoute = ProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => rootRouteImport,
-} as any)
+   id: '/profile',
+   path: '/profile',
+   getParentRoute: () => rootRouteImport,
+} as any);
 const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
+   id: '/login',
+   path: '/login',
+   getParentRoute: () => rootRouteImport,
+} as any);
 const GameChar123sessionUUIDChar125Route =
-  GameChar123sessionUUIDChar125RouteImport.update({
-    id: '/game-{$sessionUUID}',
-    path: '/game-{$sessionUUID}',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+   GameChar123sessionUUIDChar125RouteImport.update({
+      id: '/game-{$sessionUUID}',
+      path: '/game-{$sessionUUID}',
+      getParentRoute: () => rootRouteImport,
+   } as any);
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
+   id: '/forgot-password',
+   path: '/forgot-password',
+   getParentRoute: () => rootRouteImport,
+} as any);
 const CreateRoute = CreateRouteImport.update({
-  id: '/create',
-  path: '/create',
-  getParentRoute: () => rootRouteImport,
-} as any)
+   id: '/create',
+   path: '/create',
+   getParentRoute: () => rootRouteImport,
+} as any);
 const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
+   id: '/admin',
+   path: '/admin',
+   getParentRoute: () => rootRouteImport,
+} as any);
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
+   id: '/',
+   path: '/',
+   getParentRoute: () => rootRouteImport,
+} as any);
 const JoinCodeRoute = JoinCodeRouteImport.update({
-  id: '/join/$code',
-  path: '/join/$code',
-  getParentRoute: () => rootRouteImport,
-} as any)
+   id: '/join/$code',
+   path: '/join/$code',
+   getParentRoute: () => rootRouteImport,
+} as any);
 const GameChar123sessionUUIDChar125DetailsRoute =
-  GameChar123sessionUUIDChar125DetailsRouteImport.update({
-    id: '/details',
-    path: '/details',
-    getParentRoute: () => GameChar123sessionUUIDChar125Route,
-  } as any)
+   GameChar123sessionUUIDChar125DetailsRouteImport.update({
+      id: '/details',
+      path: '/details',
+      getParentRoute: () => GameChar123sessionUUIDChar125Route,
+   } as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
-  '/create': typeof CreateRoute
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren
-  '/login': typeof LoginRoute
-  '/profile': typeof ProfileRoute
-  '/signup': typeof SignupRoute
-  '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute
-  '/join/$code': typeof JoinCodeRoute
+   '/': typeof IndexRoute;
+   '/admin': typeof AdminRoute;
+   '/create': typeof CreateRoute;
+   '/forgot-password': typeof ForgotPasswordRoute;
+   '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren;
+   '/login': typeof LoginRoute;
+   '/profile': typeof ProfileRoute;
+   '/signup': typeof SignupRoute;
+   '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute;
+   '/join/$code': typeof JoinCodeRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
-  '/create': typeof CreateRoute
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren
-  '/login': typeof LoginRoute
-  '/profile': typeof ProfileRoute
-  '/signup': typeof SignupRoute
-  '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute
-  '/join/$code': typeof JoinCodeRoute
+   '/': typeof IndexRoute;
+   '/admin': typeof AdminRoute;
+   '/create': typeof CreateRoute;
+   '/forgot-password': typeof ForgotPasswordRoute;
+   '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren;
+   '/login': typeof LoginRoute;
+   '/profile': typeof ProfileRoute;
+   '/signup': typeof SignupRoute;
+   '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute;
+   '/join/$code': typeof JoinCodeRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
-  '/create': typeof CreateRoute
-  '/forgot-password': typeof ForgotPasswordRoute
-  '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren
-  '/login': typeof LoginRoute
-  '/profile': typeof ProfileRoute
-  '/signup': typeof SignupRoute
-  '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute
-  '/join/$code': typeof JoinCodeRoute
+   __root__: typeof rootRouteImport;
+   '/': typeof IndexRoute;
+   '/admin': typeof AdminRoute;
+   '/create': typeof CreateRoute;
+   '/forgot-password': typeof ForgotPasswordRoute;
+   '/game-{$sessionUUID}': typeof GameChar123sessionUUIDChar125RouteWithChildren;
+   '/login': typeof LoginRoute;
+   '/profile': typeof ProfileRoute;
+   '/signup': typeof SignupRoute;
+   '/game-{$sessionUUID}/details': typeof GameChar123sessionUUIDChar125DetailsRoute;
+   '/join/$code': typeof JoinCodeRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/admin'
-    | '/create'
-    | '/forgot-password'
-    | '/game-{$sessionUUID}'
-    | '/login'
-    | '/profile'
-    | '/signup'
-    | '/game-{$sessionUUID}/details'
-    | '/join/$code'
-  fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/admin'
-    | '/create'
-    | '/forgot-password'
-    | '/game-{$sessionUUID}'
-    | '/login'
-    | '/profile'
-    | '/signup'
-    | '/game-{$sessionUUID}/details'
-    | '/join/$code'
-  id:
-    | '__root__'
-    | '/'
-    | '/admin'
-    | '/create'
-    | '/forgot-password'
-    | '/game-{$sessionUUID}'
-    | '/login'
-    | '/profile'
-    | '/signup'
-    | '/game-{$sessionUUID}/details'
-    | '/join/$code'
-  fileRoutesById: FileRoutesById
+   fileRoutesByFullPath: FileRoutesByFullPath;
+   fullPaths:
+      | '/'
+      | '/admin'
+      | '/create'
+      | '/forgot-password'
+      | '/game-{$sessionUUID}'
+      | '/login'
+      | '/profile'
+      | '/signup'
+      | '/game-{$sessionUUID}/details'
+      | '/join/$code';
+   fileRoutesByTo: FileRoutesByTo;
+   to:
+      | '/'
+      | '/admin'
+      | '/create'
+      | '/forgot-password'
+      | '/game-{$sessionUUID}'
+      | '/login'
+      | '/profile'
+      | '/signup'
+      | '/game-{$sessionUUID}/details'
+      | '/join/$code';
+   id:
+      | '__root__'
+      | '/'
+      | '/admin'
+      | '/create'
+      | '/forgot-password'
+      | '/game-{$sessionUUID}'
+      | '/login'
+      | '/profile'
+      | '/signup'
+      | '/game-{$sessionUUID}/details'
+      | '/join/$code';
+   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
-  CreateRoute: typeof CreateRoute
-  ForgotPasswordRoute: typeof ForgotPasswordRoute
-  GameChar123sessionUUIDChar125Route: typeof GameChar123sessionUUIDChar125RouteWithChildren
-  LoginRoute: typeof LoginRoute
-  ProfileRoute: typeof ProfileRoute
-  SignupRoute: typeof SignupRoute
-  JoinCodeRoute: typeof JoinCodeRoute
+   IndexRoute: typeof IndexRoute;
+   AdminRoute: typeof AdminRoute;
+   CreateRoute: typeof CreateRoute;
+   ForgotPasswordRoute: typeof ForgotPasswordRoute;
+   GameChar123sessionUUIDChar125Route: typeof GameChar123sessionUUIDChar125RouteWithChildren;
+   LoginRoute: typeof LoginRoute;
+   ProfileRoute: typeof ProfileRoute;
+   SignupRoute: typeof SignupRoute;
+   JoinCodeRoute: typeof JoinCodeRoute;
 }
 
 declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/profile': {
-      id: '/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof ProfileRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/game-{$sessionUUID}': {
-      id: '/game-{$sessionUUID}'
-      path: '/game-{$sessionUUID}'
-      fullPath: '/game-{$sessionUUID}'
-      preLoaderRoute: typeof GameChar123sessionUUIDChar125RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/create': {
-      id: '/create'
-      path: '/create'
-      fullPath: '/create'
-      preLoaderRoute: typeof CreateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/join/$code': {
-      id: '/join/$code'
-      path: '/join/$code'
-      fullPath: '/join/$code'
-      preLoaderRoute: typeof JoinCodeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/game-{$sessionUUID}/details': {
-      id: '/game-{$sessionUUID}/details'
-      path: '/details'
-      fullPath: '/game-{$sessionUUID}/details'
-      preLoaderRoute: typeof GameChar123sessionUUIDChar125DetailsRouteImport
-      parentRoute: typeof GameChar123sessionUUIDChar125Route
-    }
-  }
+   interface FileRoutesByPath {
+      '/signup': {
+         id: '/signup';
+         path: '/signup';
+         fullPath: '/signup';
+         preLoaderRoute: typeof SignupRouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/profile': {
+         id: '/profile';
+         path: '/profile';
+         fullPath: '/profile';
+         preLoaderRoute: typeof ProfileRouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/login': {
+         id: '/login';
+         path: '/login';
+         fullPath: '/login';
+         preLoaderRoute: typeof LoginRouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/game-{$sessionUUID}': {
+         id: '/game-{$sessionUUID}';
+         path: '/game-{$sessionUUID}';
+         fullPath: '/game-{$sessionUUID}';
+         preLoaderRoute: typeof GameChar123sessionUUIDChar125RouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/forgot-password': {
+         id: '/forgot-password';
+         path: '/forgot-password';
+         fullPath: '/forgot-password';
+         preLoaderRoute: typeof ForgotPasswordRouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/create': {
+         id: '/create';
+         path: '/create';
+         fullPath: '/create';
+         preLoaderRoute: typeof CreateRouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/admin': {
+         id: '/admin';
+         path: '/admin';
+         fullPath: '/admin';
+         preLoaderRoute: typeof AdminRouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/': {
+         id: '/';
+         path: '/';
+         fullPath: '/';
+         preLoaderRoute: typeof IndexRouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/join/$code': {
+         id: '/join/$code';
+         path: '/join/$code';
+         fullPath: '/join/$code';
+         preLoaderRoute: typeof JoinCodeRouteImport;
+         parentRoute: typeof rootRouteImport;
+      };
+      '/game-{$sessionUUID}/details': {
+         id: '/game-{$sessionUUID}/details';
+         path: '/details';
+         fullPath: '/game-{$sessionUUID}/details';
+         preLoaderRoute: typeof GameChar123sessionUUIDChar125DetailsRouteImport;
+         parentRoute: typeof GameChar123sessionUUIDChar125Route;
+      };
+   }
 }
 
 interface GameChar123sessionUUIDChar125RouteChildren {
-  GameChar123sessionUUIDChar125DetailsRoute: typeof GameChar123sessionUUIDChar125DetailsRoute
+   GameChar123sessionUUIDChar125DetailsRoute: typeof GameChar123sessionUUIDChar125DetailsRoute;
 }
 
 const GameChar123sessionUUIDChar125RouteChildren: GameChar123sessionUUIDChar125RouteChildren =
-  {
-    GameChar123sessionUUIDChar125DetailsRoute:
-      GameChar123sessionUUIDChar125DetailsRoute,
-  }
+   {
+      GameChar123sessionUUIDChar125DetailsRoute:
+         GameChar123sessionUUIDChar125DetailsRoute,
+   };
 
 const GameChar123sessionUUIDChar125RouteWithChildren =
-  GameChar123sessionUUIDChar125Route._addFileChildren(
-    GameChar123sessionUUIDChar125RouteChildren,
-  )
+   GameChar123sessionUUIDChar125Route._addFileChildren(
+      GameChar123sessionUUIDChar125RouteChildren,
+   );
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
-  CreateRoute: CreateRoute,
-  ForgotPasswordRoute: ForgotPasswordRoute,
-  GameChar123sessionUUIDChar125Route:
-    GameChar123sessionUUIDChar125RouteWithChildren,
-  LoginRoute: LoginRoute,
-  ProfileRoute: ProfileRoute,
-  SignupRoute: SignupRoute,
-  JoinCodeRoute: JoinCodeRoute,
-}
+   IndexRoute: IndexRoute,
+   AdminRoute: AdminRoute,
+   CreateRoute: CreateRoute,
+   ForgotPasswordRoute: ForgotPasswordRoute,
+   GameChar123sessionUUIDChar125Route:
+      GameChar123sessionUUIDChar125RouteWithChildren,
+   LoginRoute: LoginRoute,
+   ProfileRoute: ProfileRoute,
+   SignupRoute: SignupRoute,
+   JoinCodeRoute: JoinCodeRoute,
+};
 export const routeTree = rootRouteImport
-  ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+   ._addFileChildren(rootRouteChildren)
+   ._addFileTypes<FileRouteTypes>();

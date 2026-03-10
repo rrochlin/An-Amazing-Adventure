@@ -15,3 +15,6 @@ server-v2/ws-connect
 server-v2/ws-disconnect
 server-v2/ws-chat
 server-v2/ws-game-action
+server-v2/cognito-post-confirm
+server-v2/http-admin
+server-v2/http-invites

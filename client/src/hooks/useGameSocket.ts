@@ -3,160 +3,193 @@
  * Manages the WebSocket connection lifecycle for a game session.
  * Dispatches incoming frames to the Zustand store.
  */
-import { useEffect, useRef, useCallback } from "react";
-import { useGameStore } from "../store/gameStore";
-import { getStoredTokens } from "../services/auth.service";
-import type { WsFrame, StateDelta, GameStateView, NarrativeChunkPayload, WorldGenLogPayload } from "../types/types";
-
+import { useEffect, useRef, useCallback } from 'react';
+import { useGameStore } from '../store/gameStore';
+import { getStoredTokens } from '../services/auth.service';
+import type {
+   WsFrame,
+   StateDelta,
+   GameStateView,
+   NarrativeChunkPayload,
+   WorldGenLogPayload,
+} from '../types/types';
 
 const WS_ENDPOINT = import.meta.env.VITE_WS_ENDPOINT as string | undefined;
 
 function getWsEndpoint(sessionId: string): string {
-  const tokens = getStoredTokens();
-  const token = tokens?.accessToken ?? "";
-  // Use env var if set; otherwise derive from current host (for local dev)
-  const base = WS_ENDPOINT ?? `wss://${window.location.host}/ws`;
-  return `${base}?token=${encodeURIComponent(token)}&gameId=${encodeURIComponent(sessionId)}`;
+   const tokens = getStoredTokens();
+   const token = tokens?.accessToken ?? '';
+   // Use env var if set; otherwise derive from current host (for local dev)
+   const base = WS_ENDPOINT ?? `wss://${window.location.host}/ws`;
+   return `${base}?token=${encodeURIComponent(token)}&gameId=${encodeURIComponent(sessionId)}`;
 }
 
 interface UseGameSocketOptions {
-  sessionId: string;
-  onWorldReady?: () => void;
+   sessionId: string;
+   onWorldReady?: () => void;
 }
 
-export function useGameSocket({ sessionId, onWorldReady }: UseGameSocketOptions) {
-  const wsRef = useRef<WebSocket | null>(null);
-  const retryCount = useRef(0);
-  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isMounted = useRef(true);
-  const onWorldReadyRef = useRef(onWorldReady);
-  onWorldReadyRef.current = onWorldReady;
+export function useGameSocket({
+   sessionId,
+   onWorldReady,
+}: UseGameSocketOptions) {
+   const wsRef = useRef<WebSocket | null>(null);
+   const retryCount = useRef(0);
+   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+   const isMounted = useRef(true);
+   const onWorldReadyRef = useRef(onWorldReady);
+   onWorldReadyRef.current = onWorldReady;
 
-  const {
-    setWsStatus,
-    setWsError,
-    setStreaming,
-    appendStreamChunk,
-    finalizeStreamingMessage,
-    applyDelta,
-    attachEventsToLastMessage,
-    setGameState,
-    appendWorldGenLog,
-    setWorldGenReady,
-  } = useGameStore();
+   const {
+      setWsStatus,
+      setWsError,
+      setStreaming,
+      appendStreamChunk,
+      finalizeStreamingMessage,
+      applyDelta,
+      attachEventsToLastMessage,
+      setGameState,
+      appendWorldGenLog,
+      setWorldGenReady,
+   } = useGameStore();
 
-  const handleMessage = useCallback((event: MessageEvent) => {
-    let frame: WsFrame;
-    try {
-      frame = JSON.parse(event.data as string) as WsFrame;
-    } catch {
-      return;
-    }
+   const handleMessage = useCallback(
+      (event: MessageEvent) => {
+         let frame: WsFrame;
+         try {
+            frame = JSON.parse(event.data as string) as WsFrame;
+         } catch {
+            return;
+         }
 
-    switch (frame.type) {
-      case "narrative_chunk":
-        setStreaming(true);
-        appendStreamChunk((frame.payload as NarrativeChunkPayload).content ?? "");
-        break;
+         switch (frame.type) {
+            case 'narrative_chunk':
+               setStreaming(true);
+               appendStreamChunk(
+                  (frame.payload as NarrativeChunkPayload).content ?? '',
+               );
+               break;
 
-      case "narrative_end":
-        finalizeStreamingMessage();
-        break;
+            case 'narrative_end':
+               finalizeStreamingMessage();
+               break;
 
-      case "game_state_update":
-        setGameState(frame.payload as GameStateView);
-        break;
+            case 'game_state_update':
+               setGameState(frame.payload as GameStateView);
+               break;
 
-      case "state_delta": {
-        const delta = frame.payload as StateDelta;
-        applyDelta(delta);
-        // narrative_end fires before state_delta, so finalizeStreamingMessage()
-        // has already committed the narrative message by the time we get here.
-        // Attach any world events to that last narrative message.
-        if (delta.events?.length) {
-          attachEventsToLastMessage(delta.events);
-        }
-        break;
-      }
+            case 'state_delta': {
+               const delta = frame.payload as StateDelta;
+               applyDelta(delta);
+               // narrative_end fires before state_delta, so finalizeStreamingMessage()
+               // has already committed the narrative message by the time we get here.
+               // Attach any world events to that last narrative message.
+               if (delta.events?.length) {
+                  attachEventsToLastMessage(delta.events);
+               }
+               break;
+            }
 
-      case "streaming_blocked":
-        // Server rejected message — user already informed by disabled input
-        break;
+            case 'streaming_blocked':
+               // Server rejected message — user already informed by disabled input
+               break;
 
-      case "world_gen_log":
-        appendWorldGenLog((frame.payload as WorldGenLogPayload).line ?? "");
-        break;
+            case 'world_gen_log':
+               appendWorldGenLog(
+                  (frame.payload as WorldGenLogPayload).line ?? '',
+               );
+               break;
 
-      case "world_gen_ready":
-        setWorldGenReady();
-        onWorldReadyRef.current?.();
-        break;
+            case 'world_gen_ready':
+               setWorldGenReady();
+               onWorldReadyRef.current?.();
+               break;
 
-      case "error":
-        setWsError(
-          (frame.payload as { message: string })?.message ?? "Unknown error"
-        );
-        break;
-    }
-  }, [appendStreamChunk, applyDelta, attachEventsToLastMessage, appendWorldGenLog, finalizeStreamingMessage, setGameState, setStreaming, setWsError, setWorldGenReady]);
+            case 'error':
+               setWsError(
+                  (frame.payload as { message: string })?.message ??
+                     'Unknown error',
+               );
+               break;
+         }
+      },
+      [
+         appendStreamChunk,
+         applyDelta,
+         attachEventsToLastMessage,
+         appendWorldGenLog,
+         finalizeStreamingMessage,
+         setGameState,
+         setStreaming,
+         setWsError,
+         setWorldGenReady,
+      ],
+   );
 
-  const connect = useCallback(() => {
-    if (!isMounted.current) return;
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
-
-    setWsStatus("connecting");
-    const ws = new WebSocket(getWsEndpoint(sessionId));
-    wsRef.current = ws;
-
-    ws.onopen = () => {
+   const connect = useCallback(() => {
       if (!isMounted.current) return;
-      retryCount.current = 0;
-      setWsStatus("connected");
-      setWsError(null);
-    };
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    ws.onmessage = handleMessage;
+      setWsStatus('connecting');
+      const ws = new WebSocket(getWsEndpoint(sessionId));
+      wsRef.current = ws;
 
-    ws.onerror = () => {
-      setWsStatus("error");
-    };
+      ws.onopen = () => {
+         if (!isMounted.current) return;
+         retryCount.current = 0;
+         setWsStatus('connected');
+         setWsError(null);
+      };
 
-    ws.onclose = () => {
-      if (!isMounted.current) return;
-      setWsStatus("disconnected");
-      // Exponential backoff: 1s, 2s, 4s, cap at 16s, max 5 retries
-      if (retryCount.current < 5) {
-        const delay = Math.min(1000 * Math.pow(2, retryCount.current), 16000);
-        retryCount.current++;
-        retryTimer.current = setTimeout(connect, delay);
-      }
-    };
-  }, [sessionId, handleMessage, setWsStatus, setWsError]);
+      ws.onmessage = handleMessage;
 
-  // Send a chat message through the WebSocket
-  const sendChat = useCallback((content: string) => {
-    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ action: "chat", content }));
-  }, []);
+      ws.onerror = () => {
+         setWsStatus('error');
+      };
 
-  // Send a game action (move, pick_up, drop)
-  const sendAction = useCallback((subAction: string, payload: string) => {
-    if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(
-      JSON.stringify({ action: "game_action", sub_action: subAction, payload })
-    );
-  }, []);
+      ws.onclose = () => {
+         if (!isMounted.current) return;
+         setWsStatus('disconnected');
+         // Exponential backoff: 1s, 2s, 4s, cap at 16s, max 5 retries
+         if (retryCount.current < 5) {
+            const delay = Math.min(
+               1000 * Math.pow(2, retryCount.current),
+               16000,
+            );
+            retryCount.current++;
+            retryTimer.current = setTimeout(connect, delay);
+         }
+      };
+   }, [sessionId, handleMessage, setWsStatus, setWsError]);
 
-  useEffect(() => {
-    isMounted.current = true;
-    connect();
-    return () => {
-      isMounted.current = false;
-      if (retryTimer.current) clearTimeout(retryTimer.current);
-      wsRef.current?.close();
-      wsRef.current = null;
-    };
-  }, [connect]);
+   // Send a chat message through the WebSocket
+   const sendChat = useCallback((content: string) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      wsRef.current.send(JSON.stringify({ action: 'chat', content }));
+   }, []);
 
-  return { sendChat, sendAction };
+   // Send a game action (move, pick_up, drop)
+   const sendAction = useCallback((subAction: string, payload: string) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      wsRef.current.send(
+         JSON.stringify({
+            action: 'game_action',
+            sub_action: subAction,
+            payload,
+         }),
+      );
+   }, []);
+
+   useEffect(() => {
+      isMounted.current = true;
+      connect();
+      return () => {
+         isMounted.current = false;
+         if (retryTimer.current) clearTimeout(retryTimer.current);
+         wsRef.current?.close();
+         wsRef.current = null;
+      };
+   }, [connect]);
+
+   return { sendChat, sendAction };
 }
