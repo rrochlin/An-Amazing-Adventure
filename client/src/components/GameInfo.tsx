@@ -203,6 +203,9 @@ export const GameInfo = ({
          <Tabs
             value={tabValue}
             onChange={handleTabChange}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
             sx={{
                borderBottom: 1,
                borderColor: 'divider',
@@ -216,6 +219,9 @@ export const GameInfo = ({
                   minWidth: 0,
                   px: 1,
                },
+               '& .MuiTabScrollButton-root': {
+                  width: 20,
+               },
             }}
          >
             <Tab label="Location" />
@@ -223,6 +229,7 @@ export const GameInfo = ({
             <Tab label="Equipment" />
             <Tab label="Room" />
             <Tab label="Party" />
+            <Tab label="Character" />
          </Tabs>
 
          <Box
@@ -833,6 +840,115 @@ export const GameInfo = ({
                      No occupants in this room
                   </Typography>
                )}
+            </TabPanel>
+
+            {/* Character Sheet Tab */}
+            <TabPanel value={tabValue} index={5}>
+               {(() => {
+                  const dnd = gameState?.player?.dnd;
+                  const player = gameState?.player;
+                  if (!player) return (
+                     <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                        No character loaded
+                     </Typography>
+                  );
+
+                  const ABILITY_FULL: Record<string, string> = {
+                     str: 'Strength', dex: 'Dexterity', con: 'Constitution',
+                     int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma',
+                  };
+                  const mod = (score: number) => {
+                     const m = Math.floor((score - 10) / 2);
+                     return m >= 0 ? `+${m}` : `${m}`;
+                  };
+
+                  return (
+                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {/* Identity */}
+                        <Box>
+                           <SectionHeader>Identity</SectionHeader>
+                           <Divider sx={{ mb: 1, borderColor: 'rgba(201,169,98,0.3)' }} />
+                           <Typography variant="body2" sx={{ fontFamily: 'Crimson Text, Georgia, serif', fontSize: '1rem', mb: 0.5 }}>
+                              <strong>{player.name}</strong>
+                           </Typography>
+                           {dnd && (
+                              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                 <Chip label={`${dnd.race_id.replace(/-/g, ' ')}`} size="small" sx={{ textTransform: 'capitalize', fontSize: '0.7rem' }} />
+                                 <Chip label={`${dnd.class_id}`} size="small" color="primary" sx={{ textTransform: 'capitalize', fontSize: '0.7rem' }} />
+                                 <Chip label={`Level ${dnd.level}`} size="small" variant="outlined" sx={{ fontSize: '0.7rem' }} />
+                              </Box>
+                           )}
+                        </Box>
+
+                        {/* Combat Stats */}
+                        {dnd && (
+                           <Box>
+                              <SectionHeader>Combat</SectionHeader>
+                              <Divider sx={{ mb: 1, borderColor: 'rgba(201,169,98,0.3)' }} />
+                              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75 }}>
+                                 {[
+                                    { label: 'HP', value: `${player.health} / ${dnd.max_hp}` },
+                                    { label: 'AC', value: dnd.ac },
+                                    { label: 'Speed', value: `${dnd.speed} ft` },
+                                    { label: 'Proficiency', value: `+${dnd.proficiency_bonus}` },
+                                 ].map(({ label, value }) => (
+                                    <Box key={label} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, py: 0.5, borderRadius: 1, background: 'rgba(201,169,98,0.06)', border: '1px solid rgba(201,169,98,0.12)' }}>
+                                       <Typography variant="caption" sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.65rem' }}>
+                                          {label}
+                                       </Typography>
+                                       <Typography variant="caption" sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.85rem' }}>
+                                          {value}
+                                       </Typography>
+                                    </Box>
+                                 ))}
+                              </Box>
+                           </Box>
+                        )}
+
+                        {/* Ability Scores */}
+                        {dnd?.abilities && (
+                           <Box>
+                              <SectionHeader>Ability Scores</SectionHeader>
+                              <Divider sx={{ mb: 1, borderColor: 'rgba(201,169,98,0.3)' }} />
+                              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.75 }}>
+                                 {Object.entries(dnd.abilities).map(([key, score]) => (
+                                    <Box key={key} sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 1, py: 0.5, borderRadius: 1, background: 'rgba(201,169,98,0.04)', border: '1px solid rgba(201,169,98,0.1)' }}>
+                                       <Box>
+                                          <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '0.6rem', color: 'text.secondary', display: 'block' }}>
+                                             {ABILITY_FULL[key] ?? key}
+                                          </Typography>
+                                          <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                                             {score}
+                                          </Typography>
+                                       </Box>
+                                       <Typography sx={{ fontWeight: 700, fontSize: '1.1rem', color: 'primary.light', minWidth: 32, textAlign: 'right' }}>
+                                          {mod(score)}
+                                       </Typography>
+                                    </Box>
+                                 ))}
+                              </Box>
+                           </Box>
+                        )}
+
+                        {/* Description */}
+                        {player.description && (
+                           <Box>
+                              <SectionHeader>Description</SectionHeader>
+                              <Divider sx={{ mb: 1, borderColor: 'rgba(201,169,98,0.3)' }} />
+                              <Typography variant="body2" sx={{ fontFamily: 'Crimson Text, Georgia, serif', fontSize: '0.95rem', color: 'text.secondary', fontStyle: 'italic', lineHeight: 1.6 }}>
+                                 {player.description}
+                              </Typography>
+                           </Box>
+                        )}
+
+                        {!dnd && (
+                           <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                              Full D&D stats not available for this character.
+                           </Typography>
+                        )}
+                     </Box>
+                  );
+               })()}
             </TabPanel>
          </Box>
       </Box>

@@ -1026,10 +1026,12 @@ export function CreateRoute() {
                               size="small"
                               sx={{ width: 80, flexShrink: 0 }}
                            >
-                              <InputLabel>{ab.toUpperCase()}</InputLabel>
+                              <InputLabel shrink>{ab.toUpperCase()}</InputLabel>
                               <Select
                                  value={base !== 0 ? base : ''}
                                  label={ab.toUpperCase()}
+                                 notched
+                                 displayEmpty
                                  onChange={(e) =>
                                     assignValue(ab, Number(e.target.value))
                                  }
