@@ -82,6 +82,9 @@ function GamePage() {
    const [worldGenStuck, setWorldGenStuck] = useState(false);
    const [retrying, setRetrying] = useState(false);
    const [retryError, setRetryError] = useState<string | null>(null);
+   // Transition phases: 'terminal' → 'entering' (dramatic pause) → 'game'
+   type TransitionPhase = 'terminal' | 'entering' | 'game';
+   const [transitionPhase, setTransitionPhase] = useState<TransitionPhase>('terminal');
 
    const claims = getIdTokenClaims();
    const currentUserID = claims?.sub ?? null;
@@ -122,23 +125,24 @@ function GamePage() {
          // Seed the terminal from persisted logs so late-joining clients see the output.
          // Only replace if the store is still empty (WS frames take priority when live).
          if (data.world_gen_logs && data.world_gen_logs.length > 0) {
-            // Use the Zustand store's internal snapshot to avoid stale closure.
             const storeLog = useGameStore.getState().worldGenLog;
             if (storeLog.length === 0) {
                data.world_gen_logs.forEach((line) => appendWorldGenLog(line));
             }
          }
-         // If the game is already ready but world_gen_ready hasn't fired yet over WS
-         // (e.g. the client connected after world-gen finished), mark it ready here too.
          if (data.ready) {
             setWorldGenReady();
+            triggerGameEntry([
+               'Sealing the rift between worlds...',
+               '>>> Entering the realm <<<',
+            ]);
          }
       } catch {
          setLoadError('Failed to load game — please try again.');
       } finally {
          setLoadingGame(false);
       }
-   }, [sessionUUID, setGameState, appendWorldGenLog, setWorldGenReady]);
+   }, [sessionUUID, setGameState, appendWorldGenLog, setWorldGenReady, triggerGameEntry]);
 
    // Poll LoadGame every 3s while world is not yet ready.
    // This catches the case where the client connected after world-gen finished (missed WS frames).
@@ -162,6 +166,10 @@ function GamePage() {
                setWorldGenReady();
                setWorldGenStuck(false);
                setLoadingGame(false);
+               triggerGameEntry([
+                  'Sealing the rift between worlds...',
+                  '>>> Entering the realm <<<',
+               ]);
             }
          } catch {
             // Non-fatal — next tick will retry
@@ -170,7 +178,7 @@ function GamePage() {
          }
       }, 3000);
       return () => clearInterval(interval);
-   }, [worldGenReady, gameState, sessionUUID, setGameState, appendWorldGenLog, setWorldGenReady]); // eslint-disable-line react-hooks/exhaustive-deps
+   }, [worldGenReady, gameState, sessionUUID, setGameState, appendWorldGenLog, setWorldGenReady, triggerGameEntry]); // eslint-disable-line react-hooks/exhaustive-deps
 
    // If we're still in world-gen after 90s with no progress frames, show retry option.
    const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -205,6 +213,15 @@ function GamePage() {
       }
    };
 
+   // Play the dramatic entry sequence once game state is loaded.
+   // Appends closing lines to the terminal, shifts to 'entering' phase,
+   // then transitions to 'game' after a cinematic pause.
+   const triggerGameEntry = useCallback((entryLines: string[]) => {
+      entryLines.forEach((line) => appendWorldGenLog(line));
+      setTransitionPhase('entering');
+      setTimeout(() => setTransitionPhase('game'), 2800);
+   }, [appendWorldGenLog]);
+
    // Called by useGameSocket when world_gen_ready arrives
    const handleWorldReady = useCallback(() => {
       loadGameRef.current = false; // allow reload
@@ -220,6 +237,7 @@ function GamePage() {
    useEffect(() => {
       reset();
       loadGameRef.current = false;
+      setTransitionPhase('terminal');
       loadGame();
       return () => {
          /* cleanup handled in useGameSocket */
@@ -253,8 +271,8 @@ function GamePage() {
       );
    }
 
-   // Show world-gen terminal while world is being built (not yet ready)
-   if (loadingGame || (!gameState && !loadError)) {
+   // Show world-gen terminal while world is being built (not yet ready) or transitioning in
+   if (loadingGame || transitionPhase !== 'game' || (!gameState && !loadError)) {
       return (
          <Box
             sx={{
@@ -265,6 +283,8 @@ function GamePage() {
                minHeight: 'calc(100vh - 64px)',
                p: 4,
                gap: 3,
+               opacity: transitionPhase === 'entering' ? 1 : 1,
+               transition: 'opacity 0.6s ease',
             }}
          >
             <Paper
@@ -281,21 +301,27 @@ function GamePage() {
                   sx={{
                      px: 2,
                      py: 1.5,
-                     borderBottom: '1px solid rgba(0, 255, 70, 0.2)',
+                     borderBottom: `1px solid ${transitionPhase === 'entering' ? 'rgba(201,169,98,0.3)' : 'rgba(0,255,70,0.2)'}`,
+                     transition: 'border-color 0.8s ease',
                   }}
                >
                   <Typography
                      sx={{
                         fontFamily: '"Cinzel", "Georgia", serif',
-                        color: 'rgba(0, 255, 70, 0.9)',
+                        color: transitionPhase === 'entering' ? 'rgba(201,169,98,0.95)' : 'rgba(0,255,70,0.9)',
                         fontSize: '1rem',
+                        transition: 'color 0.8s ease',
                      }}
                   >
-                     Forging Your World
+                     {transitionPhase === 'entering' ? 'Your Realm Awaits...' : 'Forging Your World'}
                   </Typography>
                </Box>
                <Box sx={{ p: 2 }}>
-                  <WorldGenTerminal lines={worldGenLog} ready={worldGenReady} />
+                  <WorldGenTerminal
+                     lines={worldGenLog}
+                     ready={worldGenReady}
+                     enteringGame={transitionPhase === 'entering'}
+                  />
                </Box>
                {worldGenLog.length === 0 &&
                   !worldGenReady &&
@@ -396,6 +422,11 @@ function GamePage() {
             display: 'flex',
             flexDirection: 'row',
             overflow: 'hidden',
+            animation: 'fadeInGame 0.8s ease forwards',
+            '@keyframes fadeInGame': {
+               from: { opacity: 0, transform: 'translateY(8px)' },
+               to: { opacity: 1, transform: 'translateY(0)' },
+            },
             backgroundColor: 'background.default',
             gap: 2,
             p: 2,
