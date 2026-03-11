@@ -322,6 +322,8 @@ func handleGetGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, user
 		"conversation_count":    saveState.ConversationCount,
 		"creation_params":       saveState.CreationParams,
 		"needs_character_reset": g.NeedsCharacterReset,
+		"world_gen_logs":        saveState.WorldGenLogs,
+		"owner_id":              saveState.OwnerID,
 	}), nil
 }
 
