@@ -107,6 +107,15 @@ function GamePage() {
 
    const prevWsStatus = useRef(wsStatus);
 
+   // Play the dramatic entry sequence once game state is loaded.
+   // Appends closing lines to the terminal, shifts to 'entering' phase,
+   // then transitions to 'game' after a cinematic pause.
+   const triggerGameEntry = useCallback((entryLines: string[]) => {
+      entryLines.forEach((line) => appendWorldGenLog(line));
+      setTransitionPhase('entering');
+      setTimeout(() => setTransitionPhase('game'), 2800);
+   }, [appendWorldGenLog]);
+
    // Load game state from the server. Called once on mount, and again when world_gen_ready fires.
    const loadGameRef = useRef(false);
    const loadGame = useCallback(async () => {
@@ -212,15 +221,6 @@ function GamePage() {
          setRetrying(false);
       }
    };
-
-   // Play the dramatic entry sequence once game state is loaded.
-   // Appends closing lines to the terminal, shifts to 'entering' phase,
-   // then transitions to 'game' after a cinematic pause.
-   const triggerGameEntry = useCallback((entryLines: string[]) => {
-      entryLines.forEach((line) => appendWorldGenLog(line));
-      setTransitionPhase('entering');
-      setTimeout(() => setTransitionPhase('game'), 2800);
-   }, [appendWorldGenLog]);
 
    // Called by useGameSocket when world_gen_ready arrives
    const handleWorldReady = useCallback(() => {
