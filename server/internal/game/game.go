@@ -66,6 +66,10 @@ type Game struct {
 	// DungeonData is the procedurally generated dungeon layout (v4+).
 	// Nil for games created before SchemaVersion 4 (they use the legacy Rooms map).
 	DungeonData *DungeonData
+
+	// WorldGenLogs holds the ordered log lines emitted by world-gen so clients
+	// that connect after world-gen completes can still replay the terminal output.
+	WorldGenLogs []string
 }
 
 // NewGame creates a blank Game with server-generated IDs.
@@ -640,6 +644,9 @@ type SaveState struct {
 
 	// Dungeon layout (v4+)
 	DungeonData *DungeonData `json:"dungeon_data,omitempty" dynamodbav:"dungeon_data,omitempty"`
+
+	// World-gen log replay (v4+). Persisted so late-joining clients can see the terminal output.
+	WorldGenLogs []string `json:"world_gen_logs,omitempty" dynamodbav:"world_gen_logs,omitempty"`
 }
 
 // NarrativeMessage stores a single turn of Bedrock conversation history.
@@ -730,6 +737,7 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 		PendingCombatContext: g.PendingCombatContext,
 		InitiativeOrder:      g.InitiativeOrder,
 		DungeonData:          g.DungeonData,
+		WorldGenLogs:         g.WorldGenLogs,
 	}
 }
 
@@ -777,6 +785,7 @@ func FromSaveState(s SaveState) (*Game, error) {
 		PendingCombatContext: s.PendingCombatContext,
 		InitiativeOrder:      s.InitiativeOrder,
 		DungeonData:          s.DungeonData,
+		WorldGenLogs:         s.WorldGenLogs,
 	}
 
 	switch {

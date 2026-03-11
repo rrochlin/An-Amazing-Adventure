@@ -97,6 +97,8 @@ function GamePage() {
       worldGenReady,
       addChatMessage,
       setGameState,
+      appendWorldGenLog,
+      setWorldGenReady,
       reset,
    } = useGameStore();
 
@@ -114,16 +116,61 @@ function GamePage() {
             setWorldGenStuck(false);
          }
          // Capture owner ID for party panel
-         if ((data as { owner_id?: string }).owner_id) {
-            setOwnerID((data as { owner_id?: string }).owner_id ?? null);
+         if (data.owner_id) {
+            setOwnerID(data.owner_id);
          }
-         // If not ready, the WebSocket will deliver world_gen_ready when done
+         // Seed the terminal from persisted logs so late-joining clients see the output.
+         // Only replace if the store is still empty (WS frames take priority when live).
+         if (data.world_gen_logs && data.world_gen_logs.length > 0) {
+            // Use the Zustand store's internal snapshot to avoid stale closure.
+            const storeLog = useGameStore.getState().worldGenLog;
+            if (storeLog.length === 0) {
+               data.world_gen_logs.forEach((line) => appendWorldGenLog(line));
+            }
+         }
+         // If the game is already ready but world_gen_ready hasn't fired yet over WS
+         // (e.g. the client connected after world-gen finished), mark it ready here too.
+         if (data.ready) {
+            setWorldGenReady();
+         }
       } catch {
          setLoadError('Failed to load game — please try again.');
       } finally {
          setLoadingGame(false);
       }
-   }, [sessionUUID, setGameState]);
+   }, [sessionUUID, setGameState, appendWorldGenLog, setWorldGenReady]);
+
+   // Poll LoadGame every 3s while world is not yet ready.
+   // This catches the case where the client connected after world-gen finished (missed WS frames).
+   const isPollingRef = useRef(false);
+   useEffect(() => {
+      if (worldGenReady || gameState) return;
+      const interval = setInterval(async () => {
+         if (isPollingRef.current) return; // skip if previous request is still in flight
+         isPollingRef.current = true;
+         try {
+            const data = await LoadGame(sessionUUID);
+            if (data.owner_id) setOwnerID(data.owner_id);
+            // Seed missing log lines (add only lines we don't have yet)
+            if (data.world_gen_logs && data.world_gen_logs.length > 0) {
+               const currentLen = useGameStore.getState().worldGenLog.length;
+               const newLines = data.world_gen_logs.slice(currentLen);
+               newLines.forEach((line) => appendWorldGenLog(line));
+            }
+            if (data.ready && data.state) {
+               setGameState(data.state);
+               setWorldGenReady();
+               setWorldGenStuck(false);
+               setLoadingGame(false);
+            }
+         } catch {
+            // Non-fatal — next tick will retry
+         } finally {
+            isPollingRef.current = false;
+         }
+      }, 3000);
+      return () => clearInterval(interval);
+   }, [worldGenReady, gameState, sessionUUID, setGameState, appendWorldGenLog, setWorldGenReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
    // If we're still in world-gen after 90s with no progress frames, show retry option.
    const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
