@@ -53,12 +53,27 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	var gameConns []db.Connection
 	if ws, wsErr := wsutil.New(ctx); wsErr == nil {
 		sender = ws
-		conns, connErr := dbClient.GetConnectionsByGameID(ctx, evt.SessionID)
-		if connErr == nil && len(conns) > 0 {
-			gameConns = conns
+		// Retry fetching connections for up to 5 seconds to account for client connect latency.
+		// The client (React app) receives session_id, navigates, and *then* connects WS.
+		// Without retry, we often run before the connection record is written to DynamoDB.
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			conns, connErr := dbClient.GetConnectionsByGameID(ctx, evt.SessionID)
+			if connErr == nil && len(conns) > 0 {
+				gameConns = conns
+				log.Printf("world-gen: found %d connection(s) after waiting", len(gameConns))
+				break
+			}
+			if connErr != nil {
+				log.Printf("world-gen: GetConnections error (retrying): %v", connErr)
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+
+		if len(gameConns) > 0 {
 			log.Printf("world-gen: will push progress to %d connection(s)", len(gameConns))
 		} else {
-			log.Printf("world-gen: no active connections for session, skipping WS push: %v", connErr)
+			log.Printf("world-gen: no active connections for session after 5s wait, skipping WS push")
 		}
 	} else {
 		log.Printf("world-gen: WS sender unavailable (WEBSOCKET_API_ENDPOINT not set?): %v", wsErr)
@@ -77,6 +92,7 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	}
 
 	// Load the stub game record created by http-games.
+	// emit is redefined after g is available to also persist log lines on g.
 	emit("Loading game record...")
 	saveState, err := dbClient.GetGame(ctx, evt.SessionID)
 	if err != nil {
@@ -85,6 +101,22 @@ func handler(ctx context.Context, evt worldGenEvent) error {
 	g, err := game.FromSaveState(saveState)
 	if err != nil {
 		return err
+	}
+
+	// Redefine emit to also persist log lines in g.WorldGenLogs so that clients
+	// which connect after world-gen completes can replay the terminal output via HTTP.
+	// Seed with the "Loading game record..." line that was already sent.
+	g.WorldGenLogs = append(g.WorldGenLogs, "Loading game record...")
+	emit = func(line string) {
+		log.Printf("world-gen: %s", line)
+		g.WorldGenLogs = append(g.WorldGenLogs, line)
+		if sender != nil {
+			for _, gc := range gameConns {
+				if err := sender.SendWorldGenLog(ctx, gc.ConnectionID, line); err != nil {
+					log.Printf("world-gen: send log frame to %s: %v", gc.ConnectionID, err)
+				}
+			}
+		}
 	}
 
 	// Load existing DnD characters (if any) so they survive the save at the end.

@@ -35,6 +35,9 @@ export interface GameLoadResponse {
    conversation_count?: number;
    creation_params?: CharacterCreationData;
    needs_character_reset?: boolean;
+   /** Persisted world-gen log lines for late-joining clients (v4+). */
+   world_gen_logs?: string[];
+   owner_id?: string;
 }
 
 export interface CreateGameResponse {
