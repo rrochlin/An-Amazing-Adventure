@@ -202,6 +202,22 @@ Always create a feature branch (`git checkout -b feat/...`) before starting any 
 5. Add `handler_test.go` with `TestAllRequiredEnvVarsPanic` covering every env var the Lambda reads
 6. Push subtree and open PR on `rrochlin/terraform-infrastructure`
 
+### Infrastructure discipline — MANDATORY
+**All infrastructure changes must go through Terraform.** Never use the AWS CLI or Console to create or modify resources (IAM policies, Lambda env vars, DynamoDB tables, API Gateway routes, Cognito config, etc.). Direct AWS changes create drift that is invisible to Terraform and breaks future applies.
+
+**AWS CLI is permitted only for:**
+- Reading logs (`aws logs filter-log-events ...`)
+- Inspecting current state for debugging (`aws lambda get-function-configuration`, `aws dynamodb describe-table`, etc.)
+- One-time data operations (`aws dynamodb put-item` to seed a record, etc.)
+
+**When adding a new Lambda or table, the checklist is:**
+1. Add the `aws_dynamodb_table` resource + outputs to `modules/dynamodb/main.tf`
+2. Add new variables + `aws_iam_role` + `aws_iam_role_policy` + `aws_lambda_function` to `modules/lambdas/main.tf`
+3. Add integrations, routes, permissions to `modules/api-gateway/main.tf` if HTTP-facing
+4. Wire new outputs through `main.tf`
+5. Add `handler_test.go` with `TestAllRequiredEnvVarsPanic` covering every env var the Lambda reads
+6. Push subtree and open PR on `rrochlin/terraform-infrastructure`
+
 ## CI/CD
 
 Two GitHub Actions workflows:

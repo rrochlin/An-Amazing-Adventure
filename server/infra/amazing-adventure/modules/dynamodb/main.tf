@@ -37,11 +37,21 @@ resource "aws_dynamodb_table" "connections" {
     name = "user_id"
     type = "B"
   }
+  attribute {
+    name = "game_id"
+    type = "S"
+  }
 
   global_secondary_index {
     name            = "user-connections-index"
     hash_key        = "user_id"
     projection_type = "ALL"
+  }
+
+  global_secondary_index {
+    name            = "game-connections-index"
+    hash_key        = "game_id"
+    projection_type = "KEYS_ONLY"
   }
 
   ttl {
@@ -120,6 +130,11 @@ resource "aws_dynamodb_table" "invites" {
   attribute {
     name = "code"
     type = "S"
+  }
+
+  ttl {
+    attribute_name = "expires_at"
+    enabled        = true
   }
 
   tags = merge(var.common_tags, { Name = "Invites" })
