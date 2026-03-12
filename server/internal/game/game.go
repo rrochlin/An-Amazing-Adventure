@@ -44,9 +44,9 @@ type Game struct {
 	Ready                bool
 	NeedsCharacterReset  bool                    // set on v1/v2 migration when characters can't be rebuilt
 	Version              int                     // optimistic locking counter, mirrors SaveState.Version
-	Title                string                  // adventure title from blueprint
-	Theme                string                  // world theme from blueprint
-	QuestGoal            string                  // win condition from blueprint
+	Title                string                  // adventure title for the generated world
+	Theme                string                  // world theme for the generated world
+	QuestGoal            string                  // win condition for the generated world
 	TotalTokens          int                     // cumulative Bedrock tokens used
 	ConversationCount    int                     // number of completed narrator turns
 	CreationParams       CharacterCreationData   // player-supplied setup choices (v3+)

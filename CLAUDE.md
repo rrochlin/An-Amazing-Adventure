@@ -11,7 +11,7 @@ An AI-powered text adventure game. Claude (via AWS Bedrock) acts as the Dungeon 
 ## Tech Stack
 
 ### Backend (`server/` — Go 1.24, AWS Lambda)
-- **AI:** AWS Bedrock — `us.anthropic.claude-sonnet-4-6` (narrator + architect), `us.anthropic.claude-haiku-4-5-20251001-v1:0` (sub-agents)
+- **AI:** AWS Bedrock — `us.anthropic.claude-sonnet-4-6` (narrator + narrative framing), `us.anthropic.claude-haiku-4-5-20251001-v1:0` (sub-agents)
 - **Database:** AWS DynamoDB (sessions + connections tables)
 - **Auth:** AWS Cognito User Pools (JWT, SRP flow)
 - **Transport:** API Gateway HTTP (REST) + API Gateway WebSocket
@@ -49,13 +49,13 @@ An-Amazing-Adventure/
 │   ├── cmd/
 │   │   ├── http-games/      # GET/POST/DELETE /api/games
 │   │   ├── http-users/      # PUT /api/users (profile update via Cognito)
-│   │   ├── world-gen/       # Async Lambda: blueprint → world build → WS progress
+│   │   ├── world-gen/       # Async Lambda: procedural world-gen + narrative framing → WS progress
 │   │   ├── ws-connect/      # WebSocket $connect
 │   │   ├── ws-disconnect/   # WebSocket $disconnect
 │   │   ├── ws-chat/         # WebSocket chat action → Bedrock streaming
 │   │   └── ws-game-action/  # WebSocket game_action (move/pick_up/drop/equip/unequip)
 │   └── internal/
-│       ├── ai/              # Bedrock client, NarrateStream, GenerateBlueprint, BuildWorldFromBlueprint
+│       ├── ai/              # Bedrock client, NarrateStream, EngineerScan, GenerateNarrativeFraming
 │       ├── db/              # DynamoDB client (BinaryID type for B-typed keys)
 │       ├── game/            # Game engine (Area, Character, Item, Game, SaveState)
 │       └── wsutil/          # WebSocket frame push helpers
@@ -98,10 +98,10 @@ git subtree push --prefix server/infra git@github.com:rrochlin/terraform-infrast
 ## Architecture
 
 ### Game Flow
-1. User fills out `/create` wizard (character + adventure prefs) → `POST /api/games` with `AdventureCreationParams` → returns `session_id`
+1. User fills out `/create` wizard (D&D character + adventure prefs) → `POST /api/games` with `CharacterCreationData` → returns `session_id`
 2. Client navigates immediately to `/game-{uuid}`; `useGameSocket` connects; `WorldGenTerminal` shown inline
 3. `http-games` fires `world-gen` Lambda async with all creation params
-4. `world-gen` calls `GenerateBlueprint` (enriched prompt), builds world deterministically, persists `Title`/`Theme`/`QuestGoal`/`TotalTokens`/`CreationParams` to `SaveState`
+4. `world-gen` generates dungeon layout procedurally (rpg-toolkit), calls `GenerateNarrativeFraming`, then persists `Title`/`Theme`/`QuestGoal`/`TotalTokens`/`CreationParams` to `SaveState`
 5. `world-gen` emits `world_gen_log` frames → terminal; then `world_gen_ready` → `useGameSocket.onWorldReady` → `LoadGame` refetch → render game
 6. Chat messages → `ws-chat` → Bedrock streaming → `narrative_chunk` frames; increments `ConversationCount` + `TotalTokens` on save
 7. Game actions (move/pick_up/equip) → `ws-game-action` → state delta frames
@@ -126,7 +126,7 @@ Never use `attributevalue.Marshal(stringVal)` directly for key fields — it pro
 
 ### Bedrock Model IDs
 Must use cross-region inference profile IDs (with `us.` prefix):
-- `us.anthropic.claude-sonnet-4-6` — narrator and architect
+- `us.anthropic.claude-sonnet-4-6` — narrator and narrative framing
 - `us.anthropic.claude-haiku-4-5-20251001-v1:0` — sub-agents
 Bare model IDs without prefix are rejected with `ValidationException`.
 
