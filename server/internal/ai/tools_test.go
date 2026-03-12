@@ -2,6 +2,7 @@ package ai_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
@@ -94,6 +95,21 @@ func TestDispatchUpdateRoom(t *testing.T) {
 	}
 	tavern, _ := g.GetRoomByName("Tavern")
 	if tavern.Description != "A cleaner tavern now" {
+		t.Errorf("expected updated description, got %q", tavern.Description)
+	}
+}
+
+func TestDispatchUpdateRoom_CaseInsensitiveRoomName(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, err := dispatch(g, "update_room", map[string]any{
+		"room_name":   "tavern",
+		"description": "Lowercase lookup works",
+	})
+	if err != nil {
+		t.Fatalf("update_room with lowercase room_name: %v", err)
+	}
+	tavern, _ := g.GetRoomByName("Tavern")
+	if tavern.Description != "Lowercase lookup works" {
 		t.Errorf("expected updated description, got %q", tavern.Description)
 	}
 }
@@ -391,6 +407,50 @@ func TestGetRoomInfo_NoEvent(t *testing.T) {
 	}
 	if ev != nil {
 		t.Errorf("expected nil event for read-only get_room_info, got %+v", ev)
+	}
+}
+
+func TestDispatchMoveCharacter_PartialNameMatch(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, _ = dispatch(g, "create_character", map[string]any{
+		"name":        "City Guard",
+		"description": "Watchful",
+		"backstory":   "Patrol duty",
+		"room_name":   "Tavern",
+	})
+
+	_, err := dispatch(g, "move_character", map[string]any{
+		"character_name": "guard",
+		"room_name":      "alley",
+	})
+	if err != nil {
+		t.Fatalf("move_character with partial/case-insensitive names: %v", err)
+	}
+	npc, err := g.GetNPCByName("City Guard")
+	if err != nil {
+		t.Fatalf("expected NPC to exist: %v", err)
+	}
+	alley, _ := g.GetRoomByName("Alley")
+	if !alley.HasOccupant(npc.ID) {
+		t.Error("expected City Guard in Alley after move")
+	}
+}
+
+func TestDispatchRoomLookupErrorListsKnownRooms(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, err := dispatch(g, "update_room", map[string]any{
+		"room_name":   "Crypt of Ash",
+		"description": "irrelevant",
+	})
+	if err == nil {
+		t.Fatal("expected error for unknown room")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "known rooms") {
+		t.Fatalf("expected known rooms in error message, got: %s", msg)
+	}
+	if !strings.Contains(msg, "Tavern") || !strings.Contains(msg, "Alley") {
+		t.Fatalf("expected room candidates in error message, got: %s", msg)
 	}
 }
 

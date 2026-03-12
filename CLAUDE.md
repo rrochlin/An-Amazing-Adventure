@@ -141,6 +141,18 @@ git log --oneline origin/main -5   # confirm any recently merged PRs are visible
 git checkout -b feat/<phase-name> origin/main
 ```
 
+### After merge cleanup — MANDATORY
+**When a PR is merged and you are about to start new work, always reset your local branch state first:**
+
+```bash
+git checkout main
+git pull --ff-only origin main
+git branch -d feat/<old-phase-branch>
+git checkout -b feat/<new-phase-branch>
+```
+
+This avoids stacking work on stale branches and keeps each PR scoped to one section of work.
+
 **Why this matters:** If a previous PR was merged while the last session was running, your local `main` is stale. Starting a branch from stale `main` means your Phase N branch includes Phase N-1 commits. When you later rebase/PR, git sees those commits as divergent (not as the squash-merge from main) and either raises conflicts or duplicates the work.
 
 **If you forgot and already have commits on a stale branch:**
