@@ -6,6 +6,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
+	"unicode"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	brDocument "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
@@ -172,7 +175,7 @@ func execCreateRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, 
 		return "", nil, err
 	}
 	if connectTo != "" && direction != "" {
-		fromRoom, err := g.GetRoomByName(connectTo)
+		fromRoom, err := resolveRoomByName(g, connectTo)
 		if err != nil {
 			return "", nil, fmt.Errorf("connect_to_room_name: %w", err)
 		}
@@ -187,7 +190,7 @@ func execCreateRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, 
 func execUpdateRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	roomName := strArg(in, "room_name")
 	desc := strArg(in, "description")
-	room, err := g.GetRoomByName(roomName)
+	room, err := resolveRoomByName(g, roomName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -211,7 +214,7 @@ func execCreateItem(g *game.Game, in map[string]any) (string, *game.WorldEvent, 
 		return "", nil, err
 	}
 	if roomName := strArg(in, "place_in_room"); roomName != "" {
-		room, err := g.GetRoomByName(roomName)
+		room, err := resolveRoomByName(g, roomName)
 		if err != nil {
 			return "", nil, err
 		}
@@ -253,7 +256,7 @@ func execCreateCharacter(g *game.Game, in map[string]any) (string, *game.WorldEv
 	if err := g.AddNPC(c); err != nil {
 		return "", nil, err
 	}
-	room, err := g.GetRoomByName(roomName)
+	room, err := resolveRoomByName(g, roomName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -272,12 +275,12 @@ func execCreateCharacter(g *game.Game, in map[string]any) (string, *game.WorldEv
 func execMoveCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	charName := strArg(in, "character_name")
 	roomName := strArg(in, "room_name")
-	c, err := g.GetNPCByName(charName)
+	c, err := resolveNPCByName(g, charName)
 	if err != nil {
 		return "", nil, err
 	}
 	fromRoomID := c.LocationID
-	room, err := g.GetRoomByName(roomName)
+	room, err := resolveRoomByName(g, roomName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -298,7 +301,7 @@ func execMoveCharacter(g *game.Game, in map[string]any) (string, *game.WorldEven
 
 func execGiveItemToPlayer(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	itemName := strArg(in, "item_name")
-	item, err := g.GetItemByName(itemName)
+	item, err := resolveItemByName(g, itemName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -312,7 +315,7 @@ func execGiveItemToPlayer(g *game.Game, in map[string]any) (string, *game.WorldE
 
 func execTakeItemFromPlayer(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	itemName := strArg(in, "item_name")
-	item, err := g.GetItemByName(itemName)
+	item, err := resolveItemByName(g, itemName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -332,11 +335,11 @@ func execTakeItemFromPlayer(g *game.Game, in map[string]any) (string, *game.Worl
 func execPlaceItemInRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	itemName := strArg(in, "item_name")
 	roomName := strArg(in, "room_name")
-	item, err := g.GetItemByName(itemName)
+	item, err := resolveItemByName(g, itemName)
 	if err != nil {
 		return "", nil, err
 	}
-	room, err := g.GetRoomByName(roomName)
+	room, err := resolveRoomByName(g, roomName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -398,7 +401,7 @@ func execTriggerLongRest(ctx context.Context, g *game.Game, in map[string]any) (
 
 func execGetRoomInfo(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	roomName := strArg(in, "room_name")
-	room, err := g.GetRoomByName(roomName)
+	room, err := resolveRoomByName(g, roomName)
 	if err != nil {
 		return "", nil, err
 	}
@@ -456,4 +459,148 @@ func strArg(in map[string]any, key string) string {
 func numArg(in map[string]any, key string) float64 {
 	v, _ := in[key].(float64)
 	return v
+}
+
+func resolveRoomByName(g *game.Game, name string) (game.Area, error) {
+	if room, err := g.GetRoomByName(name); err == nil {
+		return room, nil
+	}
+	normTarget := normalizeLookupKey(name)
+	if normTarget == "" {
+		return game.Area{}, fmt.Errorf("room name is required")
+	}
+
+	var partial []game.Area
+	for _, room := range g.Rooms {
+		normRoom := normalizeLookupKey(room.Name)
+		if normRoom == normTarget {
+			return room, nil
+		}
+		if strings.Contains(normRoom, normTarget) || strings.Contains(normTarget, normRoom) {
+			partial = append(partial, room)
+		}
+	}
+	if len(partial) == 1 {
+		return partial[0], nil
+	}
+	if len(partial) > 1 {
+		return game.Area{}, fmt.Errorf("room name %q is ambiguous; candidates: %s", name, strings.Join(roomNames(g), ", "))
+	}
+	return game.Area{}, fmt.Errorf("room named %q not found; known rooms: %s", name, strings.Join(roomNames(g), ", "))
+}
+
+func resolveItemByName(g *game.Game, name string) (game.Item, error) {
+	if item, err := g.GetItemByName(name); err == nil {
+		return item, nil
+	}
+	normTarget := normalizeLookupKey(name)
+	if normTarget == "" {
+		return game.Item{}, fmt.Errorf("item name is required")
+	}
+
+	var partial []game.Item
+	for _, item := range g.Items {
+		normItem := normalizeLookupKey(item.Name)
+		if normItem == normTarget {
+			return item, nil
+		}
+		if strings.Contains(normItem, normTarget) || strings.Contains(normTarget, normItem) {
+			partial = append(partial, item)
+		}
+	}
+	if len(partial) == 1 {
+		return partial[0], nil
+	}
+	if len(partial) > 1 {
+		return game.Item{}, fmt.Errorf("item name %q is ambiguous; candidates: %s", name, strings.Join(itemNames(g), ", "))
+	}
+	return game.Item{}, fmt.Errorf("item named %q not found; known items: %s", name, strings.Join(itemNames(g), ", "))
+}
+
+func resolveNPCByName(g *game.Game, name string) (game.Character, error) {
+	if npc, err := g.GetNPCByName(name); err == nil {
+		return npc, nil
+	}
+	normTarget := normalizeLookupKey(name)
+	if normTarget == "" {
+		return game.Character{}, fmt.Errorf("character name is required")
+	}
+
+	var partial []game.Character
+	for _, npc := range g.NPCs {
+		normNPC := normalizeLookupKey(npc.Name)
+		if normNPC == normTarget {
+			return npc, nil
+		}
+		if strings.Contains(normNPC, normTarget) || strings.Contains(normTarget, normNPC) {
+			partial = append(partial, npc)
+		}
+	}
+	if len(partial) == 1 {
+		return partial[0], nil
+	}
+	if len(partial) > 1 {
+		return game.Character{}, fmt.Errorf("character name %q is ambiguous; candidates: %s", name, strings.Join(npcNames(g), ", "))
+	}
+	return game.Character{}, fmt.Errorf("NPC named %q not found; known NPCs: %s", name, strings.Join(npcNames(g), ", "))
+}
+
+func normalizeLookupKey(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	lastSpace := false
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+			lastSpace = false
+			continue
+		}
+		if unicode.IsSpace(r) || r == '-' || r == '_' || r == '\'' {
+			if !lastSpace {
+				b.WriteRune(' ')
+				lastSpace = true
+			}
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func roomNames(g *game.Game) []string {
+	names := make([]string, 0, len(g.Rooms))
+	for _, room := range g.Rooms {
+		names = append(names, room.Name)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return []string{"(none)"}
+	}
+	return names
+}
+
+func itemNames(g *game.Game) []string {
+	names := make([]string, 0, len(g.Items))
+	for _, item := range g.Items {
+		names = append(names, item.Name)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return []string{"(none)"}
+	}
+	return names
+}
+
+func npcNames(g *game.Game) []string {
+	names := make([]string, 0, len(g.NPCs))
+	for _, npc := range g.NPCs {
+		names = append(names, npc.Name)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return []string{"(none)"}
+	}
+	return names
 }

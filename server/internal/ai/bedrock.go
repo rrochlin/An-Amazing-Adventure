@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -337,9 +338,11 @@ Rules:
 - Do NOT output any narrative text — only tool calls.
 - If the narrative implies no world changes, call no tools.
 - Prefer precision over completeness: it is better to miss a subtle mutation than to invent one.
+- Use only canonical entity names exactly as listed in the Current Game State section.
+- If a mutation references a room/entity that is uncertain, call get_room_info first, then mutate.
 
 Examples of what to look for:
-- "The lever grinds and a hidden passage opens to the east" → connect_rooms(current room, hidden room, east)
+- "The lever grinds and a hidden passage opens to the east" → create_room(name, description, connect_to_room_name, direction)
 - "You find a rusty key on the floor" → give_item_to_player(rusty key) or place_item_in_room
 - "The merchant gives you a healing potion" → give_item_to_player(healing potion)
 - "A warded chest materializes beside the altar" → create_item + place_item_in_room
@@ -384,6 +387,22 @@ func engineerUserMessage(g *game.Game, narrative string) string {
 	// Current room
 	if room, err := g.GetRoom(owner.LocationID); err == nil {
 		sb.WriteString(fmt.Sprintf("Current room: %s\n", room.Name))
+		sb.WriteString("Current room exits: ")
+		if len(room.Connections) == 0 {
+			sb.WriteString("none")
+		} else {
+			exits := make([]string, 0, len(room.Connections))
+			for dir, destID := range room.Connections {
+				destName := "unknown"
+				if destRoom, err := g.GetRoom(destID); err == nil {
+					destName = destRoom.Name
+				}
+				exits = append(exits, fmt.Sprintf("%s -> %s", dir, destName))
+			}
+			sort.Strings(exits)
+			sb.WriteString(strings.Join(exits, "; "))
+		}
+		sb.WriteString("\n")
 		sb.WriteString("Room items: ")
 		if len(room.Items) == 0 {
 			sb.WriteString("none")
@@ -414,8 +433,53 @@ func engineerUserMessage(g *game.Game, narrative string) string {
 		sb.WriteString("\n")
 	}
 
+	// Canonical room list and exits (for exact tool arguments)
+	sb.WriteString("Known rooms (use these exact names):\n")
+	roomNames := make([]string, 0, len(g.Rooms))
+	roomsByName := make(map[string]game.Area, len(g.Rooms))
+	for _, room := range g.Rooms {
+		roomNames = append(roomNames, room.Name)
+		roomsByName[room.Name] = room
+	}
+	sort.Strings(roomNames)
+	if len(roomNames) == 0 {
+		sb.WriteString("- none\n")
+	} else {
+		for _, roomName := range roomNames {
+			room := roomsByName[roomName]
+			exits := make([]string, 0, len(room.Connections))
+			for dir, destID := range room.Connections {
+				destName := "unknown"
+				if destRoom, err := g.GetRoom(destID); err == nil {
+					destName = destRoom.Name
+				}
+				exits = append(exits, fmt.Sprintf("%s -> %s", dir, destName))
+			}
+			sort.Strings(exits)
+			exitsStr := "none"
+			if len(exits) > 0 {
+				exitsStr = strings.Join(exits, ", ")
+			}
+			sb.WriteString(fmt.Sprintf("- %s (exits: %s)\n", roomName, exitsStr))
+		}
+	}
+
+	// Canonical item list
+	sb.WriteString("Known items (use these exact names): ")
+	itemNames := make([]string, 0, len(g.Items))
+	for _, item := range g.Items {
+		itemNames = append(itemNames, item.Name)
+	}
+	sort.Strings(itemNames)
+	if len(itemNames) == 0 {
+		sb.WriteString("none")
+	} else {
+		sb.WriteString(strings.Join(itemNames, ", "))
+	}
+	sb.WriteString("\n")
+
 	// All NPCs (for cross-room mutations)
-	sb.WriteString("All NPCs: ")
+	sb.WriteString("All NPCs (use these exact names): ")
 	npcParts := make([]string, 0, len(g.NPCs))
 	for _, npc := range g.NPCs {
 		roomName := ""

@@ -11,7 +11,7 @@ import {
    useColorScheme,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { type ChatMessageType, type WorldEvent } from '../types/types';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -471,14 +471,64 @@ export const Chat = ({
    const isDark = mode === 'dark' || mode === 'system' || !mode;
    const chatContainerRef = useRef<HTMLDivElement>(null);
    const inputRef = useRef<HTMLInputElement>(null);
+   const chatBottomRef = useRef<HTMLDivElement>(null);
+   const messageRefs = useRef<Array<HTMLDivElement | null>>([]);
+   const didInitialSnapRef = useRef(false);
 
    const handleSubmit = () => {
       handleCommand();
+
+       // Snap to the in-flight turn immediately after submit.
+       if (typeof chatBottomRef.current?.scrollIntoView === 'function') {
+          chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+       }
+
       // Focus the input after sending the message
       setTimeout(() => {
          inputRef.current?.focus();
       }, 0);
    };
+
+   // On first render with history (e.g. after refresh), snap to the start of
+   // the most recent conversation turn (last player message).
+   useEffect(() => {
+      if (didInitialSnapRef.current || chatHistory.length === 0) {
+         return;
+      }
+      const container = chatContainerRef.current;
+      if (!container) {
+         return;
+      }
+
+      let lastPlayerIdx = -1;
+      for (let i = chatHistory.length - 1; i >= 0; i--) {
+         if (chatHistory[i]?.type === 'player') {
+            lastPlayerIdx = i;
+            break;
+         }
+      }
+
+      if (lastPlayerIdx >= 0) {
+         const target = messageRefs.current[lastPlayerIdx];
+         if (target) {
+            container.scrollTop = target.offsetTop;
+         }
+      } else {
+         container.scrollTop = container.scrollHeight;
+      }
+
+      didInitialSnapRef.current = true;
+   }, [chatHistory]);
+
+   // During active streaming, keep latest chunks visible.
+   useEffect(() => {
+      if (!isLoading) {
+         return;
+      }
+      if (typeof chatBottomRef.current?.scrollIntoView === 'function') {
+         chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+   }, [isLoading, streamingMessage, chatHistory.length]);
 
    return (
       <Box
@@ -518,9 +568,16 @@ export const Chat = ({
                   },
                },
             }}
-         >
+          >
             {chatHistory.map((msg, index) => (
-               <ChatMessage key={index} message={msg} />
+               <Box
+                  key={index}
+                  ref={(el: HTMLDivElement | null) => {
+                     messageRefs.current[index] = el;
+                  }}
+               >
+                  <ChatMessage message={msg} />
+               </Box>
             ))}
             {/* Show streaming bubble when chunks are arriving; fall back to
             the shimmer-only LoadingMessage while waiting for the first chunk */}
@@ -529,6 +586,7 @@ export const Chat = ({
             ) : (
                isLoading && <LoadingMessage />
             )}
+            <Box ref={chatBottomRef} />
          </Box>
 
          <Box
