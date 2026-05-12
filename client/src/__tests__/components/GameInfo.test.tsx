@@ -143,11 +143,39 @@ describe('GameInfo', () => {
       expect(sendAction).toHaveBeenCalledWith('pick_up', 'Rusty Dagger');
    });
 
-   it('calls sendAction with drop when drop button clicked', async () => {
-      const sendAction = vi.fn();
-      renderInfo(makeGameState(), sendAction);
-      await userEvent.click(screen.getByRole('tab', { name: /inventory/i }));
-      await userEvent.click(screen.getByRole('button', { name: /drop/i }));
-      expect(sendAction).toHaveBeenCalledWith('drop', 'Health Potion');
-   });
+    it('calls sendAction with drop when drop button clicked', async () => {
+       const sendAction = vi.fn();
+       renderInfo(makeGameState(), sendAction);
+       await userEvent.click(screen.getByRole('tab', { name: /inventory/i }));
+       await userEvent.click(screen.getByRole('button', { name: /drop/i }));
+       expect(sendAction).toHaveBeenCalledWith('drop', 'Health Potion');
+    });
+
+    it('shows campaign and dialogue metadata when provided', () => {
+       render(
+          <ThemeProvider theme={AppTheme}>
+             <GameInfo
+                gameState={makeGameState()}
+                sendAction={vi.fn()}
+                adventureTitle="Lich's Labyrinth"
+                campaignState={{
+                   campaign_id: 'lichs-labyrinth',
+                   campaign_version: '1',
+                   active_node_id: 'camp_briefing',
+                   current_objective: 'Understand the mission.',
+                   active_dialogue: {
+                      asset_id: 'camp_briefing',
+                      current_node: 'CampBriefing',
+                   },
+                }}
+             />
+          </ThemeProvider>,
+       );
+
+       expect(screen.getByText("Lich's Labyrinth")).toBeInTheDocument();
+       expect(screen.getByText(/Node: camp_briefing/i)).toBeInTheDocument();
+       expect(
+          screen.getByText(/Dialogue Asset: camp_briefing/i),
+       ).toBeInTheDocument();
+    });
 });

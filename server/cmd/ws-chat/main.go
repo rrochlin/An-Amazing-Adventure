@@ -218,6 +218,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		// but the narrative has already been delivered successfully.
 		log.Printf("ws-chat: engineer scan error: %v", err)
 	}
+	authoredDialogueText := ""
 
 	if campaignDef != nil {
 		allowedSpecs := campaigns.AllowedConditionSpecsForNode(campaignDef.StoryNodes[g.Campaign.ActiveNodeID])
@@ -236,6 +237,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			if transitionErr != nil {
 				log.Printf("ws-chat: campaign transition error: %v", transitionErr)
 			} else if transitionResult.Transitioned && transitionResult.ToNodeID != "" {
+				authoredDialogueText = transitionResult.DialogueText
 				if nextNode, ok := campaignDef.StoryNodes[transitionResult.ToNodeID]; ok && nextNode.ObjectiveText != "" {
 					engineerResult.Events = append(engineerResult.Events, game.WorldEvent{
 						Type:    "campaign_progress",
@@ -248,13 +250,6 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		}
 	}
 
-	// Step 4: Persist mutation audit log entries (best-effort — failure is non-fatal).
-	for _, m := range engineerResult.Mutations {
-		if err := dbClient.PutMutation(ctx, m); err != nil {
-			log.Printf("ws-chat: put mutation (tool=%s): %v", m.Tool, err)
-		}
-	}
-
 	// Append chat history — attach world events to the narrative message so they
 	// survive reconnection/reload.
 	history := saveState.ChatHistory
@@ -264,6 +259,32 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		Content: narratorResult.Narrative,
 		Events:  engineerResult.Events,
 	})
+	if authoredDialogueText != "" {
+		narratorResult.NewMessages = append(narratorResult.NewMessages, game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: authoredDialogueText}},
+		})
+		history = append(history, game.ChatMessage{Type: "narrative", Content: authoredDialogueText})
+		chunkFrame := wsutil.Frame{
+			Type:    wsutil.FrameNarrativeChunk,
+			Payload: map[string]string{"content": authoredDialogueText},
+		}
+		stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
+		for _, s := range stale {
+			_ = dbClient.DeleteConnection(ctx, s)
+		}
+		staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
+		for _, s := range staleEnds {
+			_ = dbClient.DeleteConnection(ctx, s)
+		}
+	}
+
+	// Step 4: Persist mutation audit log entries (best-effort — failure is non-fatal).
+	for _, m := range engineerResult.Mutations {
+		if err := dbClient.PutMutation(ctx, m); err != nil {
+			log.Printf("ws-chat: put mutation (tool=%s): %v", m.Tool, err)
+		}
+	}
 
 	// Update stats (include both Narrator and Engineer token usage).
 	g.ConversationCount++
