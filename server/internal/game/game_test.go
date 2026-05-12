@@ -463,6 +463,7 @@ func TestBuildCampaignStateView(t *testing.T) {
 		CampaignVersion:  "1",
 		ActiveNodeID:     "intro",
 		CurrentObjective: "Finish Intro",
+		ActiveObjectives: []game.ObjectiveState{{ID: "finish_intro", Status: "active", VisibleText: "Finish Intro"}},
 	}
 	view := g.BuildCampaignStateView()
 	if view == nil {
@@ -470,6 +471,9 @@ func TestBuildCampaignStateView(t *testing.T) {
 	}
 	if view.CampaignID != "test" || view.ActiveNodeID != "intro" {
 		t.Fatalf("unexpected campaign view: %#v", view)
+	}
+	if len(view.ActiveObjectives) != 1 || view.ActiveObjectives[0].ID != "finish_intro" {
+		t.Fatalf("expected active objectives in view, got %#v", view)
 	}
 }
 

@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
+   type CampaignStateView,
    type GameStateView,
    type ItemView,
    type RoomView,
@@ -56,20 +57,25 @@ const SLOT_ORDER = ['head', 'chest', 'legs', 'hands', 'feet', 'back'] as const;
 
 interface GameInfoProps {
    gameState: GameStateView | null;
+   campaignState?: CampaignStateView | null;
    sendAction: (subAction: string, payload: string) => void;
    /** When non-null, the Location tab displays this room instead of the current room (UI-FUT-4). */
    focusedRoom?: RoomView | null;
    /** Session UUID — used for invite generation */
    sessionId?: string;
+   /** Adventure title — shown in the campaign summary panel when present. */
+   adventureTitle?: string;
    /** Whether the current user is the session owner */
    isOwner?: boolean;
 }
 
 export const GameInfo = ({
    gameState,
+   campaignState,
    sendAction,
    focusedRoom,
    sessionId,
+   adventureTitle,
    isOwner,
 }: GameInfoProps) => {
    // UI-FUT-4: show focusedRoom when hovering/clicking map, otherwise fall back to current room
@@ -249,6 +255,68 @@ export const GameInfo = ({
                },
             }}
          >
+            {campaignState && (
+               <Paper
+                  variant="outlined"
+                  sx={{
+                     mt: 1.5,
+                     mb: 1.5,
+                     p: 1.5,
+                     background: 'rgba(106, 78, 157, 0.08)',
+                     borderColor: 'rgba(201,169,98,0.25)',
+                  }}
+               >
+                  <Typography
+                     variant="subtitle2"
+                     sx={{
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: 'primary.main',
+                        mb: 0.75,
+                     }}
+                  >
+                     {adventureTitle ?? campaignState.campaign_id}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mb: 0.5 }}>
+                     Node: {campaignState.active_node_id}
+                  </Typography>
+                  {campaignState.current_objective && (
+                     <Typography
+                        variant="body2"
+                        sx={{ color: 'text.secondary', mb: 0.75 }}
+                     >
+                        Objective: {campaignState.current_objective}
+                     </Typography>
+                  )}
+                  {campaignState.active_objectives &&
+                     campaignState.active_objectives.length > 0 && (
+                        <Box
+                           sx={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: 0.5,
+                           }}
+                        >
+                           {campaignState.active_objectives.map((objective) => (
+                              <Chip
+                                 key={objective.id}
+                                 label={objective.visible_text ?? objective.id}
+                                 size="small"
+                                 color={
+                                    objective.status === 'completed'
+                                       ? 'success'
+                                       : objective.status === 'failed'
+                                         ? 'error'
+                                         : 'primary'
+                                 }
+                                 variant="outlined"
+                              />
+                           ))}
+                        </Box>
+                     )}
+               </Paper>
+            )}
+
             {/* Location Tab */}
             <TabPanel value={tabValue} index={0}>
                <Typography

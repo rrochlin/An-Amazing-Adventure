@@ -4,6 +4,7 @@ import {
    Alert,
    Box,
    Button,
+   CircularProgress,
    IconButton,
    Paper,
    Snackbar,
@@ -78,7 +79,8 @@ function GamePage() {
    // UI-FUT-8: reconnection toast — show when WS reconnects after a drop
    const [reconnectToast, setReconnectToast] = useState(false);
    const [ownerID, setOwnerID] = useState<string | null>(null);
-   // Stuck world-gen detection: set after 90s with no world_gen_ready and still not-ready
+   const [adventureTitle, setAdventureTitle] = useState<string | null>(null);
+    // Stuck world-gen detection: set after 90s with no world_gen_ready and still not-ready
    const [worldGenStuck, setWorldGenStuck] = useState(false);
    const [retrying, setRetrying] = useState(false);
    const [retryError, setRetryError] = useState<string | null>(null);
@@ -91,6 +93,7 @@ function GamePage() {
 
    const {
       gameState,
+      campaignState,
       chatMessages,
       streamingMessage,
       isStreaming,
@@ -99,6 +102,7 @@ function GamePage() {
       worldGenLog,
       worldGenReady,
       addChatMessage,
+      setCampaignState,
       setGameState,
       appendWorldGenLog,
       setWorldGenReady,
@@ -123,8 +127,10 @@ function GamePage() {
       loadGameRef.current = true;
       try {
          const data = await LoadGame(sessionUUID);
-         if (data.ready && data.state) {
-            setGameState(data.state);
+         setCampaignState(data.campaign ?? null);
+         setAdventureTitle(data.title ?? null);
+          if (data.ready && data.state) {
+             setGameState(data.state);
             setWorldGenStuck(false);
          }
          // Capture owner ID for party panel
@@ -151,7 +157,7 @@ function GamePage() {
       } finally {
          setLoadingGame(false);
       }
-   }, [sessionUUID, setGameState, appendWorldGenLog, setWorldGenReady, triggerGameEntry]);
+    }, [sessionUUID, setCampaignState, setGameState, appendWorldGenLog, setWorldGenReady, triggerGameEntry]);
 
    // Poll LoadGame every 3s while world is not yet ready.
    // This catches the case where the client connected after world-gen finished (missed WS frames).
@@ -163,6 +169,8 @@ function GamePage() {
          isPollingRef.current = true;
          try {
             const data = await LoadGame(sessionUUID);
+            setCampaignState(data.campaign ?? null);
+            setAdventureTitle(data.title ?? null);
             if (data.owner_id) setOwnerID(data.owner_id);
             // Seed missing log lines (add only lines we don't have yet)
             if (data.world_gen_logs && data.world_gen_logs.length > 0) {
@@ -187,7 +195,7 @@ function GamePage() {
          }
       }, 3000);
       return () => clearInterval(interval);
-   }, [worldGenReady, gameState, sessionUUID, setGameState, appendWorldGenLog, setWorldGenReady, triggerGameEntry]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [worldGenReady, gameState, sessionUUID, setCampaignState, setGameState, appendWorldGenLog, setWorldGenReady, triggerGameEntry]); // eslint-disable-line react-hooks/exhaustive-deps
 
    // If we're still in world-gen after 90s with no progress frames, show retry option.
    const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -271,10 +279,37 @@ function GamePage() {
       );
    }
 
-   // Show world-gen terminal while world is being built (not yet ready) or transitioning in
-   if (loadingGame || transitionPhase !== 'game' || (!gameState && !loadError)) {
-      return (
-         <Box
+    // Show world-gen terminal while world is being built (not yet ready) or transitioning in
+    if (loadingGame && !gameState) {
+       return (
+          <Box
+             sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: 'calc(100vh - 64px)',
+                p: 4,
+                gap: 2,
+             }}
+          >
+             <CircularProgress />
+             <Typography
+                sx={{
+                   fontFamily: '"Cinzel", serif',
+                   letterSpacing: '0.08em',
+                   textTransform: 'uppercase',
+                }}
+             >
+                Loading Adventure
+             </Typography>
+          </Box>
+       );
+    }
+
+    if (!gameState && !loadError) {
+       return (
+          <Box
             sx={{
                display: 'flex',
                flexDirection: 'column',
@@ -314,8 +349,8 @@ function GamePage() {
                      }}
                   >
                      {transitionPhase === 'entering' ? 'Your Realm Awaits...' : 'Forging Your World'}
-                  </Typography>
-               </Box>
+                   </Typography>
+                </Box>
                <Box sx={{ p: 2 }}>
                   <WorldGenTerminal
                      lines={worldGenLog}
@@ -392,23 +427,69 @@ function GamePage() {
                   </Box>
                )}
             </Paper>
-            {worldGenReady && (
-               <Alert
-                  severity="success"
-                  sx={{
-                     maxWidth: 600,
-                     width: '100%',
-                     background: 'rgba(0, 255, 70, 0.08)',
-                     color: 'rgba(0,255,70,0.9)',
-                     border: '1px solid rgba(0,255,70,0.3)',
-                  }}
-               >
-                  World ready — loading your adventure...
-               </Alert>
-            )}
-         </Box>
-      );
-   }
+          </Box>
+       );
+    }
+
+    if (transitionPhase !== 'game') {
+       return (
+          <Box
+             sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: 'calc(100vh - 64px)',
+                p: 4,
+                gap: 3,
+             }}
+          >
+             <Paper
+                sx={{
+                   maxWidth: 600,
+                   width: '100%',
+                   background: 'rgba(14, 9, 20, 0.96)',
+                   border: '1px solid rgba(201, 169, 98, 0.25)',
+                   boxShadow: '0 0 40px rgba(201, 169, 98, 0.12)',
+                   overflow: 'hidden',
+                }}
+             >
+                <Box
+                   sx={{
+                      px: 2,
+                      py: 1.5,
+                      borderBottom: '1px solid rgba(201,169,98,0.3)',
+                   }}
+                >
+                   <Typography
+                      sx={{
+                         fontFamily: '"Cinzel", "Georgia", serif',
+                         color: 'rgba(201,169,98,0.95)',
+                         fontSize: '1rem',
+                      }}
+                   >
+                      {adventureTitle ?? 'Entering the Adventure'}
+                   </Typography>
+                   {campaignState?.current_objective && (
+                      <Typography
+                         variant="caption"
+                         sx={{ color: 'rgba(240,230,255,0.75)' }}
+                      >
+                         Objective: {campaignState.current_objective}
+                      </Typography>
+                   )}
+                </Box>
+                <Box sx={{ p: 2 }}>
+                   <WorldGenTerminal
+                      lines={worldGenLog}
+                      ready={worldGenReady}
+                      enteringGame={transitionPhase === 'entering'}
+                   />
+                </Box>
+             </Paper>
+          </Box>
+       );
+    }
 
    // displayMessages contains only committed (finalized) messages.
    // The in-flight streamingMessage is passed separately to Chat so it can
@@ -593,12 +674,14 @@ function GamePage() {
                   },
                }}
             >
-               <GameInfo
-                  gameState={gameState}
-                  sendAction={sendAction}
-                  focusedRoom={focusedRoom}
-                  sessionId={sessionUUID}
-                  isOwner={
+                <GameInfo
+                   gameState={gameState}
+                   campaignState={campaignState}
+                   sendAction={sendAction}
+                   focusedRoom={focusedRoom}
+                   sessionId={sessionUUID}
+                   adventureTitle={adventureTitle ?? undefined}
+                   isOwner={
                      ownerID != null
                         ? ownerID === currentUserID
                         : currentUserID != null && gameState != null

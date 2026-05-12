@@ -76,10 +76,11 @@ type DialogueRuntimeState struct {
 }
 
 type CampaignStateView struct {
-	CampaignID       string `json:"campaign_id"`
-	CampaignVersion  string `json:"campaign_version"`
-	ActiveNodeID     string `json:"active_node_id"`
-	CurrentObjective string `json:"current_objective,omitempty"`
+	CampaignID       string           `json:"campaign_id"`
+	CampaignVersion  string           `json:"campaign_version"`
+	ActiveNodeID     string           `json:"active_node_id"`
+	CurrentObjective string           `json:"current_objective,omitempty"`
+	ActiveObjectives []ObjectiveState `json:"active_objectives,omitempty"`
 }
 
 // Game is the in-memory representation of a live game session.
@@ -894,6 +895,7 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 		CampaignVersion:  g.Campaign.CampaignVersion,
 		ActiveNodeID:     g.Campaign.ActiveNodeID,
 		CurrentObjective: g.Campaign.CurrentObjective,
+		ActiveObjectives: g.Campaign.ActiveObjectives,
 	}
 }
 
@@ -1155,5 +1157,6 @@ type StateDelta struct {
 	Self         *CharacterView      `json:"self,omitempty"`
 	Party        []CharacterView     `json:"party,omitempty"` // updated party member views
 	UpdatedRooms map[string]RoomView `json:"updated_rooms,omitempty"`
+	Campaign     *CampaignStateView  `json:"campaign,omitempty"`
 	Events       []WorldEvent        `json:"events,omitempty"` // player-visible world events this turn
 }

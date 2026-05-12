@@ -131,34 +131,30 @@ func TestHandlerListGames_EmptyList(t *testing.T) {
 
 // ---- POST /api/games ----
 
-func TestHandlerCreateGame_EmptyBody_AcceptsAIGenerated(t *testing.T) {
-	// player_name is now optional — empty body should reach the DB layer (not 400)
-	t.Setenv("SESSIONS_TABLE", "test-table")
-	t.Setenv("USERS_TABLE", "test-users")
-	t.Setenv("WORLD_GEN_ARN", "")
+func TestHandlerCreateGame_EmptyBody_RequiresCampaignID(t *testing.T) {
 	req := makeHTTPReq("POST", "/api/games", `{}`, "user-123", nil)
 	resp, err := handler(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected lambda error: %v", err)
 	}
-	// Should NOT be a 400 (bad request) — will fail at DB layer (500) without real credentials
-	if resp.StatusCode == 400 {
-		t.Errorf("empty body should not return 400 now that player_name is optional, got %d\nbody: %s", resp.StatusCode, resp.Body)
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 when campaign_id is missing, got %d body=%s", resp.StatusCode, resp.Body)
 	}
 }
 
-func TestHandlerCreateGame_WithAllParams(t *testing.T) {
-	// Verify the handler accepts all new optional creation params
+func TestHandlerCreateGame_WithCampaignIDAndCharacterData(t *testing.T) {
+	// Verify a valid authored create request reaches deeper handler logic.
 	t.Setenv("SESSIONS_TABLE", "test-table")
 	t.Setenv("USERS_TABLE", "test-users")
 	t.Setenv("WORLD_GEN_ARN", "")
 	body := `{
-		"player_name": "Aria",
-		"player_age": "mid 20s",
-		"player_description": "A nimble rogue with sharp eyes",
-		"player_backstory": "Raised by thieves, seeking redemption",
-		"theme_hint": "gritty noir",
-		"preferences": ["stealth", "mystery"]
+		"campaign_id": "test",
+		"name": "Aria",
+		"backstory": "Raised by thieves, seeking redemption",
+		"race_id": "human",
+		"class_id": "fighter",
+		"ability_scores": {"str": 15, "dex": 14, "con": 13, "int": 12, "wis": 10, "cha": 8},
+		"selected_skills": ["athletics", "history"]
 	}`
 	req := makeHTTPReq("POST", "/api/games", body, "user-123", nil)
 	resp, err := handler(context.Background(), req)
@@ -167,7 +163,7 @@ func TestHandlerCreateGame_WithAllParams(t *testing.T) {
 	}
 	// Should reach DB layer, not return 400
 	if resp.StatusCode == 400 {
-		t.Errorf("valid body with all params should not return 400, got %d\nbody: %s", resp.StatusCode, resp.Body)
+		t.Errorf("valid authored create body should not return 400, got %d\nbody: %s", resp.StatusCode, resp.Body)
 	}
 }
 

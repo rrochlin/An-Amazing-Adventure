@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { AppTheme } from '@/theme/theme';
@@ -26,7 +26,8 @@ vi.mock('@/services/auth.service', () => ({
 }));
 
 // ── API mocks ────────────────────────────────────────────────────────────────
-const { mockCreateGame, mockJoinCharacter } = vi.hoisted(() => ({
+const { mockCreateGame, mockJoinCharacter, mockListCampaigns } = vi.hoisted(
+   () => ({
    mockCreateGame: vi.fn().mockResolvedValue({
       session_id: 'abc-123',
       ready: false,
@@ -35,11 +36,25 @@ const { mockCreateGame, mockJoinCharacter } = vi.hoisted(() => ({
    mockJoinCharacter: vi
       .fn()
       .mockResolvedValue({ session_id: 'existing-session' }),
-}));
+      mockListCampaigns: vi.fn().mockResolvedValue({
+         campaigns: [
+            {
+               id: 'test',
+               version: '1',
+               title: 'Test Campaign',
+               premise: 'A tiny authored path.',
+               description: 'Bootstraps a deterministic campaign state.',
+               tone: 'test',
+            },
+         ],
+      }),
+   }),
+);
 
 vi.mock('@/services/api.game', () => ({
    CreateGame: mockCreateGame,
    JoinCharacter: mockJoinCharacter,
+   ListCampaigns: mockListCampaigns,
 }));
 
 // ── Import component directly (bypasses TanStack lazy wrapper) ───────────────
@@ -51,12 +66,14 @@ beforeEach(() => {
    mockUseSearch.mockReturnValue({ session: undefined });
 });
 
-function renderWizard() {
-   return render(
+async function renderWizard() {
+   const result = render(
       <ThemeProvider theme={AppTheme}>
          <CreateRouteComponent />
       </ThemeProvider>,
    );
+   await act(() => Promise.resolve());
+   return result;
 }
 
 // ── Helper: complete step 0 (Name) ───────────────────────────────────────────
@@ -77,40 +94,40 @@ async function clickNext(user: ReturnType<typeof userEvent.setup>) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('CreateRoute wizard — new game mode', () => {
-   it('starts on the Name step', () => {
-      renderWizard();
+   it('starts on the Name step', async () => {
+      await renderWizard();
       expect(screen.getByLabelText(/Character Name/i)).toBeInTheDocument();
       expect(screen.getByText(/What are you called/i)).toBeInTheDocument();
    });
 
    it('Back button on step 0 navigates to /', async () => {
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /cancel/i }));
       expect(mockNavigate).toHaveBeenCalledWith({ to: '/' });
    });
 
-   it('Next button is disabled when name is empty', () => {
-      renderWizard();
+   it('Next button is disabled when name is empty', async () => {
+      await renderWizard();
       const nextBtn = screen.getByRole('button', { name: /next/i });
       expect(nextBtn).toBeDisabled();
    });
 
    it('Next button is disabled when name is only 1 character', async () => {
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await user.type(screen.getByLabelText(/Character Name/i), 'A');
       expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
    });
 
    it('Next button enables with a valid name', async () => {
-      renderWizard();
+      await renderWizard();
       await fillName();
       expect(screen.getByRole('button', { name: /next/i })).toBeEnabled();
    });
 
    it('advances to Race step after entering a valid name', async () => {
-      renderWizard();
+      await renderWizard();
       const user = await fillName();
       await clickNext(user);
       expect(screen.getByText(/Choose your ancestry/i)).toBeInTheDocument();
@@ -120,14 +137,14 @@ describe('CreateRoute wizard — new game mode', () => {
    });
 
    it('Race step: Next disabled until race selected', async () => {
-      renderWizard();
+      await renderWizard();
       const user = await fillName();
       await clickNext(user);
       expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
    });
 
    it('Race step: can select a race without subraces and advance', async () => {
-      renderWizard();
+      await renderWizard();
       const user = await fillName();
       await clickNext(user);
       await user.click(screen.getByText('Human'));
@@ -140,7 +157,7 @@ describe('CreateRoute wizard — new game mode', () => {
    });
 
    it('Race step: cannot advance without subrace for Dwarf', async () => {
-      renderWizard();
+      await renderWizard();
       const user = await fillName();
       await clickNext(user);
       await user.click(screen.getByText('Dwarf'));
@@ -152,7 +169,7 @@ describe('CreateRoute wizard — new game mode', () => {
    });
 
    it('Class step: Next disabled until class selected', async () => {
-      renderWizard();
+      await renderWizard();
       const user = await fillName();
       await clickNext(user);
       await user.click(screen.getByText('Human'));
@@ -161,7 +178,7 @@ describe('CreateRoute wizard — new game mode', () => {
    });
 
    it('Class step: selecting a class enables Next', async () => {
-      renderWizard();
+      await renderWizard();
       const user = await fillName();
       await clickNext(user);
       await user.click(screen.getByText('Human'));
@@ -172,7 +189,7 @@ describe('CreateRoute wizard — new game mode', () => {
    });
 
    it('Ability scores: Next disabled until all 6 assigned', async () => {
-      renderWizard();
+      await renderWizard();
       const user = await fillName();
       await clickNext(user); // → Race
       await user.click(screen.getByText('Human'));
@@ -188,7 +205,7 @@ describe('CreateRoute wizard — new game mode', () => {
 
    it('Skills: limited to class skill count', async () => {
       // Navigate to Skills step by completing all prior steps
-      renderWizard();
+      await renderWizard();
       const user = await fillName();
       await clickNext(user); // → Race
       await user.click(screen.getByText('Human'));
@@ -228,24 +245,104 @@ describe('CreateRoute wizard — new game mode', () => {
       expect(screen.getByText('2/2 skills selected')).toBeInTheDocument();
    });
 
-   it('shows Forge Your Adventure heading in create mode', () => {
-      renderWizard();
+   it('shows Forge Your Adventure heading in create mode', async () => {
+      await renderWizard();
       expect(screen.getByText('Forge Your Adventure')).toBeInTheDocument();
    });
 
-   it('stepper shows all 7 steps in create mode', () => {
-      renderWizard();
+   it('stepper shows all 7 steps in create mode', async () => {
+      await renderWizard();
       [
          'Name',
          'Race',
          'Class',
          'Ability Scores',
          'Skills',
-         'Adventure',
+         'Campaign',
          'Review',
       ].forEach((label) => {
          expect(screen.getByText(label)).toBeInTheDocument();
       });
+   });
+
+    it('campaign step requires a premade campaign selection', async () => {
+      await renderWizard();
+      const user = await fillName('Borin Stoneguard');
+      await clickNext(user); // -> Race
+      await user.click(screen.getByText('Human'));
+      await clickNext(user); // -> Class
+      await user.click(screen.getByText('Fighter'));
+      await clickNext(user); // -> Abilities
+      const comboboxes = screen.getAllByRole('combobox');
+      const abilitySelects = comboboxes.slice(0, 6);
+      const values = [15, 14, 13, 12, 10, 8];
+      for (let i = 0; i < abilitySelects.length; i++) {
+         await user.click(abilitySelects[i]);
+         const listbox = screen.getByRole('listbox');
+         const options = within(listbox).getAllByRole('option');
+         const targetOption = options.find(
+            (o) => o.textContent === String(values[i]),
+         );
+         if (targetOption) await user.click(targetOption);
+      }
+      await clickNext(user); // -> Skills
+      await user.click(screen.getByText('Athletics (STR)'));
+      await user.click(screen.getByText('History (INT)'));
+      await clickNext(user); // -> Campaign
+
+      expect(
+         screen.getByRole('button', { name: /next: review/i }),
+      ).toBeDisabled();
+   });
+
+   it('allows selecting an authored campaign and submits campaign_id', async () => {
+      await renderWizard();
+      const user = await fillName('Borin Stoneguard');
+      await clickNext(user); // -> Race
+      await user.click(screen.getByText('Human'));
+      await clickNext(user); // -> Class
+      await user.click(screen.getByText('Fighter'));
+      await clickNext(user); // -> Abilities
+      const comboboxes = screen.getAllByRole('combobox');
+      const abilitySelects = comboboxes.slice(0, 6);
+      const values = [15, 14, 13, 12, 10, 8];
+      for (let i = 0; i < abilitySelects.length; i++) {
+         await user.click(abilitySelects[i]);
+         const listbox = screen.getByRole('listbox');
+         const options = within(listbox).getAllByRole('option');
+         const targetOption = options.find(
+            (o) => o.textContent === String(values[i]),
+         );
+         if (targetOption) await user.click(targetOption);
+      }
+      await clickNext(user); // -> Skills
+      await user.click(screen.getByText('Athletics (STR)'));
+      await user.click(screen.getByText('History (INT)'));
+      await clickNext(user); // -> Campaign
+
+      await user.click(
+         screen.getByRole('combobox', { name: /^campaign$/i }),
+      );
+      await user.click(await screen.findByRole('option', { name: 'Test Campaign' }));
+
+      expect(screen.getByText('A tiny authored path.')).toBeInTheDocument();
+      expect(
+         screen.getByText(/launches premade campaigns only/i),
+      ).toBeInTheDocument();
+
+      await clickNext(user); // -> Review
+      await user.click(
+         screen.getByRole('button', { name: /Begin Adventure/i }),
+      );
+
+      expect(mockCreateGame).toHaveBeenCalledWith(
+         expect.objectContaining({
+            name: 'Borin Stoneguard',
+            class_id: 'fighter',
+            race_id: 'human',
+            campaign_id: 'test',
+         }),
+      );
    });
 });
 
@@ -254,30 +351,30 @@ describe('CreateRoute wizard — join game mode', () => {
       mockUseSearch.mockReturnValue({ session: 'existing-session-id' });
    });
 
-   it('shows Join the Adventure heading in join mode', () => {
-      renderWizard();
+   it('shows Join the Adventure heading in join mode', async () => {
+      await renderWizard();
       expect(screen.getByText('Join the Adventure')).toBeInTheDocument();
    });
 
-   it('shows info alert about joining', () => {
-      renderWizard();
+   it('shows info alert about joining', async () => {
+      await renderWizard();
       expect(
          screen.getByText(/joining an existing adventure/i),
       ).toBeInTheDocument();
    });
 
-   it('stepper shows only 6 steps in join mode (no Adventure step)', () => {
-      renderWizard();
+   it('stepper shows only 6 steps in join mode (no Campaign step)', async () => {
+      await renderWizard();
       ['Name', 'Race', 'Class', 'Ability Scores', 'Skills', 'Review'].forEach(
          (label) => {
             expect(screen.getByText(label)).toBeInTheDocument();
          },
       );
-      expect(screen.queryByText('Adventure')).not.toBeInTheDocument();
+      expect(screen.queryByText('Campaign')).not.toBeInTheDocument();
    });
 
    it('submit in join mode calls JoinCharacter, not CreateGame', async () => {
-      renderWizard();
+      await renderWizard();
       const user = await fillName('Thorin Ironforge');
       await clickNext(user); // → Race
       await user.click(screen.getByText('Human'));
@@ -299,7 +396,7 @@ describe('CreateRoute wizard — join game mode', () => {
       await clickNext(user); // → Skills
       await user.click(screen.getByText('Athletics (STR)'));
       await user.click(screen.getByText('Perception (WIS)'));
-      await clickNext(user); // → Review (no Adventure step in join mode)
+      await clickNext(user); // → Review (no Campaign step in join mode)
       expect(screen.getByText('Thorin Ironforge')).toBeInTheDocument();
       expect(screen.getByText(/Level 1 Human Fighter/i)).toBeInTheDocument();
       await user.click(
@@ -347,12 +444,14 @@ describe('CreateRoute wizard — Review step', () => {
       await clickNext(user); // → Skills
       await user.click(screen.getByText('Athletics (STR)'));
       await user.click(screen.getByText('Survival (WIS)'));
-      await clickNext(user); // → Adventure
+      await clickNext(user); // → Campaign
+      await user.click(screen.getByRole('combobox', { name: /^campaign$/i }));
+      await user.click(await screen.findByRole('option', { name: 'Test Campaign' }));
       await clickNext(user); // → Review
    }
 
    it('review step shows character name, race, class', async () => {
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await navigateToReviewStep(user);
       expect(screen.getByText('Aria Silverwind')).toBeInTheDocument();
@@ -360,7 +459,7 @@ describe('CreateRoute wizard — Review step', () => {
    });
 
    it('review step shows HP > 0', async () => {
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await navigateToReviewStep(user);
       // HP label
@@ -373,7 +472,7 @@ describe('CreateRoute wizard — Review step', () => {
    });
 
    it('review step shows selected skills', async () => {
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await navigateToReviewStep(user);
       expect(screen.getByText('Skill Proficiencies')).toBeInTheDocument();
@@ -382,7 +481,7 @@ describe('CreateRoute wizard — Review step', () => {
    });
 
    it('review step shows class features', async () => {
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await navigateToReviewStep(user);
       expect(screen.getByText('Class Features')).toBeInTheDocument();
@@ -390,7 +489,7 @@ describe('CreateRoute wizard — Review step', () => {
    });
 
    it('clicking Begin Adventure calls CreateGame with correct payload', async () => {
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await navigateToReviewStep(user);
       await user.click(
@@ -408,7 +507,7 @@ describe('CreateRoute wizard — Review step', () => {
    });
 
    it('navigates to game route after successful creation', async () => {
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await navigateToReviewStep(user);
       await user.click(
@@ -422,7 +521,7 @@ describe('CreateRoute wizard — Review step', () => {
 
    it('shows error alert on API failure', async () => {
       mockCreateGame.mockRejectedValueOnce(new Error('Server down'));
-      renderWizard();
+      await renderWizard();
       const user = userEvent.setup();
       await navigateToReviewStep(user);
       await user.click(

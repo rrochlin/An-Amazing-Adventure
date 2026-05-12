@@ -1,5 +1,11 @@
 import { DELETE, GET, POST } from './api.service';
-import type { GameStateView, CharacterCreationData } from '../types/types';
+import type {
+   CampaignManifest,
+   CampaignStateView,
+   CharacterCreationData,
+   CreateGameData,
+   GameStateView,
+} from '../types/types';
 
 export interface GameListItem {
    session_id: string;
@@ -28,6 +34,7 @@ export interface GameLoadResponse {
    session_id: string;
    ready: boolean;
    state: GameStateView;
+   campaign?: CampaignStateView | null;
    title?: string;
    theme?: string;
    quest_goal?: string;
@@ -44,6 +51,11 @@ export interface CreateGameResponse {
    session_id: string;
    ready: boolean;
    preview_mode: boolean;
+   campaign_id?: string;
+}
+
+export interface ListCampaignsResponse {
+   campaigns: CampaignManifest[];
 }
 
 export async function ListGames(): Promise<ListGamesResponse> {
@@ -52,9 +64,14 @@ export async function ListGames(): Promise<ListGamesResponse> {
 }
 
 export async function CreateGame(
-   params: CharacterCreationData,
+   params: CreateGameData,
 ): Promise<CreateGameResponse> {
    const res = await POST<CreateGameResponse>('api/games', params);
+   return res.data;
+}
+
+export async function ListCampaigns(): Promise<ListCampaignsResponse> {
+   const res = await GET<ListCampaignsResponse>('api/campaigns');
    return res.data;
 }
 

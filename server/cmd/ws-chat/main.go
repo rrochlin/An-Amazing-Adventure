@@ -15,18 +15,33 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"sync"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
+	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
 )
 
+var (
+	campaignRegistryOnce sync.Once
+	campaignRegistry     *campaigns.Registry
+	campaignRegistryErr  error
+)
+
 type chatRequest struct {
 	Action  string `json:"action"`
 	Content string `json:"content"`
+}
+
+func getCampaignRegistry() (*campaigns.Registry, error) {
+	campaignRegistryOnce.Do(func() {
+		campaignRegistry, campaignRegistryErr = campaigns.LoadEmbeddedRegistry()
+	})
+	return campaignRegistry, campaignRegistryErr
 }
 
 func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -131,6 +146,22 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		}
 	}
 
+	var campaignDef *campaigns.CampaignDefinition
+	if g.Campaign != nil && g.Campaign.CampaignID != "" {
+		reg, regErr := getCampaignRegistry()
+		if regErr != nil {
+			log.Printf("ws-chat: load campaigns: %v", regErr)
+			return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+		}
+		var ok bool
+		campaignDef, ok = reg.Get(g.Campaign.CampaignID)
+		if !ok {
+			log.Printf("ws-chat: campaign %q missing for game %s", g.Campaign.CampaignID, conn.GameID)
+			_ = ws.SendError(ctx, connID, "campaign_not_found")
+			return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+		}
+	}
+
 	// Set up Bedrock client
 	aiClient, err := ai.New(ctx)
 	if err != nil {
@@ -186,6 +217,35 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		// Non-fatal: log the error but continue — game state may be partially mutated,
 		// but the narrative has already been delivered successfully.
 		log.Printf("ws-chat: engineer scan error: %v", err)
+	}
+
+	if campaignDef != nil {
+		allowedSpecs := campaigns.AllowedConditionSpecsForNode(campaignDef.StoryNodes[g.Campaign.ActiveNodeID])
+		resolverResult, resolveErr := aiClient.ResolveCampaignConditions(
+			ctx,
+			g,
+			campaignDef,
+			msg.Content,
+			narratorResult.Narrative,
+		)
+		if resolveErr != nil {
+			log.Printf("ws-chat: campaign condition resolution error: %v", resolveErr)
+		} else {
+			campaigns.ApplyConditionResolution(g.Campaign, campaigns.FilterConditionResolution(allowedSpecs, resolverResult.Resolution))
+			transitionResult, transitionErr := campaigns.AdvanceCampaign(campaignDef, g)
+			if transitionErr != nil {
+				log.Printf("ws-chat: campaign transition error: %v", transitionErr)
+			} else if transitionResult.Transitioned && transitionResult.ToNodeID != "" {
+				if nextNode, ok := campaignDef.StoryNodes[transitionResult.ToNodeID]; ok && nextNode.ObjectiveText != "" {
+					engineerResult.Events = append(engineerResult.Events, game.WorldEvent{
+						Type:    "campaign_progress",
+						Message: "Objective updated: " + nextNode.ObjectiveText,
+					})
+				}
+			}
+			engineerResult.Tokens.InputTokens += resolverResult.Tokens.InputTokens
+			engineerResult.Tokens.OutputTokens += resolverResult.Tokens.OutputTokens
+		}
 	}
 
 	// Step 4: Persist mutation audit log entries (best-effort — failure is non-fatal).
@@ -245,9 +305,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
 		delta := game.StateDelta{
-			Events: engineerResult.Events,
-			Player: &memberView.Player,
-			Self:   &memberView.Self,
+			Events:   engineerResult.Events,
+			Player:   &memberView.Player,
+			Self:     &memberView.Self,
+			Campaign: g.BuildCampaignStateView(),
 		}
 		if postTurnOwnerLoc != preTurnPlayerLoc || true { // always send current room
 			delta.CurrentRoom = &memberView.CurrentRoom
