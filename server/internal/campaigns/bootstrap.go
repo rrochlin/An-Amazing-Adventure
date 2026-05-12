@@ -21,6 +21,39 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 	g.CreationParams = creation
 	g.Ready = true
 
+	activeNodeID := def.StartNodeID
+	if def.IntroSequence.OpeningNodeID != "" {
+		activeNodeID = def.IntroSequence.OpeningNodeID
+	}
+	currentObjective := ""
+	activeObjectives := []game.ObjectiveState{}
+	if node, ok := def.StoryNodes[activeNodeID]; ok {
+		currentObjective = node.ObjectiveText
+		for _, action := range node.OnEnter {
+			if action.Type == "activate_objective" && action.ObjectiveID != "" {
+				if obj, ok := def.Objectives[action.ObjectiveID]; ok {
+					activeObjectives = append(activeObjectives, game.ObjectiveState{
+						ID:          action.ObjectiveID,
+						Status:      "active",
+						VisibleText: obj.Title,
+					})
+				}
+			}
+		}
+	}
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:       def.ID,
+		CampaignVersion:  def.Version,
+		ActiveNodeID:     activeNodeID,
+		CurrentObjective: currentObjective,
+		BoolFlags:        make(map[string]bool),
+		Labels:           make(map[string]string),
+		Counters:         make(map[string]int),
+		ActiveObjectives: activeObjectives,
+		ActorStates:      make(map[string]game.ActorRuntimeState),
+		CompanionStates:  make(map[string]game.CompanionState),
+	}
+
 	roomIDMap := make(map[string]string, len(def.Map.Rooms))
 	for authoredID, room := range def.Map.Rooms {
 		area := game.Area{
@@ -72,6 +105,23 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 			_ = room.AddOccupant(npc.ID)
 			g.Rooms[startRoomID] = room
 		}
+		g.Campaign.CompanionStates[actorID] = game.CompanionState{
+			CompanionID:       actorID,
+			Status:            "active",
+			CurrentLocationID: startRoomID,
+		}
+	}
+
+	for actorID, actor := range def.Actors {
+		if actor.Kind == "companion" {
+			continue
+		}
+		state := game.ActorRuntimeState{ActorID: actorID, Status: "idle"}
+		if len(actor.Rail.Steps) > 0 {
+			state.CurrentRailStepID = actor.Rail.Steps[0].ID
+			state.CurrentLocationID = actor.Rail.Steps[0].LocationID
+		}
+		g.Campaign.ActorStates[actorID] = state
 	}
 
 	history := []game.ChatMessage{}

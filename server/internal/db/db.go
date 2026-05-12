@@ -123,6 +123,7 @@ type saveStateDB struct {
 	ConversationCount    int                          `dynamodbav:"conversation_count,omitempty"`
 	CreationParams       game.CharacterCreationData   `dynamodbav:"creation_params,omitempty"`        // v3+
 	LegacyCreationParams game.AdventureCreationParams `dynamodbav:"legacy_creation_params,omitempty"` // v1/v2
+	Campaign             *game.CampaignRuntimeState   `dynamodbav:"campaign,omitempty"`
 
 	// Combat state (v3+) — previously missing from saveStateDB, fixed in v4.
 	RoomMonsters         map[string][]*dnd5emonster.Data `dynamodbav:"room_monsters,omitempty"`
@@ -158,6 +159,7 @@ func toDBState(s game.SaveState) saveStateDB {
 		ConversationCount:    s.ConversationCount,
 		CreationParams:       s.CreationParams,
 		LegacyCreationParams: s.LegacyCreationParams,
+		Campaign:             s.Campaign,
 		RoomMonsters:         s.RoomMonsters,
 		PendingCombatContext: s.PendingCombatContext,
 		InitiativeOrder:      s.InitiativeOrder,
@@ -190,6 +192,7 @@ func fromDBState(d saveStateDB) game.SaveState {
 		ConversationCount:    d.ConversationCount,
 		CreationParams:       d.CreationParams,
 		LegacyCreationParams: d.LegacyCreationParams,
+		Campaign:             d.Campaign,
 		RoomMonsters:         d.RoomMonsters,
 		PendingCombatContext: d.PendingCombatContext,
 		InitiativeOrder:      d.InitiativeOrder,

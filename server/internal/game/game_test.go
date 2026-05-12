@@ -453,6 +453,26 @@ func TestFromSaveStateSchemaVersionMismatch(t *testing.T) {
 	}
 }
 
+func TestBuildCampaignStateView(t *testing.T) {
+	g := game.NewGame("sess-1", "user-1")
+	if got := g.BuildCampaignStateView(); got != nil {
+		t.Fatalf("expected nil campaign view when no campaign exists, got %#v", got)
+	}
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:       "test",
+		CampaignVersion:  "1",
+		ActiveNodeID:     "intro",
+		CurrentObjective: "Finish Intro",
+	}
+	view := g.BuildCampaignStateView()
+	if view == nil {
+		t.Fatal("expected campaign view")
+	}
+	if view.CampaignID != "test" || view.ActiveNodeID != "intro" {
+		t.Fatalf("unexpected campaign view: %#v", view)
+	}
+}
+
 // ── Equipment ─────────────────────────────────────────────────────────────────
 
 func TestEquipItem_Success(t *testing.T) {

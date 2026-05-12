@@ -15,7 +15,7 @@ import (
 // SchemaVersion is incremented whenever SaveState's structure changes
 // in a backward-incompatible way. FromSaveState handles migration from
 // older versions.
-const SchemaVersion = 4
+const SchemaVersion = 5
 
 // AdventureCreationParams holds the player-provided setup choices that were
 // used when the game was created. All fields are optional — the AI fills in
@@ -26,6 +26,60 @@ type AdventureCreationParams struct {
 	PlayerBackstory   string   `json:"player_backstory,omitempty" dynamodbav:"player_backstory,omitempty"`
 	ThemeHint         string   `json:"theme_hint,omitempty" dynamodbav:"theme_hint,omitempty"`
 	Preferences       []string `json:"preferences,omitempty" dynamodbav:"preferences,omitempty"`
+}
+
+// CampaignRuntimeState stores the authored campaign progression for Phase 7+
+// sessions. It is persisted directly rather than reconstructed from chat
+// history so reconnects and debugging remain deterministic.
+type CampaignRuntimeState struct {
+	CampaignID       string                       `json:"campaign_id" dynamodbav:"campaign_id"`
+	CampaignVersion  string                       `json:"campaign_version" dynamodbav:"campaign_version"`
+	ActiveNodeID     string                       `json:"active_node_id" dynamodbav:"active_node_id"`
+	CurrentObjective string                       `json:"current_objective,omitempty" dynamodbav:"current_objective,omitempty"`
+	PreviousNodeIDs  []string                     `json:"previous_node_ids,omitempty" dynamodbav:"previous_node_ids,omitempty"`
+	BoolFlags        map[string]bool              `json:"bool_flags,omitempty" dynamodbav:"bool_flags,omitempty"`
+	Labels           map[string]string            `json:"labels,omitempty" dynamodbav:"labels,omitempty"`
+	Counters         map[string]int               `json:"counters,omitempty" dynamodbav:"counters,omitempty"`
+	ActiveObjectives []ObjectiveState             `json:"active_objectives,omitempty" dynamodbav:"active_objectives,omitempty"`
+	ActorStates      map[string]ActorRuntimeState `json:"actor_states,omitempty" dynamodbav:"actor_states,omitempty"`
+	CompanionStates  map[string]CompanionState    `json:"companion_states,omitempty" dynamodbav:"companion_states,omitempty"`
+	CampaignClock    int                          `json:"campaign_clock,omitempty" dynamodbav:"campaign_clock,omitempty"`
+	ActiveDialogue   *DialogueRuntimeState        `json:"active_dialogue,omitempty" dynamodbav:"active_dialogue,omitempty"`
+}
+
+type ObjectiveState struct {
+	ID          string `json:"id" dynamodbav:"id"`
+	Status      string `json:"status" dynamodbav:"status"`
+	VisibleText string `json:"visible_text,omitempty" dynamodbav:"visible_text,omitempty"`
+}
+
+type ActorRuntimeState struct {
+	ActorID           string `json:"actor_id" dynamodbav:"actor_id"`
+	CurrentRailStepID string `json:"current_rail_step_id,omitempty" dynamodbav:"current_rail_step_id,omitempty"`
+	CurrentLocationID string `json:"current_location_id,omitempty" dynamodbav:"current_location_id,omitempty"`
+	AlertLevel        int    `json:"alert_level,omitempty" dynamodbav:"alert_level,omitempty"`
+	Status            string `json:"status,omitempty" dynamodbav:"status,omitempty"`
+}
+
+type CompanionState struct {
+	CompanionID       string `json:"companion_id" dynamodbav:"companion_id"`
+	Status            string `json:"status" dynamodbav:"status"`
+	CurrentLocationID string `json:"current_location_id,omitempty" dynamodbav:"current_location_id,omitempty"`
+	BondLevel         int    `json:"bond_level,omitempty" dynamodbav:"bond_level,omitempty"`
+}
+
+type DialogueRuntimeState struct {
+	AssetID        string            `json:"asset_id" dynamodbav:"asset_id"`
+	CurrentNode    string            `json:"current_node,omitempty" dynamodbav:"current_node,omitempty"`
+	Variables      map[string]string `json:"variables,omitempty" dynamodbav:"variables,omitempty"`
+	AwaitingChoice bool              `json:"awaiting_choice,omitempty" dynamodbav:"awaiting_choice,omitempty"`
+}
+
+type CampaignStateView struct {
+	CampaignID       string `json:"campaign_id"`
+	CampaignVersion  string `json:"campaign_version"`
+	ActiveNodeID     string `json:"active_node_id"`
+	CurrentObjective string `json:"current_objective,omitempty"`
 }
 
 // Game is the in-memory representation of a live game session.
@@ -51,6 +105,7 @@ type Game struct {
 	ConversationCount    int                     // number of completed narrator turns
 	CreationParams       CharacterCreationData   // player-supplied setup choices (v3+)
 	LegacyCreationParams AdventureCreationParams // preserved for v1/v2 records
+	Campaign             *CampaignRuntimeState   // authored campaign progression (v5+)
 
 	// Combat state (v3+)
 	// RoomMonsters maps roomID → serialized monster data for that room.
@@ -636,6 +691,7 @@ type SaveState struct {
 	ConversationCount    int                        `json:"conversation_count,omitempty" dynamodbav:"conversation_count,omitempty"`
 	CreationParams       CharacterCreationData      `json:"creation_params,omitempty" dynamodbav:"creation_params,omitempty"`               // v3+
 	LegacyCreationParams AdventureCreationParams    `json:"legacy_creation_params,omitempty" dynamodbav:"legacy_creation_params,omitempty"` // v1/v2 only
+	Campaign             *CampaignRuntimeState      `json:"campaign,omitempty" dynamodbav:"campaign,omitempty"`
 
 	// Combat state (v3+)
 	RoomMonsters         map[string][]*monster.Data `json:"room_monsters,omitempty" dynamodbav:"room_monsters,omitempty"`
@@ -733,6 +789,7 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 		ConversationCount:    g.ConversationCount,
 		CreationParams:       g.CreationParams,
 		LegacyCreationParams: g.LegacyCreationParams,
+		Campaign:             g.Campaign,
 		RoomMonsters:         g.RoomMonsters,
 		PendingCombatContext: g.PendingCombatContext,
 		InitiativeOrder:      g.InitiativeOrder,
@@ -744,7 +801,7 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 // FromSaveState restores a Game from a SaveState (without loading DnD characters).
 // DnD characters must be loaded separately via g.LoadDnDCharacters() to bind
 // an event bus. This two-step design avoids context/bus passing here.
-// Supports schema versions 1–3. Returns error for unknown future versions.
+// Supports schema versions 1+. Returns error for unknown future versions.
 func FromSaveState(s SaveState) (*Game, error) {
 	if s.SchemaVersion > SchemaVersion {
 		return nil, fmt.Errorf("unsupported schema version %d (current: %d)", s.SchemaVersion, SchemaVersion)
@@ -781,6 +838,7 @@ func FromSaveState(s SaveState) (*Game, error) {
 		ConversationCount:    s.ConversationCount,
 		CreationParams:       s.CreationParams,
 		LegacyCreationParams: s.LegacyCreationParams,
+		Campaign:             s.Campaign,
 		RoomMonsters:         roomMonsters,
 		PendingCombatContext: s.PendingCombatContext,
 		InitiativeOrder:      s.InitiativeOrder,
@@ -823,6 +881,20 @@ func FromSaveState(s SaveState) (*Game, error) {
 		g.NPCs[n.ID] = n
 	}
 	return g, nil
+}
+
+// BuildCampaignStateView returns a client-facing summary of the authored
+// campaign runtime when this session is campaign-backed.
+func (g *Game) BuildCampaignStateView() *CampaignStateView {
+	if g == nil || g.Campaign == nil {
+		return nil
+	}
+	return &CampaignStateView{
+		CampaignID:       g.Campaign.CampaignID,
+		CampaignVersion:  g.Campaign.CampaignVersion,
+		ActiveNodeID:     g.Campaign.ActiveNodeID,
+		CurrentObjective: g.Campaign.CurrentObjective,
+	}
 }
 
 // NewSessionID returns a new random UUID string for use as a session ID.

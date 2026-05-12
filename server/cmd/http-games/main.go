@@ -379,10 +379,12 @@ func handleGetGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, user
 	}
 
 	stateView := g.BuildGameStateView(userID, saveState.ChatHistory)
+	campaignView := g.BuildCampaignStateView()
 	return jsonResponse(200, map[string]any{
 		"session_id":            sessionID,
 		"ready":                 saveState.Ready,
 		"state":                 stateView,
+		"campaign":              campaignView,
 		"title":                 saveState.Title,
 		"theme":                 saveState.Theme,
 		"quest_goal":            saveState.QuestGoal,
