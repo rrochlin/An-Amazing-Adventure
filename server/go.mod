@@ -5,6 +5,10 @@ module github.com/rrochlin/an-amazing-adventure
 go 1.24.1
 
 require (
+	github.com/KirkDiggler/rpg-toolkit/dice v0.3.2
+	github.com/KirkDiggler/rpg-toolkit/events v0.6.2
+	github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e v0.51.0
+	github.com/KirkDiggler/rpg-toolkit/tools/environments v0.4.2
 	github.com/aws/aws-lambda-go v1.53.0
 	github.com/aws/aws-sdk-go-v2 v1.41.3
 	github.com/aws/aws-sdk-go-v2/config v1.32.11
@@ -20,13 +24,9 @@ require (
 
 require (
 	github.com/KirkDiggler/rpg-toolkit/core v0.10.0 // indirect
-	github.com/KirkDiggler/rpg-toolkit/dice v0.3.2 // indirect
-	github.com/KirkDiggler/rpg-toolkit/events v0.6.2 // indirect
 	github.com/KirkDiggler/rpg-toolkit/game v0.1.0 // indirect
 	github.com/KirkDiggler/rpg-toolkit/mechanics/resources v0.3.1 // indirect
 	github.com/KirkDiggler/rpg-toolkit/rpgerr v0.1.1 // indirect
-	github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e v0.51.0 // indirect
-	github.com/KirkDiggler/rpg-toolkit/tools/environments v0.4.2 // indirect
 	github.com/KirkDiggler/rpg-toolkit/tools/selectables v0.1.2 // indirect
 	github.com/KirkDiggler/rpg-toolkit/tools/spatial v0.4.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.6 // indirect

@@ -86,6 +86,26 @@ func TestHandlerUnknownRoute_404(t *testing.T) {
 
 // ---- GET /api/games ----
 
+func TestHandlerListCampaigns_OK(t *testing.T) {
+	req := makeHTTPReq("GET", "/api/campaigns", "", "user-123", nil)
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected lambda error: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected 200, got %d body=%s", resp.StatusCode, resp.Body)
+	}
+	var body struct {
+		Campaigns []map[string]any `json:"campaigns"`
+	}
+	if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
+		t.Fatalf("invalid JSON response: %v", err)
+	}
+	if len(body.Campaigns) == 0 {
+		t.Fatal("expected at least one campaign manifest")
+	}
+}
+
 func TestHandlerListGames_EmptyList(t *testing.T) {
 	t.Setenv("SESSIONS_TABLE", "test-table")
 	t.Setenv("CONNECTIONS_TABLE", "test-connections")
@@ -162,6 +182,17 @@ func TestHandlerCreateGame_InvalidJSON(t *testing.T) {
 	}
 	if resp.StatusCode != 400 {
 		t.Errorf("expected 400 for invalid JSON, got %d", resp.StatusCode)
+	}
+}
+
+func TestHandlerCreateGame_UnknownCampaignID_Returns400(t *testing.T) {
+	req := makeHTTPReq("POST", "/api/games", `{"campaign_id":"does-not-exist"}`, "user-123", nil)
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected lambda error: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 for unknown campaign id, got %d body=%s", resp.StatusCode, resp.Body)
 	}
 }
 

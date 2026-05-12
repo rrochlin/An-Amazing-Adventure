@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -14,8 +15,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	awslambda "github.com/aws/aws-sdk-go-v2/service/lambda"
 	awslambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+)
+
+var (
+	campaignRegistryOnce sync.Once
+	campaignRegistry     *campaigns.Registry
+	campaignRegistryErr  error
 )
 
 // worldGenPayload is passed to the world-gen Lambda as its event.
@@ -30,6 +38,18 @@ type worldGenPayload struct {
 	PlayerBackstory   string   `json:"player_backstory,omitempty"`
 	ThemeHint         string   `json:"theme_hint,omitempty"`
 	Preferences       []string `json:"preferences,omitempty"`
+}
+
+type createGameRequest struct {
+	CampaignID string `json:"campaign_id,omitempty"`
+	game.CharacterCreationData
+}
+
+func getCampaignRegistry() (*campaigns.Registry, error) {
+	campaignRegistryOnce.Do(func() {
+		campaignRegistry, campaignRegistryErr = campaigns.LoadEmbeddedRegistry()
+	})
+	return campaignRegistry, campaignRegistryErr
 }
 
 func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
@@ -48,6 +68,8 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 	var resp events.APIGatewayV2HTTPResponse
 	var err error
 	switch {
+	case method == "GET" && path == "/api/campaigns":
+		resp, err = handleListCampaigns(ctx)
 	case method == "GET" && path == "/api/games":
 		resp, err = handleListGames(ctx, userID)
 	case method == "POST" && path == "/api/games":
@@ -66,6 +88,16 @@ func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.AP
 
 	log.Printf("http-games: %s %s → %d (req=%s)", method, path, resp.StatusCode, reqID)
 	return resp, err
+}
+
+func handleListCampaigns(ctx context.Context) (events.APIGatewayV2HTTPResponse, error) {
+	_ = ctx
+	reg, err := getCampaignRegistry()
+	if err != nil {
+		log.Printf("list campaigns: load registry: %v", err)
+		return serverError(), nil
+	}
+	return jsonResponse(200, map[string]any{"campaigns": reg.List()}), nil
 }
 
 type gameListItem struct {
@@ -173,9 +205,23 @@ func handleListGames(ctx context.Context, userID string) (events.APIGatewayV2HTT
 }
 
 func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
-	var body game.CharacterCreationData
+	var body createGameRequest
 	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
 		return jsonResponse(400, map[string]string{"error": "invalid request body"}), nil
+	}
+
+	var selectedCampaign *campaigns.CampaignDefinition
+	if body.CampaignID != "" {
+		reg, err := getCampaignRegistry()
+		if err != nil {
+			log.Printf("http-games POST: load campaigns: %v", err)
+			return serverError(), nil
+		}
+		var ok bool
+		selectedCampaign, ok = reg.Get(body.CampaignID)
+		if !ok {
+			return jsonResponse(400, map[string]string{"error": fmt.Sprintf("unknown campaign_id %q", body.CampaignID)}), nil
+		}
 	}
 
 	dbClient, err := db.New(ctx)
@@ -231,11 +277,11 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	player := game.NewCharacter(playerName, body.Backstory)
 	g := game.NewGame(sessionID, userID)
 	g.SetPlayerCharacter(userID, player)
-	g.CreationParams = body
+	g.CreationParams = body.CharacterCreationData
 
 	// Build the full D&D character if we have enough data
 	if body.ClassID != "" && body.RaceID != "" && len(body.AbilityScores) == 6 {
-		dndChar, err := game.BuildDnDCharacter(ctx, body)
+		dndChar, err := game.BuildDnDCharacter(ctx, body.CharacterCreationData)
 		if err != nil {
 			log.Printf("http-games POST: BuildDnDCharacter error: %v", err)
 			return jsonResponse(400, map[string]string{"error": fmt.Sprintf("character creation failed: %v", err)}), nil
@@ -243,8 +289,20 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		g.SetDnDCharacter(userID, dndChar)
 	}
 
-	// Save the initial (not-ready) game record
-	saved := g.ToSaveState(nil, nil)
+	history := []game.ChatMessage(nil)
+	if selectedCampaign != nil {
+		bootstrapped, openingHistory, bootErr := campaigns.BootstrapGame(selectedCampaign, sessionID, userID, player, body.CharacterCreationData)
+		if bootErr != nil {
+			log.Printf("http-games POST: BootstrapGame error: %v", bootErr)
+			return serverError(), nil
+		}
+		g = bootstrapped
+		history = openingHistory
+	}
+
+	// Save the initial game record. Campaign-backed sessions are ready immediately;
+	// legacy sessions remain not-ready until world-gen completes.
+	saved := g.ToSaveState(nil, history)
 	if err := dbClient.PutGame(ctx, saved); err != nil {
 		log.Printf("create game put: %v", err)
 		return serverError(), nil
@@ -260,26 +318,36 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		log.Printf("create game PutMembership (non-fatal): %v", err)
 	}
 
-	log.Printf("http-games POST: invoking world-gen for session %s", sessionID)
-	payload, _ := json.Marshal(worldGenPayload{
-		SessionID:      sessionID,
-		UserID:         userID,
-		CreationParams: body,
-		// Legacy fields for backward-compat
-		PlayerName:  playerName,
-		ThemeHint:   body.ThemeHint,
-		Preferences: body.Preferences,
-	})
-	if err := invokeWorldGen(ctx, payload); err != nil {
-		log.Printf("http-games POST: invoke world-gen FAILED for session %s: %v (game still created)", sessionID, err)
+	ready := false
+	if selectedCampaign == nil {
+		log.Printf("http-games POST: invoking world-gen for session %s", sessionID)
+		payload, _ := json.Marshal(worldGenPayload{
+			SessionID:      sessionID,
+			UserID:         userID,
+			CreationParams: body.CharacterCreationData,
+			// Legacy fields for backward-compat
+			PlayerName:  playerName,
+			ThemeHint:   body.ThemeHint,
+			Preferences: body.Preferences,
+		})
+		if err := invokeWorldGen(ctx, payload); err != nil {
+			log.Printf("http-games POST: invoke world-gen FAILED for session %s: %v (game still created)", sessionID, err)
+		} else {
+			log.Printf("http-games POST: world-gen invoked for session %s", sessionID)
+		}
 	} else {
-		log.Printf("http-games POST: world-gen invoked for session %s", sessionID)
+		ready = true
+		log.Printf("http-games POST: campaign bootstrap complete for session %s campaign=%s", sessionID, selectedCampaign.ID)
 	}
 
-	return jsonResponse(201, map[string]any{
+	resp := map[string]any{
 		"session_id": sessionID,
-		"ready":      false,
-	}), nil
+		"ready":      ready,
+	}
+	if selectedCampaign != nil {
+		resp["campaign_id"] = selectedCampaign.ID
+	}
+	return jsonResponse(201, resp), nil
 }
 
 func handleGetGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, userID string) (events.APIGatewayV2HTTPResponse, error) {
