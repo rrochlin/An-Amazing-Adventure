@@ -464,6 +464,7 @@ func TestBuildCampaignStateView(t *testing.T) {
 		ActiveNodeID:     "intro",
 		CurrentObjective: "Finish Intro",
 		ActiveObjectives: []game.ObjectiveState{{ID: "finish_intro", Status: "active", VisibleText: "Finish Intro"}},
+		ActiveDialogue:   &game.DialogueRuntimeState{AssetID: "intro_dialogue", CurrentNode: "Intro", AwaitingChoice: true},
 	}
 	view := g.BuildCampaignStateView()
 	if view == nil {
@@ -474,6 +475,9 @@ func TestBuildCampaignStateView(t *testing.T) {
 	}
 	if len(view.ActiveObjectives) != 1 || view.ActiveObjectives[0].ID != "finish_intro" {
 		t.Fatalf("expected active objectives in view, got %#v", view)
+	}
+	if view.ActiveDialogue == nil || view.ActiveDialogue.AssetID != "intro_dialogue" {
+		t.Fatalf("expected active dialogue in view, got %#v", view)
 	}
 }
 

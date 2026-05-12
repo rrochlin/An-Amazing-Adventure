@@ -83,6 +83,33 @@ func TestAdvanceCampaign_TransitionsAndUpdatesObjectives(t *testing.T) {
 	}
 }
 
+func TestBootstrapGame_SeedsOpeningDialogueLine(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+	_, history, err := campaigns.BootstrapGame(
+		def,
+		"session-bootstrap",
+		"user-1",
+		game.NewCharacter("Hero", ""),
+		game.CharacterCreationData{Name: "Hero", RaceID: "human", ClassID: "fighter"},
+	)
+	if err != nil {
+		t.Fatalf("bootstrap game: %v", err)
+	}
+	if len(history) < 2 {
+		t.Fatalf("expected opening text and dialogue line, got %#v", history)
+	}
+	if history[1].Content != "Welcome to the test campaign." {
+		t.Fatalf("expected seeded dialogue line, got %#v", history)
+	}
+}
+
 func TestAdvanceCampaign_AppliesCounterAndLabelConditions(t *testing.T) {
 	reg, err := campaigns.LoadEmbeddedRegistry()
 	if err != nil {
@@ -127,6 +154,42 @@ func TestAdvanceCampaign_AppliesCounterAndLabelConditions(t *testing.T) {
 	}
 	if statuses["track_target_party"] != "active" {
 		t.Fatalf("expected track_target_party active, got %#v", statuses)
+	}
+}
+
+func TestAdvanceCampaign_ReturnsDialogueTextForEnteredHybridNode(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	def, ok := reg.Get("lichs-labyrinth")
+	if !ok {
+		t.Fatal("expected lichs-labyrinth campaign")
+	}
+	g := game.NewGame("session-3", "user-1")
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:      def.ID,
+		CampaignVersion: def.Version,
+		ActiveNodeID:    "camp_briefing",
+		BoolFlags:       map[string]bool{"briefing_complete": true},
+		Labels:          map[string]string{},
+		Counters:        map[string]int{},
+		ActorStates:     map[string]game.ActorRuntimeState{},
+		CompanionStates: map[string]game.CompanionState{},
+	}
+
+	result, err := campaigns.AdvanceCampaign(def, g)
+	if err != nil {
+		t.Fatalf("advance campaign: %v", err)
+	}
+	if !result.Transitioned || result.ToNodeID != "choose_entry_plan" {
+		t.Fatalf("expected transition to choose_entry_plan, got %#v", result)
+	}
+	if result.DialogueText != "Choose your route into the labyrinth." {
+		t.Fatalf("expected dialogue text from entered node, got %q", result.DialogueText)
+	}
+	if g.Campaign.ActiveDialogue == nil || g.Campaign.ActiveDialogue.AssetID != "choose_entry_plan" {
+		t.Fatalf("expected active dialogue to be started, got %#v", g.Campaign.ActiveDialogue)
 	}
 }
 

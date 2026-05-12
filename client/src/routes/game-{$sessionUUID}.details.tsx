@@ -249,8 +249,16 @@ function GameDetailsPage() {
                             label="Current Objective"
                             value={data.campaign.current_objective}
                          />
-                         {data.campaign.active_objectives &&
-                         data.campaign.active_objectives.length > 0 ? (
+                         <DetailRow
+                            label="Dialogue Asset"
+                            value={data.campaign.active_dialogue?.asset_id}
+                         />
+                         <DetailRow
+                            label="Dialogue Node"
+                            value={data.campaign.active_dialogue?.current_node}
+                         />
+                          {data.campaign.active_objectives &&
+                          data.campaign.active_objectives.length > 0 ? (
                             <Box
                                sx={{
                                   display: 'flex',

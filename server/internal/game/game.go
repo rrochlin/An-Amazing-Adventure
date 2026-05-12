@@ -75,12 +75,19 @@ type DialogueRuntimeState struct {
 	AwaitingChoice bool              `json:"awaiting_choice,omitempty" dynamodbav:"awaiting_choice,omitempty"`
 }
 
+type DialogueStateView struct {
+	AssetID        string `json:"asset_id"`
+	CurrentNode    string `json:"current_node,omitempty"`
+	AwaitingChoice bool   `json:"awaiting_choice,omitempty"`
+}
+
 type CampaignStateView struct {
-	CampaignID       string           `json:"campaign_id"`
-	CampaignVersion  string           `json:"campaign_version"`
-	ActiveNodeID     string           `json:"active_node_id"`
-	CurrentObjective string           `json:"current_objective,omitempty"`
-	ActiveObjectives []ObjectiveState `json:"active_objectives,omitempty"`
+	CampaignID       string             `json:"campaign_id"`
+	CampaignVersion  string             `json:"campaign_version"`
+	ActiveNodeID     string             `json:"active_node_id"`
+	CurrentObjective string             `json:"current_objective,omitempty"`
+	ActiveObjectives []ObjectiveState   `json:"active_objectives,omitempty"`
+	ActiveDialogue   *DialogueStateView `json:"active_dialogue,omitempty"`
 }
 
 // Game is the in-memory representation of a live game session.
@@ -896,6 +903,18 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 		ActiveNodeID:     g.Campaign.ActiveNodeID,
 		CurrentObjective: g.Campaign.CurrentObjective,
 		ActiveObjectives: g.Campaign.ActiveObjectives,
+		ActiveDialogue:   buildDialogueStateView(g.Campaign.ActiveDialogue),
+	}
+}
+
+func buildDialogueStateView(state *DialogueRuntimeState) *DialogueStateView {
+	if state == nil {
+		return nil
+	}
+	return &DialogueStateView{
+		AssetID:        state.AssetID,
+		CurrentNode:    state.CurrentNode,
+		AwaitingChoice: state.AwaitingChoice,
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/rrochlin/an-amazing-adventure/internal/dialogue"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
@@ -18,6 +19,7 @@ type TransitionResult struct {
 	Transitioned bool
 	FromNodeID   string
 	ToNodeID     string
+	DialogueText string
 }
 
 func AllowedConditionSpecsForNode(node StoryNode) []AllowedConditionSpec {
@@ -128,6 +130,21 @@ func FilterConditionResolution(specs []AllowedConditionSpec, resolution Conditio
 	return filtered
 }
 
+func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
+	if def == nil || g == nil || g.Campaign == nil {
+		return "", nil
+	}
+	node, ok := def.StoryNodes[g.Campaign.ActiveNodeID]
+	if !ok {
+		return "", fmt.Errorf("active story node %q not found", g.Campaign.ActiveNodeID)
+	}
+	g.Campaign.CurrentObjective = node.ObjectiveText
+	if err := applyActions(def, g, node.OnEnter); err != nil {
+		return "", err
+	}
+	return currentDialogueOpening(def, g.Campaign), nil
+}
+
 func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, error) {
 	if def == nil || g == nil || g.Campaign == nil {
 		return TransitionResult{}, nil
@@ -152,24 +169,36 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 			if rule.NextNodeID == "" {
 				return TransitionResult{Transitioned: true, FromNodeID: fromNodeID}, nil
 			}
-			nextNode, ok := def.StoryNodes[rule.NextNodeID]
-			if !ok {
-				return TransitionResult{}, fmt.Errorf("next story node %q not found", rule.NextNodeID)
-			}
 			g.Campaign.PreviousNodeIDs = append(g.Campaign.PreviousNodeIDs, fromNodeID)
 			g.Campaign.ActiveNodeID = rule.NextNodeID
-			g.Campaign.CurrentObjective = nextNode.ObjectiveText
-			if err := applyActions(def, g, nextNode.OnEnter); err != nil {
+			dialogueText, err := EnterActiveNode(def, g)
+			if err != nil {
 				return TransitionResult{}, err
 			}
 			return TransitionResult{
 				Transitioned: true,
 				FromNodeID:   fromNodeID,
 				ToNodeID:     rule.NextNodeID,
+				DialogueText: dialogueText,
 			}, nil
 		}
 	}
 	return TransitionResult{}, nil
+}
+
+func currentDialogueOpening(def *CampaignDefinition, state *game.CampaignRuntimeState) string {
+	if def == nil || state == nil || state.ActiveDialogue == nil || state.ActiveDialogue.AssetID == "" {
+		return ""
+	}
+	asset, ok := def.DialogueAssets[state.ActiveDialogue.AssetID]
+	if !ok {
+		return ""
+	}
+	line, err := dialogue.OpeningLine(def.SourceFS, asset.Strings)
+	if err != nil {
+		return ""
+	}
+	return line
 }
 
 func conditionsMatch(def *CampaignDefinition, g *game.Game, conditions []Condition) (bool, error) {

@@ -41,12 +41,19 @@ export interface CampaignStateView {
    active_node_id: string;
    current_objective?: string;
    active_objectives?: ObjectiveStateView[];
+   active_dialogue?: DialogueStateView | null;
 }
 
 export interface ObjectiveStateView {
    id: string;
    status: string;
    visible_text?: string;
+}
+
+export interface DialogueStateView {
+   asset_id: string;
+   current_node?: string;
+   awaiting_choice?: boolean;
 }
 
 // D&D 5e mechanical stats returned in CharacterView

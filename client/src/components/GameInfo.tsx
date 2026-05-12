@@ -288,6 +288,21 @@ export const GameInfo = ({
                         Objective: {campaignState.current_objective}
                      </Typography>
                   )}
+                  {campaignState.active_dialogue && (
+                     <Box sx={{ mb: 0.75 }}>
+                        <Typography variant="body2" sx={{ mb: 0.25 }}>
+                           Dialogue Asset: {campaignState.active_dialogue.asset_id}
+                        </Typography>
+                        {campaignState.active_dialogue.current_node && (
+                           <Typography
+                              variant="body2"
+                              sx={{ color: 'text.secondary' }}
+                           >
+                              Dialogue Node: {campaignState.active_dialogue.current_node}
+                           </Typography>
+                        )}
+                     </Box>
+                  )}
                   {campaignState.active_objectives &&
                      campaignState.active_objectives.length > 0 && (
                         <Box
