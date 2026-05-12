@@ -22,6 +22,33 @@ export interface CharacterCreationData {
    preferences?: string[];
 }
 
+export interface CreateGameData extends CharacterCreationData {
+   campaign_id: string;
+}
+
+export interface CampaignManifest {
+   id: string;
+   version: string;
+   title: string;
+   premise: string;
+   description?: string;
+   tone?: string;
+}
+
+export interface CampaignStateView {
+   campaign_id: string;
+   campaign_version: string;
+   active_node_id: string;
+   current_objective?: string;
+   active_objectives?: ObjectiveStateView[];
+}
+
+export interface ObjectiveStateView {
+   id: string;
+   status: string;
+   visible_text?: string;
+}
+
 // D&D 5e mechanical stats returned in CharacterView
 export interface DnDStatsView {
    class_id: string;
@@ -142,6 +169,7 @@ export interface StateDelta {
    self?: CharacterView; // calling user's own character
    party?: CharacterView[]; // updated party member views
    updated_rooms?: Record<string, RoomView>;
+   campaign?: CampaignStateView | null;
    events?: WorldEvent[]; // player-visible world events this turn
    // new_message removed — narrative arrives via streaming frames, not state_delta
 }

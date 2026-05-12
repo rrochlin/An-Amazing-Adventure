@@ -211,8 +211,8 @@ function GameDetailsPage() {
                }}
             >
                {/* Quest */}
-               <Section title="Quest">
-                  {data.title && (
+                <Section title="Quest">
+                   {data.title && (
                      <Typography
                         variant="h5"
                         sx={{
@@ -223,11 +223,64 @@ function GameDetailsPage() {
                         {data.title}
                      </Typography>
                   )}
-                  <DetailRow label="Theme" value={data.theme} />
-                  <DetailRow label="Objective" value={data.quest_goal} />
-               </Section>
+                   <DetailRow label="Theme" value={data.theme} />
+                   <DetailRow label="Objective" value={data.quest_goal} />
+                </Section>
 
-               <Divider sx={{ my: 2, borderColor: 'rgba(201,169,98,0.15)' }} />
+                {data.campaign && (
+                   <>
+                      <Divider
+                         sx={{ my: 2, borderColor: 'rgba(201,169,98,0.15)' }}
+                      />
+                      <Section title="Campaign State">
+                         <DetailRow
+                            label="Campaign ID"
+                            value={data.campaign.campaign_id}
+                         />
+                         <DetailRow
+                            label="Version"
+                            value={data.campaign.campaign_version}
+                         />
+                         <DetailRow
+                            label="Active Node"
+                            value={data.campaign.active_node_id}
+                         />
+                         <DetailRow
+                            label="Current Objective"
+                            value={data.campaign.current_objective}
+                         />
+                         {data.campaign.active_objectives &&
+                         data.campaign.active_objectives.length > 0 ? (
+                            <Box
+                               sx={{
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  gap: 1,
+                                  mt: 0.5,
+                               }}
+                            >
+                               {data.campaign.active_objectives.map((objective) => (
+                                  <Chip
+                                     key={objective.id}
+                                     label={objective.visible_text ?? objective.id}
+                                     size="small"
+                                     color={
+                                        objective.status === 'completed'
+                                           ? 'success'
+                                           : objective.status === 'failed'
+                                             ? 'error'
+                                             : 'primary'
+                                     }
+                                     variant="outlined"
+                                  />
+                               ))}
+                            </Box>
+                         ) : null}
+                      </Section>
+                   </>
+                )}
+
+                <Divider sx={{ my: 2, borderColor: 'rgba(201,169,98,0.15)' }} />
 
                {/* Character */}
                <Section title="Character">
@@ -324,7 +377,7 @@ function GameDetailsPage() {
                         variant="body2"
                         sx={{ color: 'text.secondary', fontStyle: 'italic' }}
                      >
-                        No specific preferences set — AI chose freely.
+                        No specific preferences were saved for this session.
                      </Typography>
                   )}
                </Section>

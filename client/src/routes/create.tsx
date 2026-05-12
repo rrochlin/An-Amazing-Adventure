@@ -25,10 +25,13 @@ import {
    TextField,
    Typography,
 } from '@mui/material';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { isAuthenticated } from '@/services/auth.service';
-import { CreateGame, JoinCharacter } from '@/services/api.game';
-import type { CharacterCreationData } from '@/types/types';
+import { CreateGame, JoinCharacter, ListCampaigns } from '@/services/api.game';
+import type {
+   CampaignManifest,
+   CreateGameData,
+} from '@/types/types';
 import { z } from 'zod';
 
 // ─── D&D Static Data ────────────────────────────────────────────────────────
@@ -305,17 +308,6 @@ function abilityModifier(score: number): string {
    return mod >= 0 ? `+${mod}` : `${mod}`;
 }
 
-const PREFERENCE_OPTIONS = [
-   { label: 'Combat', value: 'combat' },
-   { label: 'Puzzles', value: 'puzzles' },
-   { label: 'Dialog', value: 'dialog' },
-   { label: 'Exploration', value: 'exploration' },
-   { label: 'Chance', value: 'chance' },
-   { label: 'Stealth', value: 'stealth' },
-   { label: 'Crafting', value: 'crafting' },
-   { label: 'Mystery', value: 'mystery' },
-];
-
 // ─── Steps ──────────────────────────────────────────────────────────────────
 
 const CREATE_STEPS = [
@@ -324,7 +316,7 @@ const CREATE_STEPS = [
    'Class',
    'Ability Scores',
    'Skills',
-   'Adventure',
+   'Campaign',
    'Review',
 ];
 const JOIN_STEPS = [
@@ -343,7 +335,7 @@ const STEP = {
    CLASS: 2,
    ABILITIES: 3,
    SKILLS: 4,
-   ADVENTURE_OR_REVIEW: 5, // "Adventure" in create mode, "Review" in join mode
+   CAMPAIGN_OR_REVIEW: 5, // "Campaign" in create mode, "Review" in join mode
    REVIEW: 6, // only in create mode
 } as const;
 
@@ -400,14 +392,53 @@ export function CreateRoute() {
    // Step 4 — Skills
    const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
 
-   // Step 5 — Adventure Preferences (create mode only)
-   const [preferences, setPreferences] = useState<string[]>([]);
-   const [themeHint, setThemeHint] = useState('');
+   // Step 5 — Campaign selection (create mode only)
+   const [availableCampaigns, setAvailableCampaigns] = useState<
+      CampaignManifest[]
+   >([]);
+   const [selectedCampaignID, setSelectedCampaignID] = useState('');
+   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
+   const [campaignLoadError, setCampaignLoadError] = useState<string | null>(
+      null,
+   );
 
    // ── Derived ──
    const selectedRace = RACES.find((r) => r.id === raceID);
    const selectedClass = CLASSES.find((c) => c.id === classID);
+   const selectedCampaign = availableCampaigns.find(
+      (campaign) => campaign.id === selectedCampaignID,
+   );
    const racialBonuses = getRacialBonuses(raceID, subraceID);
+
+   useEffect(() => {
+      if (isJoinMode) return;
+
+      let cancelled = false;
+      setIsLoadingCampaigns(true);
+      setCampaignLoadError(null);
+
+      ListCampaigns()
+         .then((response) => {
+            if (cancelled) return;
+            setAvailableCampaigns(response.campaigns);
+         })
+         .catch((e: unknown) => {
+            if (cancelled) return;
+            const msg =
+               e instanceof Error
+                  ? e.message
+                  : 'Failed to load campaigns. You can still create a procedural adventure.';
+            setCampaignLoadError(msg);
+         })
+         .finally(() => {
+            if (cancelled) return;
+            setIsLoadingCampaigns(false);
+         });
+
+      return () => {
+         cancelled = true;
+      };
+   }, [isJoinMode]);
 
    // Final scores (base + racial bonus) used in Review step
    const finalScores = ABILITY_KEYS.reduce<Record<AbilityKey, number>>(
@@ -472,14 +503,6 @@ export function CreateRoute() {
       });
    };
 
-   const togglePreference = (value: string) => {
-      setPreferences((prev) =>
-         prev.includes(value)
-            ? prev.filter((p) => p !== value)
-            : [...prev, value],
-      );
-   };
-
    const handleNext = () => {
       setStep((s) => s + 1);
       setError(null);
@@ -490,13 +513,13 @@ export function CreateRoute() {
    };
 
    // ── Determine if current step is the last action step before submit ──
-   // In join mode: step 5 is Review (no Adventure step)
-   // In create mode: step 5 is Adventure, step 6 is Review
+   // In join mode: step 5 is Review (no Campaign step)
+   // In create mode: step 5 is Campaign, step 6 is Review
    const isReviewStep = isJoinMode ? step === 5 : step === 6;
-   const isAdventureStep = !isJoinMode && step === 5;
+   const isCampaignStep = !isJoinMode && step === 5;
 
    // ── Submit ──
-   const buildPayload = (): CharacterCreationData => ({
+   const buildPayload = (): CreateGameData => ({
       name: playerName.trim(),
       backstory: backstory.trim() || undefined,
       race_id: raceID,
@@ -504,8 +527,7 @@ export function CreateRoute() {
       class_id: classID,
       ability_scores: abilityScores,
       selected_skills: selectedSkills,
-      theme_hint: themeHint.trim() || undefined,
-      preferences: preferences.length > 0 ? preferences : undefined,
+      campaign_id: selectedCampaignID,
    });
 
    const handleSubmit = async () => {
@@ -1149,30 +1171,30 @@ export function CreateRoute() {
 
                   {navButtons(
                      selectedClass
-                        ? selectedSkills.length === selectedClass.skillCount
-                        : false,
-                     isJoinMode ? 'Next: Review' : 'Next: Adventure',
-                  )}
-               </Box>
-            )}
+                         ? selectedSkills.length === selectedClass.skillCount
+                         : false,
+                     isJoinMode ? 'Next: Review' : 'Next: Campaign',
+                   )}
+                </Box>
+             )}
 
-            {/* ── Step 5: Adventure Preferences (create mode only) ── */}
-            {isAdventureStep && (
-               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <Typography
-                     variant="body2"
+             {/* ── Step 5: Campaign Selection (create mode only) ── */}
+             {isCampaignStep && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                   <Typography
+                      variant="body2"
                      sx={{
                         color: 'text.secondary',
                         fontStyle: 'italic',
                         fontFamily: '"Crimson Text", "Georgia", serif',
                         fontSize: '1rem',
-                     }}
-                  >
-                     Shape the world you&apos;ll explore. All optional — the AI
-                     fills in the rest.
-                  </Typography>
+                      }}
+                   >
+                     Choose which authored campaign to enter. The game selector
+                     now launches premade campaigns only.
+                   </Typography>
 
-                  <Box>
+                   <Box>
                      <Typography
                         variant="subtitle2"
                         sx={{
@@ -1181,45 +1203,84 @@ export function CreateRoute() {
                            letterSpacing: '0.08em',
                         }}
                      >
-                        Preferred Gameplay
+                        Campaign
                      </Typography>
-                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {PREFERENCE_OPTIONS.map((opt) => (
-                           <Chip
-                              key={opt.value}
-                              label={opt.label}
-                              clickable
-                              onClick={() => togglePreference(opt.value)}
-                              color={
-                                 preferences.includes(opt.value)
-                                    ? 'primary'
-                                    : 'default'
-                              }
-                              variant={
-                                 preferences.includes(opt.value)
-                                    ? 'filled'
-                                    : 'outlined'
-                              }
-                              sx={{ fontSize: '0.9rem', py: 0.5 }}
-                           />
-                        ))}
-                     </Box>
+                     <FormControl fullWidth>
+                        <InputLabel id="campaign-select-label">
+                           Campaign
+                        </InputLabel>
+                        <Select
+                           labelId="campaign-select-label"
+                           label="Campaign"
+                           value={selectedCampaignID}
+                           onChange={(e) =>
+                              setSelectedCampaignID(e.target.value)
+                           }
+                           disabled={isLoadingCampaigns}
+                        >
+                           <MenuItem value="" disabled>
+                              Select a campaign
+                           </MenuItem>
+                           {availableCampaigns.map((campaign) => (
+                              <MenuItem key={campaign.id} value={campaign.id}>
+                                 {campaign.title}
+                              </MenuItem>
+                           ))}
+                        </Select>
+                        <FormHelperText>
+                           {isLoadingCampaigns
+                              ? 'Loading available campaigns...'
+                              : availableCampaigns.length === 0
+                                ? 'No campaigns are currently available.'
+                                : 'Pick one of the available premade campaigns.'}
+                        </FormHelperText>
+                     </FormControl>
                   </Box>
 
-                  <TextField
-                     label="World Tone / Theme Hint"
-                     value={themeHint}
-                     onChange={(e) => setThemeHint(e.target.value)}
-                     fullWidth
-                     helperText='e.g. "gritty noir", "high fantasy epic", "light-hearted comedy", "cosmic horror"'
-                     slotProps={{
-                        htmlInput: { maxLength: 200, autoComplete: 'off' },
-                     }}
-                  />
+                  {campaignLoadError && (
+                     <Alert severity="error">{campaignLoadError}</Alert>
+                  )}
 
-                  {navButtons(true, 'Next: Review')}
-               </Box>
-            )}
+                  {selectedCampaign && (
+                     <Paper
+                        variant="outlined"
+                        sx={{
+                           p: 2,
+                           background: 'rgba(106, 78, 157, 0.07)',
+                           borderColor: 'rgba(201, 169, 98, 0.3)',
+                        }}
+                     >
+                        <Typography
+                           variant="h6"
+                           sx={{ fontFamily: '"Cinzel", serif', mb: 0.5 }}
+                        >
+                           {selectedCampaign.title}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                           {selectedCampaign.premise}
+                        </Typography>
+                        {selectedCampaign.description && (
+                           <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mb: selectedCampaign.tone ? 1 : 0 }}
+                           >
+                              {selectedCampaign.description}
+                           </Typography>
+                        )}
+                        {selectedCampaign.tone && (
+                           <Chip
+                              label={`Tone: ${selectedCampaign.tone}`}
+                              size="small"
+                              variant="outlined"
+                           />
+                        )}
+                     </Paper>
+                  )}
+
+                  {navButtons(!!selectedCampaignID, 'Next: Review')}
+                </Box>
+             )}
 
             {/* ── Review Step ── */}
             {isReviewStep && selectedClass && (
@@ -1463,8 +1524,8 @@ export function CreateRoute() {
                      ))}
                   </Box>
 
-                  {/* Adventure preferences (create mode only) */}
-                  {!isJoinMode && (themeHint || preferences.length > 0) && (
+                  {/* Campaign summary (create mode only) */}
+                  {!isJoinMode && selectedCampaign && (
                      <Box>
                         <Divider sx={{ mb: 1.5 }} />
                         <Typography
@@ -1475,27 +1536,14 @@ export function CreateRoute() {
                               letterSpacing: '0.08em',
                            }}
                         >
-                           Adventure Preferences
+                           Authored Campaign
                         </Typography>
-                        {themeHint && (
-                           <Typography variant="body2">
-                              Theme: {themeHint}
-                           </Typography>
-                        )}
-                        {preferences.length > 0 && (
-                           <Box
-                              sx={{
-                                 display: 'flex',
-                                 gap: 0.5,
-                                 mt: 0.5,
-                                 flexWrap: 'wrap',
-                              }}
-                           >
-                              {preferences.map((p) => (
-                                 <Chip key={p} label={p} size="small" />
-                              ))}
-                           </Box>
-                        )}
+                        <Typography variant="body2">
+                           {selectedCampaign.title}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                           {selectedCampaign.premise}
+                        </Typography>
                      </Box>
                   )}
 

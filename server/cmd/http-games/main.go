@@ -41,7 +41,7 @@ type worldGenPayload struct {
 }
 
 type createGameRequest struct {
-	CampaignID string `json:"campaign_id,omitempty"`
+	CampaignID string `json:"campaign_id"`
 	game.CharacterCreationData
 }
 
@@ -209,19 +209,18 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	if err := json.Unmarshal([]byte(req.Body), &body); err != nil {
 		return jsonResponse(400, map[string]string{"error": "invalid request body"}), nil
 	}
+	if body.CampaignID == "" {
+		return jsonResponse(400, map[string]string{"error": "campaign_id is required"}), nil
+	}
 
-	var selectedCampaign *campaigns.CampaignDefinition
-	if body.CampaignID != "" {
-		reg, err := getCampaignRegistry()
-		if err != nil {
-			log.Printf("http-games POST: load campaigns: %v", err)
-			return serverError(), nil
-		}
-		var ok bool
-		selectedCampaign, ok = reg.Get(body.CampaignID)
-		if !ok {
-			return jsonResponse(400, map[string]string{"error": fmt.Sprintf("unknown campaign_id %q", body.CampaignID)}), nil
-		}
+	reg, err := getCampaignRegistry()
+	if err != nil {
+		log.Printf("http-games POST: load campaigns: %v", err)
+		return serverError(), nil
+	}
+	selectedCampaign, ok := reg.Get(body.CampaignID)
+	if !ok {
+		return jsonResponse(400, map[string]string{"error": fmt.Sprintf("unknown campaign_id %q", body.CampaignID)}), nil
 	}
 
 	dbClient, err := db.New(ctx)
@@ -289,19 +288,16 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		g.SetDnDCharacter(userID, dndChar)
 	}
 
-	history := []game.ChatMessage(nil)
-	if selectedCampaign != nil {
-		bootstrapped, openingHistory, bootErr := campaigns.BootstrapGame(selectedCampaign, sessionID, userID, player, body.CharacterCreationData)
-		if bootErr != nil {
-			log.Printf("http-games POST: BootstrapGame error: %v", bootErr)
-			return serverError(), nil
-		}
-		g = bootstrapped
-		history = openingHistory
+	bootstrapped, openingHistory, bootErr := campaigns.BootstrapGame(selectedCampaign, sessionID, userID, player, body.CharacterCreationData)
+	if bootErr != nil {
+		log.Printf("http-games POST: BootstrapGame error: %v", bootErr)
+		return serverError(), nil
 	}
+	g = bootstrapped
+	history := openingHistory
 
-	// Save the initial game record. Campaign-backed sessions are ready immediately;
-	// legacy sessions remain not-ready until world-gen completes.
+	// Save the initial authored campaign session. Campaign-backed sessions are
+	// ready immediately after bootstrap.
 	saved := g.ToSaveState(nil, history)
 	if err := dbClient.PutGame(ctx, saved); err != nil {
 		log.Printf("create game put: %v", err)
@@ -318,34 +314,12 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		log.Printf("create game PutMembership (non-fatal): %v", err)
 	}
 
-	ready := false
-	if selectedCampaign == nil {
-		log.Printf("http-games POST: invoking world-gen for session %s", sessionID)
-		payload, _ := json.Marshal(worldGenPayload{
-			SessionID:      sessionID,
-			UserID:         userID,
-			CreationParams: body.CharacterCreationData,
-			// Legacy fields for backward-compat
-			PlayerName:  playerName,
-			ThemeHint:   body.ThemeHint,
-			Preferences: body.Preferences,
-		})
-		if err := invokeWorldGen(ctx, payload); err != nil {
-			log.Printf("http-games POST: invoke world-gen FAILED for session %s: %v (game still created)", sessionID, err)
-		} else {
-			log.Printf("http-games POST: world-gen invoked for session %s", sessionID)
-		}
-	} else {
-		ready = true
-		log.Printf("http-games POST: campaign bootstrap complete for session %s campaign=%s", sessionID, selectedCampaign.ID)
-	}
+	log.Printf("http-games POST: campaign bootstrap complete for session %s campaign=%s", sessionID, selectedCampaign.ID)
 
 	resp := map[string]any{
-		"session_id": sessionID,
-		"ready":      ready,
-	}
-	if selectedCampaign != nil {
-		resp["campaign_id"] = selectedCampaign.ID
+		"session_id":  sessionID,
+		"ready":       true,
+		"campaign_id": selectedCampaign.ID,
 	}
 	return jsonResponse(201, resp), nil
 }
@@ -505,6 +479,9 @@ func handleRetryWorldGen(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return jsonResponse(403, map[string]string{"error": "only the session owner can retry world generation"}), nil
 	}
 
+	if saveState.Campaign != nil {
+		return jsonResponse(409, map[string]string{"error": "campaign sessions do not use world generation"}), nil
+	}
 	// Refuse if the game is already ready — nothing to retry.
 	if saveState.Ready {
 		return jsonResponse(409, map[string]string{"error": "game is already ready"}), nil

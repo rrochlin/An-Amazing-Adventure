@@ -46,10 +46,10 @@ export function useGameSocket({
       setStreaming,
       appendStreamChunk,
       finalizeStreamingMessage,
-      applyDelta,
-      attachEventsToLastMessage,
-      setGameState,
-      appendWorldGenLog,
+       applyDelta,
+       attachEventsToLastMessage,
+       setGameState,
+       appendWorldGenLog,
       setWorldGenReady,
    } = useGameStore();
 
@@ -75,8 +75,8 @@ export function useGameSocket({
                break;
 
             case 'game_state_update':
-               setGameState(frame.payload as GameStateView);
-               break;
+                setGameState(frame.payload as GameStateView);
+                break;
 
             case 'state_delta': {
                const delta = frame.payload as StateDelta;
@@ -117,9 +117,9 @@ export function useGameSocket({
          appendStreamChunk,
          applyDelta,
          attachEventsToLastMessage,
-         appendWorldGenLog,
-         finalizeStreamingMessage,
-         setGameState,
+          appendWorldGenLog,
+          finalizeStreamingMessage,
+          setGameState,
          setStreaming,
          setWsError,
          setWorldGenReady,

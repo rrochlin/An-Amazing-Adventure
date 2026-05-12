@@ -5,6 +5,7 @@
  */
 import { create } from 'zustand';
 import type {
+   CampaignStateView,
    GameStateView,
    ChatMessage,
    StateDelta,
@@ -16,6 +17,7 @@ type WsStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 interface GameStore {
    // State
    gameState: GameStateView | null;
+   campaignState: CampaignStateView | null;
    chatMessages: ChatMessage[];
    streamingMessage: string; // narrative being streamed, not yet committed
    isStreaming: boolean;
@@ -29,6 +31,7 @@ interface GameStore {
 
    // Actions
    setGameState: (state: GameStateView) => void;
+   setCampaignState: (state: CampaignStateView | null) => void;
    applyDelta: (delta: StateDelta) => void;
    attachEventsToLastMessage: (events: WorldEvent[]) => void;
    appendStreamChunk: (chunk: string) => void;
@@ -44,6 +47,7 @@ interface GameStore {
 
 const initialState = {
    gameState: null,
+   campaignState: null,
    chatMessages: [],
    streamingMessage: '',
    isStreaming: false,
@@ -57,7 +61,7 @@ const initialState = {
 export const useGameStore = create<GameStore>((set, get) => ({
    ...initialState,
 
-   setGameState: (state) => {
+    setGameState: (state) => {
       // Seed visited rooms from the starting room and its direct connections
       const seeded = new Set<string>();
       seeded.add(state.current_room.id);
@@ -70,16 +74,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
          self: state.self ?? state.player,
          party: state.party ?? [],
       };
-      set({
-         gameState: normalised,
-         chatMessages: state.chat_history ?? [],
-         visitedRooms: seeded,
-      });
-   },
+       set({
+          gameState: normalised,
+          chatMessages: state.chat_history ?? [],
+          visitedRooms: seeded,
+       });
+    },
 
-   applyDelta: (delta) => {
-      const { gameState, visitedRooms } = get();
-      if (!gameState) return;
+    setCampaignState: (state) => set({ campaignState: state }),
+
+    applyDelta: (delta) => {
+       const { gameState, visitedRooms } = get();
+       if (!gameState) return;
 
       const updated: GameStateView = { ...gameState };
 
@@ -106,11 +112,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
             updated.self = delta.player;
          }
          if (delta.party) updated.party = delta.party;
-         if (delta.updated_rooms)
-            updated.rooms = { ...updated.rooms, ...delta.updated_rooms };
-         set({ gameState: updated });
-         return;
-      }
+          if (delta.updated_rooms)
+             updated.rooms = { ...updated.rooms, ...delta.updated_rooms };
+          set({ gameState: updated, campaignState: delta.campaign ?? get().campaignState });
+          return;
+       }
       if (delta.self) {
          updated.self = delta.self;
          updated.player = delta.self; // keep backward compat
@@ -128,8 +134,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       // new_message intentionally not handled here — narrative text arrives via
       // narrative_chunk / narrative_end streaming frames. Adding it here caused
       // duplicate chat messages (UI-3 fix).
-      set({ gameState: updated });
-   },
+       set({ gameState: updated, campaignState: delta.campaign ?? get().campaignState });
+    },
 
    attachEventsToLastMessage: (events) => {
       if (!events.length) return;

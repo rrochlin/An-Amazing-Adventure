@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
@@ -72,6 +73,11 @@ type EngineerResult struct {
 	Events    []game.WorldEvent    // player-visible world events
 	Mutations []game.MutationEntry // audit log entries
 	Tokens    TokenUsage           // token usage for the Engineer call
+}
+
+type CampaignConditionResolutionResult struct {
+	Resolution campaigns.ConditionResolution
+	Tokens     TokenUsage
 }
 
 // NarrateStream runs a single narrator turn with streaming.
@@ -326,6 +332,105 @@ func (c *Client) EngineerScan(
 		result.Tokens.InputTokens, result.Tokens.OutputTokens)
 
 	return result, nil
+}
+
+func (c *Client) ResolveCampaignConditions(
+	ctx context.Context,
+	g *game.Game,
+	def *campaigns.CampaignDefinition,
+	playerInput string,
+	narrative string,
+) (CampaignConditionResolutionResult, error) {
+	if g == nil || g.Campaign == nil || def == nil {
+		return CampaignConditionResolutionResult{}, nil
+	}
+	node, ok := def.StoryNodes[g.Campaign.ActiveNodeID]
+	if !ok {
+		return CampaignConditionResolutionResult{}, fmt.Errorf("active story node %q not found", g.Campaign.ActiveNodeID)
+	}
+	allowed := campaigns.AllowedConditionSpecsForNode(node)
+	if len(allowed) == 0 {
+		return CampaignConditionResolutionResult{}, nil
+	}
+	allowedJSON, _ := json.Marshal(allowed)
+	stateJSON, _ := json.Marshal(map[string]any{
+		"bool_flags": g.Campaign.BoolFlags,
+		"labels":     g.Campaign.Labels,
+		"counters":   g.Campaign.Counters,
+	})
+	userPrompt := fmt.Sprintf(`Campaign: %s
+Node ID: %s
+Node title: %s
+Node summary: %s
+Current objective: %s
+Allowed condition specs: %s
+Current campaign state: %s
+Latest player input: %q
+Latest assistant narrative: %q`,
+		def.ID,
+		g.Campaign.ActiveNodeID,
+		node.Title,
+		node.Summary,
+		node.ObjectiveText,
+		string(allowedJSON),
+		string(stateJSON),
+		playerInput,
+		narrative,
+	)
+	resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
+		ModelId: aws.String(ModelSubAgent),
+		System: []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: `You are a deterministic campaign condition resolver.
+Use only the latest player input and latest assistant narrative to decide whether authored campaign conditions were satisfied this turn.
+Return strict JSON with exactly these top-level keys: bool_flags, labels, counters.
+Only include keys that appear in the allowed condition specs.
+For boolean flags, set true only when the turn clearly establishes that authored condition.
+For labels, only emit one of the allowed values.
+For counters, emit integers only when the turn clearly advances a tracked quantity.
+Do not invent keys, branches, dialogue, or explanations.`}},
+		Messages: []types.Message{{
+			Role:    types.ConversationRoleUser,
+			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: userPrompt}},
+		}},
+		InferenceConfig: &types.InferenceConfiguration{
+			MaxTokens:   aws.Int32(512),
+			Temperature: aws.Float32(0.0),
+		},
+	})
+	if err != nil {
+		return CampaignConditionResolutionResult{}, fmt.Errorf("resolve campaign conditions: %w", err)
+	}
+	result := CampaignConditionResolutionResult{}
+	if resp.Usage != nil {
+		result.Tokens.InputTokens = int(aws.ToInt32(resp.Usage.InputTokens))
+		result.Tokens.OutputTokens = int(aws.ToInt32(resp.Usage.OutputTokens))
+	}
+	msg, ok := resp.Output.(*types.ConverseOutputMemberMessage)
+	if !ok {
+		return result, fmt.Errorf("resolve campaign conditions: missing message output")
+	}
+	var text strings.Builder
+	for _, block := range msg.Value.Content {
+		if b, ok := block.(*types.ContentBlockMemberText); ok {
+			text.WriteString(b.Value)
+		}
+	}
+	raw := extractJSONObject(text.String())
+	if raw == "" {
+		return result, fmt.Errorf("resolve campaign conditions: no JSON object in %q", text.String())
+	}
+	if err := json.Unmarshal([]byte(raw), &result.Resolution); err != nil {
+		return result, fmt.Errorf("resolve campaign conditions: parse JSON: %w", err)
+	}
+	return result, nil
+}
+
+func extractJSONObject(raw string) string {
+	start := strings.Index(raw, "{")
+	end := strings.LastIndex(raw, "}")
+	if start == -1 || end == -1 || end < start {
+		return ""
+	}
+	return raw[start : end+1]
 }
 
 // engineerSystemPrompt returns the system instructions for the Engineer.

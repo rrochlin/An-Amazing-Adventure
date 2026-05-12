@@ -18,6 +18,7 @@ vi.mock('@/services/auth.service', () => ({
 import * as apiService from '@/services/api.service';
 import {
    ListGames,
+   ListCampaigns,
    CreateGame,
    LoadGame,
    DeleteGame,
@@ -47,10 +48,11 @@ describe('ListGames', () => {
 describe('CreateGame', () => {
    it('calls POST api/games with D&D creation params and returns session data', async () => {
       mockPost.mockResolvedValueOnce({
-         data: { session_id: 'sess-1', ready: false },
+         data: { session_id: 'sess-1', ready: true, campaign_id: 'test' },
          status: 201,
       });
       const params = {
+         campaign_id: 'test',
          name: 'Legolas',
          race_id: 'elf',
          subrace_id: 'high-elf',
@@ -68,15 +70,16 @@ describe('CreateGame', () => {
       const result = await CreateGame(params);
       expect(mockPost).toHaveBeenCalledWith('api/games', params);
       expect(result.session_id).toBe('sess-1');
-      expect(result.ready).toBe(false);
-   });
+      expect(result.ready).toBe(true);
+    });
 
-   it('calls POST api/games with optional world preferences', async () => {
+   it('calls POST api/games with authored campaign payload and optional backstory', async () => {
       mockPost.mockResolvedValueOnce({
-         data: { session_id: 'sess-2', ready: false },
+         data: { session_id: 'sess-2', ready: true, campaign_id: 'lichs-labyrinth' },
          status: 201,
       });
       const params = {
+         campaign_id: 'lichs-labyrinth',
          name: 'Aria',
          race_id: 'half-orc',
          class_id: 'barbarian',
@@ -89,12 +92,60 @@ describe('CreateGame', () => {
             cha: 8,
          },
          selected_skills: ['athletics', 'intimidation'],
-         theme_hint: 'gritty noir',
-         preferences: ['stealth', 'mystery'],
+         backstory: 'A scarred veteran looking for redemption.',
       };
       const result = await CreateGame(params);
       expect(mockPost).toHaveBeenCalledWith('api/games', params);
       expect(result.session_id).toBe('sess-2');
+      expect(result.campaign_id).toBe('lichs-labyrinth');
+   });
+
+   it('calls POST api/games with an authored campaign id', async () => {
+      mockPost.mockResolvedValueOnce({
+         data: { session_id: 'sess-3', ready: true, campaign_id: 'test' },
+         status: 201,
+      });
+      const params = {
+         name: 'Borin',
+         race_id: 'human',
+         class_id: 'fighter',
+         ability_scores: {
+            str: 15,
+            dex: 14,
+            con: 13,
+            int: 12,
+            wis: 10,
+            cha: 8,
+         },
+         selected_skills: ['athletics', 'history'],
+         campaign_id: 'test',
+      };
+      const result = await CreateGame(params);
+      expect(mockPost).toHaveBeenCalledWith('api/games', params);
+      expect(result.campaign_id).toBe('test');
+      expect(result.ready).toBe(true);
+   });
+});
+
+describe('ListCampaigns', () => {
+   it('calls GET api/campaigns and returns the manifest list', async () => {
+      mockGet.mockResolvedValueOnce({
+         data: {
+            campaigns: [
+               {
+                  id: 'test',
+                  version: '1',
+                  title: 'Test Campaign',
+                  premise: 'A tiny authored path.',
+               },
+            ],
+         },
+         status: 200,
+      });
+      const result = await ListCampaigns();
+      expect(mockGet).toHaveBeenCalledWith('api/campaigns');
+      expect(result.campaigns).toHaveLength(1);
+      expect(result.campaigns[0]?.id).toBe('test');
    });
 });
 
