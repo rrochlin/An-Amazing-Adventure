@@ -1,0 +1,533 @@
+{
+  "id": "lichs-labyrinth",
+  "version": "1",
+  "title": "Lich's Labyrinth",
+  "premise": "You are part of a mercenary band hired to ambush a rival adventuring party delving into the Lich's Labyrinth.",
+  "description": "A one-shot dark fantasy pursuit campaign focused on timing, infiltration, and an authored ambush arc.",
+  "tone": "dark-fantasy",
+  "character_creation": {
+    "use_standard_creator": true,
+    "allowed_classes": ["fighter", "barbarian", "monk"],
+    "allowed_races": ["human", "half-orc", "dwarf", "tiefling"],
+    "allowed_subraces": ["hill-dwarf", "mountain-dwarf"],
+    "locked_background_prompt": "You are a mercenary hired for a morally dubious contract against a rival adventuring band.",
+    "theme_hint_mode": "disabled",
+    "preference_mode": "disabled"
+  },
+  "player_role": {
+    "name": "Mercenary Operative",
+    "premise": "You are one of four sellswords tasked with stopping a rival party inside a lethal dungeon.",
+    "role_summary": "Clever, ruthless, and under pressure to turn a dirty contract into a survivable victory."
+  },
+  "party": {
+    "max_human_players": 1,
+    "starting_room_id": "camp",
+    "companion_ids": ["doren", "amalia", "rowan"]
+  },
+  "map": {
+    "rooms": {
+      "camp": {
+        "name": "Mercenary Camp",
+        "floor": 0,
+        "type": "briefing",
+        "tags": ["safe", "briefing"],
+        "connections": {
+          "east": "ridge_overlook"
+        }
+      },
+      "ridge_overlook": {
+        "name": "Ridge Overlook",
+        "floor": 0,
+        "type": "approach",
+        "tags": ["observation"],
+        "connections": {
+          "west": "camp",
+          "south": "f1_target_entry",
+          "east": "f1_hidden_entry",
+          "north": "f1_novice_entry"
+        }
+      },
+      "f1_target_entry": {
+        "name": "Target Entrance",
+        "floor": 1,
+        "type": "entrance",
+        "tags": ["entry", "target-route"],
+        "connections": {
+          "north": "ridge_overlook",
+          "down": "f1_antechamber"
+        }
+      },
+      "f1_novice_entry": {
+        "name": "Novice Entrance",
+        "floor": 1,
+        "type": "entrance",
+        "tags": ["entry", "novice-route"],
+        "connections": {
+          "south": "ridge_overlook",
+          "down": "f1_beginner_halls"
+        }
+      },
+      "f1_hidden_entry": {
+        "name": "Hidden Entrance",
+        "floor": 1,
+        "type": "entrance",
+        "tags": ["entry", "stealth-route"],
+        "connections": {
+          "west": "ridge_overlook",
+          "down": "f1_shadow_passage"
+        }
+      },
+      "f1_antechamber": {
+        "name": "Antechamber of Ash",
+        "floor": 1,
+        "type": "chamber",
+        "tags": ["combat", "target-route"],
+        "connections": {
+          "up": "f1_target_entry",
+          "east": "f1_intersection"
+        }
+      },
+      "f1_beginner_halls": {
+        "name": "Beginner Halls",
+        "floor": 1,
+        "type": "corridor",
+        "tags": ["novice-route"],
+        "connections": {
+          "up": "f1_novice_entry",
+          "east": "f1_intersection"
+        }
+      },
+      "f1_shadow_passage": {
+        "name": "Shadow Passage",
+        "floor": 1,
+        "type": "corridor",
+        "tags": ["stealth-route"],
+        "connections": {
+          "up": "f1_hidden_entry",
+          "east": "f1_intersection"
+        }
+      },
+      "f1_intersection": {
+        "name": "Fork of the Unworthy",
+        "floor": 1,
+        "type": "junction",
+        "tags": ["chokepoint", "observation", "novice-intersection"],
+        "connections": {
+          "west": "f1_antechamber",
+          "north": "f1_beginner_halls",
+          "south": "f1_shadow_passage",
+          "east": "f1_miniboss"
+        }
+      },
+      "f1_miniboss": {
+        "name": "Chapel of Split Bone",
+        "floor": 1,
+        "type": "boss",
+        "tags": ["boss", "chokepoint"],
+        "connections": {
+          "west": "f1_intersection",
+          "down": "f2_staging"
+        }
+      },
+      "f2_staging": {
+        "name": "Flooded Descent",
+        "floor": 2,
+        "type": "corridor",
+        "tags": ["transition"],
+        "connections": {
+          "up": "f1_miniboss",
+          "east": "f2_shrine"
+        }
+      },
+      "f2_shrine": {
+        "name": "Shrine of Unquiet Glass",
+        "floor": 2,
+        "type": "chamber",
+        "tags": ["ambush", "observation"],
+        "connections": {
+          "west": "f2_staging",
+          "east": "f2_miniboss"
+        }
+      },
+      "f2_miniboss": {
+        "name": "Hall of the Bell-Knight",
+        "floor": 2,
+        "type": "boss",
+        "tags": ["boss", "ambush"],
+        "connections": {
+          "west": "f2_shrine",
+          "down": "f3_threshold"
+        }
+      },
+      "f3_threshold": {
+        "name": "Threshold of the Final Seal",
+        "floor": 3,
+        "type": "corridor",
+        "tags": ["endgame"],
+        "connections": {
+          "up": "f2_miniboss",
+          "east": "f3_lich_chamber"
+        }
+      },
+      "f3_lich_chamber": {
+        "name": "Lich Chamber",
+        "floor": 3,
+        "type": "boss",
+        "tags": ["endgame", "lich"],
+        "connections": {
+          "west": "f3_threshold"
+        }
+      }
+    },
+    "entrances": [
+      {
+        "id": "target_entrance",
+        "name": "Target Entrance",
+        "start_room_id": "f1_target_entry",
+        "initial_flags": {
+          "entry_route_target": true
+        }
+      },
+      {
+        "id": "novice_entrance",
+        "name": "Novice Entrance",
+        "start_room_id": "f1_novice_entry",
+        "initial_flags": {
+          "entry_route_novice": true
+        }
+      },
+      {
+        "id": "hidden_entrance",
+        "name": "Hidden Entrance",
+        "start_room_id": "f1_hidden_entry",
+        "initial_flags": {
+          "entry_route_hidden": true
+        }
+      }
+    ]
+  },
+  "actors": {
+    "doren": {
+      "name": "Doren",
+      "kind": "companion",
+      "goal": "See the contract through cleanly and get everyone paid.",
+      "importance": "primary"
+    },
+    "amalia": {
+      "name": "Amalia",
+      "kind": "companion",
+      "goal": "Keep control of the operation and punish weakness fast.",
+      "importance": "primary"
+    },
+    "rowan": {
+      "name": "Rowan",
+      "kind": "companion",
+      "goal": "Survive the labyrinth and make sure the party does not get boxed in.",
+      "importance": "primary"
+    },
+    "target_party": {
+      "name": "Rival Adventuring Party",
+      "kind": "party",
+      "goal": "Delve the labyrinth, defeat the lich, and return alive.",
+      "importance": "primary",
+      "rail": {
+        "steps": [
+          { "id": "enter_f1", "location_id": "f1_target_entry" },
+          { "id": "novice_intersection", "location_id": "f1_intersection" },
+          { "id": "floor1_boss_down", "location_id": "f1_miniboss" },
+          { "id": "floor2_entry", "location_id": "f2_staging" },
+          { "id": "floor2_boss_down", "location_id": "f2_miniboss" },
+          { "id": "floor3_entry", "location_id": "f3_threshold" },
+          { "id": "lich_confrontation", "location_id": "f3_lich_chamber" },
+          { "id": "escape_route", "location_id": "f2_shrine" }
+        ]
+      }
+    },
+    "novices": {
+      "name": "Novice Adventurers",
+      "kind": "party",
+      "goal": "Explore the beginner halls and survive long enough to flee.",
+      "importance": "secondary",
+      "rail": {
+        "steps": [
+          { "id": "enter_beginner_route", "location_id": "f1_novice_entry" },
+          { "id": "brief_intersection", "location_id": "f1_intersection" },
+          { "id": "retreat_beginner_halls", "location_id": "f1_beginner_halls" }
+        ]
+      }
+    },
+    "lich": {
+      "name": "The Lich",
+      "kind": "boss",
+      "goal": "Destroy or dominate all who breach the final chamber.",
+      "importance": "primary"
+    }
+  },
+  "objectives": {
+    "understand_contract": {
+      "title": "Understand the Contract",
+      "description": "Get the measure of the mission, the party, and the rival adventurers."
+    },
+    "choose_entry_plan": {
+      "title": "Choose an Entry Plan",
+      "description": "Commit to an entrance and timing strategy before the rival party pulls ahead."
+    },
+    "track_target_party": {
+      "title": "Track the Rival Party",
+      "description": "Shadow the target party without losing the initiative."
+    },
+    "prepare_ambush": {
+      "title": "Prepare the Ambush",
+      "description": "Choose where and when to strike once the rival party is vulnerable."
+    },
+    "survive_aftermath": {
+      "title": "Survive the Aftermath",
+      "description": "Get out with whatever victory, losses, and betrayals remain."
+    }
+  },
+  "dialogue_assets": {
+    "camp_briefing": {
+      "format": "yarn",
+      "program": "dialogue/camp-briefing.yarnc",
+      "strings": "dialogue/camp-briefing.csv"
+    },
+    "choose_entry_plan": {
+      "format": "yarn",
+      "program": "dialogue/choose-entry-plan.yarnc",
+      "strings": "dialogue/choose-entry-plan.csv"
+    },
+    "endgame_confrontation": {
+      "format": "yarn",
+      "program": "dialogue/endgame-confrontation.yarnc",
+      "strings": "dialogue/endgame-confrontation.csv"
+    }
+  },
+  "story_nodes": {
+    "camp_briefing": {
+      "mode": "hybrid",
+      "dialogue_asset_id": "camp_briefing",
+      "dialogue_start_node": "CampBriefing",
+      "title": "Camp Briefing",
+      "summary": "The mercenary band gathers at camp to review the contract and establish the opening mood.",
+      "objective_text": "Understand the mission and the rival party before committing to a plan.",
+      "on_enter": [
+        { "type": "activate_objective", "objective_id": "understand_contract" },
+        { "type": "start_dialogue", "asset_id": "camp_briefing", "start_node": "CampBriefing" }
+      ],
+      "allowed_conditions": [
+        { "type": "flag_true", "key": "briefing_complete" }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "flag_true", "key": "briefing_complete" }
+          ],
+          "next_node_id": "choose_entry_plan",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "understand_contract" },
+            { "type": "activate_objective", "objective_id": "choose_entry_plan" },
+            { "type": "start_dialogue", "asset_id": "choose_entry_plan", "start_node": "ChooseEntryPlan" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "mission briefing, party tension, and threat framing",
+        "must_mention": ["the rival adventuring party", "the labyrinth entrances"],
+        "must_not_reveal": ["the exact final chamber state"]
+      }
+    },
+    "choose_entry_plan": {
+      "mode": "hybrid",
+      "dialogue_asset_id": "choose_entry_plan",
+      "dialogue_start_node": "ChooseEntryPlan",
+      "title": "Choose Entry Plan",
+      "summary": "The player commits to an entrance and timing strategy.",
+      "objective_text": "Choose how your band will enter the labyrinth and when it will move.",
+      "allowed_conditions": [
+        {
+          "type": "label_equals",
+          "key": "entry_route",
+          "allowed_values": ["target_entrance", "novice_entrance", "hidden_entrance"]
+        },
+        {
+          "type": "label_equals",
+          "key": "timing_strategy",
+          "allowed_values": ["before_target", "after_target", "wait_for_return"]
+        }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            {
+              "type": "label_in",
+              "key": "entry_route",
+              "values": ["target_entrance", "novice_entrance", "hidden_entrance"]
+            },
+            {
+              "type": "label_in",
+              "key": "timing_strategy",
+              "values": ["before_target", "after_target", "wait_for_return"]
+            }
+          ],
+          "next_node_id": "floor1_shadow_game",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "choose_entry_plan" },
+            { "type": "activate_objective", "objective_id": "track_target_party" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "planning pressure and commitment",
+        "must_mention": ["route risk", "timing tradeoff"],
+        "must_not_reveal": ["which ambush route will be best later"]
+      }
+    },
+    "floor1_shadow_game": {
+      "mode": "ai_scene",
+      "title": "Floor 1 Shadow Game",
+      "summary": "The party enters the labyrinth and begins tracking, flanking, or avoiding the rival party.",
+      "objective_text": "Track the rival party and preserve your advantage.",
+      "allowed_conditions": [
+        { "type": "flag_true", "key": "target_party_alerted" },
+        { "type": "flag_true", "key": "novices_warned" },
+        { "type": "counter_gte", "key": "target_party_progress", "allowed_values": ["3", "4"] }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "flag_true", "key": "target_party_alerted" }
+          ],
+          "next_node_id": "first_escalation"
+        },
+        {
+          "conditions": [
+            { "type": "counter_gte", "key": "target_party_progress", "value": 4 }
+          ],
+          "next_node_id": "floor2_pressure_setup",
+          "actions": [
+            { "type": "activate_objective", "objective_id": "prepare_ambush" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "tracking, stealth, and pressure at the first intersection",
+        "must_mention": ["signs of the rival party", "labyrinth danger"],
+        "must_not_reveal": ["the final ambush outcome"]
+      }
+    },
+    "first_escalation": {
+      "mode": "ai_scene",
+      "title": "First Escalation",
+      "summary": "The operation begins to destabilize as the rival party or surrounding actors become alerted.",
+      "objective_text": "Recover control before the operation collapses.",
+      "allowed_conditions": [
+        { "type": "flag_true", "key": "ambush_site_prepared" },
+        { "type": "counter_gte", "key": "target_party_progress", "allowed_values": ["4", "5"] }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "counter_gte", "key": "target_party_progress", "value": 4 }
+          ],
+          "next_node_id": "floor2_pressure_setup",
+          "actions": [
+            { "type": "activate_objective", "objective_id": "prepare_ambush" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "complications, exposure, and tactical recovery",
+        "must_mention": ["rising danger"],
+        "must_not_reveal": ["which ending the contract will produce"]
+      }
+    },
+    "floor2_pressure_setup": {
+      "mode": "ai_scene",
+      "title": "Floor 2 Pressure Setup",
+      "summary": "The player prepares an ambush while the rival party pushes deeper toward the lich.",
+      "objective_text": "Choose where and when the rival party will be most vulnerable.",
+      "allowed_conditions": [
+        { "type": "flag_true", "key": "ambush_site_prepared" },
+        {
+          "type": "label_equals",
+          "key": "ambush_timing",
+          "allowed_values": ["before_boss", "after_boss", "after_lich"]
+        }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "flag_true", "key": "ambush_site_prepared" },
+            {
+              "type": "label_in",
+              "key": "ambush_timing",
+              "values": ["before_boss", "after_boss", "after_lich"]
+            }
+          ],
+          "next_node_id": "endgame_collision"
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "ambush preparation and deteriorating timing window",
+        "must_mention": ["vulnerability window", "positioning risk"],
+        "must_not_reveal": ["the exact confrontation result"]
+      }
+    },
+    "endgame_collision": {
+      "mode": "hybrid",
+      "dialogue_asset_id": "endgame_confrontation",
+      "dialogue_start_node": "EndgameConfrontation",
+      "title": "Endgame Collision",
+      "summary": "The campaign converges on the ambush, the lich, or both at once.",
+      "objective_text": "Decide the contract in blood, steel, or catastrophe.",
+      "allowed_conditions": [
+        {
+          "type": "label_equals",
+          "key": "contract_outcome",
+          "allowed_values": ["clean_success", "costly_success", "mission_failure", "catastrophe"]
+        }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            {
+              "type": "label_in",
+              "key": "contract_outcome",
+              "values": ["clean_success", "costly_success", "mission_failure", "catastrophe"]
+            }
+          ],
+          "next_node_id": "escape_aftermath",
+          "actions": [
+            { "type": "activate_objective", "objective_id": "survive_aftermath" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "final collision and consequence",
+        "must_mention": ["stakes", "violence or collapse"],
+        "must_not_reveal": ["aftermath beyond the immediate scene"]
+      }
+    },
+    "escape_aftermath": {
+      "mode": "ai_scene",
+      "title": "Escape And Aftermath",
+      "summary": "The survivors attempt to leave the labyrinth with the consequences of the contract.",
+      "objective_text": "Escape with whatever victory, losses, and betrayals remain.",
+      "narrator_contract": {
+        "scene_focus": "survival, cost, and fallout",
+        "must_mention": ["who made it out", "what the contract cost"],
+        "must_not_reveal": []
+      }
+    }
+  },
+  "start_node_id": "camp_briefing",
+  "intro_sequence": {
+    "mode": "streamed_briefing",
+    "opening_node_id": "camp_briefing",
+    "opening_text": "Rain whispers over the canvas of the mercenary camp while steel and bad intentions glint in the firelight.",
+    "opening_choices": {
+      "entry_route": ["target_entrance", "novice_entrance", "hidden_entrance"],
+      "timing_strategy": ["before_target", "after_target", "wait_for_return"]
+    }
+  }
+}
