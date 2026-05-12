@@ -225,6 +225,48 @@ func TestToSaveState_PreservesCreationParams(t *testing.T) {
 	}
 }
 
+func TestToSaveState_PreservesCampaignRuntimeState(t *testing.T) {
+	g := game.NewGame("sess-campaign", "user-campaign")
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:       "test",
+		CampaignVersion:  "1",
+		ActiveNodeID:     "intro",
+		CurrentObjective: "Finish Intro",
+		BoolFlags:        map[string]bool{"intro_complete": false},
+		Labels:           map[string]string{"path_choice": "main"},
+		Counters:         map[string]int{"steps": 1},
+		ActiveObjectives: []game.ObjectiveState{{ID: "finish_intro", Status: "active", VisibleText: "Finish Intro"}},
+	}
+
+	ss := g.ToSaveState(nil, nil)
+	if ss.Campaign == nil {
+		t.Fatal("expected campaign state to be preserved")
+	}
+	if ss.Campaign.CampaignID != "test" {
+		t.Fatalf("expected campaign_id=test, got %q", ss.Campaign.CampaignID)
+	}
+	if ss.Campaign.ActiveNodeID != "intro" {
+		t.Fatalf("expected active_node_id=intro, got %q", ss.Campaign.ActiveNodeID)
+	}
+
+	restored, err := game.FromSaveState(ss)
+	if err != nil {
+		t.Fatalf("FromSaveState: %v", err)
+	}
+	if restored.Campaign == nil {
+		t.Fatal("expected restored campaign state")
+	}
+	if restored.Campaign.CurrentObjective != "Finish Intro" {
+		t.Fatalf("expected current objective to round-trip, got %q", restored.Campaign.CurrentObjective)
+	}
+	if restored.Campaign.Labels["path_choice"] != "main" {
+		t.Fatalf("expected labels to round-trip, got %#v", restored.Campaign.Labels)
+	}
+	if restored.Campaign.Counters["steps"] != 1 {
+		t.Fatalf("expected counters to round-trip, got %#v", restored.Campaign.Counters)
+	}
+}
+
 // ── BuildCharacterContext ────────────────────────────────────────────────────
 
 func TestBuildDnDCharacter_ToDataRoundTrip(t *testing.T) {
