@@ -2,8 +2,8 @@
   "id": "test",
   "version": "1",
   "title": "Test Campaign",
-  "premise": "A minimal campaign used to validate campaign loading, deterministic node transitions, and dialogue integration.",
-  "description": "Small POC campaign with easy-to-hit conditions and a tiny room graph.",
+  "premise": "A minimal systems-only campaign used to validate quest state and dialogue state alignment.",
+  "description": "Tiny deterministic runtime probe with no narration-heavy behavior.",
   "tone": "test",
   "character_creation": {
     "use_standard_creator": true,
@@ -63,28 +63,28 @@
     "guide": {
       "name": "Guide",
       "kind": "companion",
-      "goal": "Help the player complete the test flow.",
+      "goal": "Guide the player through a tiny deterministic state test.",
       "importance": "primary"
     },
     "caretaker": {
       "name": "Caretaker",
       "kind": "npc",
-      "goal": "Guard the relic room until the player arrives.",
+      "goal": "Stand in the relic room as a static authored endpoint.",
       "importance": "secondary"
     }
   },
   "objectives": {
     "finish_intro": {
-      "title": "Finish Intro",
-      "description": "Complete the opening scene."
+      "title": "Complete Intro",
+      "description": "Advance from the intro node to the relic prompt node."
     },
-    "choose_path": {
-      "title": "Choose Path",
-      "description": "Pick the easy path forward."
+    "reach_relic_prompt": {
+      "title": "Reach Relic Prompt",
+      "description": "Advance from the relic prompt node to completion."
     },
-    "grab_relic": {
-      "title": "Grab Relic",
-      "description": "Reach the relic room and complete the test objective."
+    "complete_test": {
+      "title": "Complete Test",
+      "description": "Confirm the systems-only state machine finishes cleanly."
     }
   },
   "dialogue_assets": {
@@ -92,16 +92,21 @@
       "format": "yarn",
       "program": "dialogue/intro.yarnc",
       "strings": "dialogue/intro.csv"
+    },
+    "relic_dialogue": {
+      "format": "yarn",
+      "program": "dialogue/relic.yarnc",
+      "strings": "dialogue/relic.csv"
     }
   },
   "story_nodes": {
     "intro": {
-      "mode": "hybrid",
+      "mode": "yarn_dialogue",
       "dialogue_asset_id": "intro_dialogue",
       "dialogue_start_node": "Intro",
       "title": "Intro",
-      "summary": "A tiny opening scene that should be easy to complete during testing.",
-      "objective_text": "Conclude the intro and agree to proceed.",
+      "summary": "The first deterministic systems check.",
+      "objective_text": "Send a message containing proceed to move to the relic prompt node.",
       "on_enter": [
         { "type": "activate_objective", "objective_id": "finish_intro" },
         { "type": "start_dialogue", "asset_id": "intro_dialogue", "start_node": "Intro" }
@@ -114,40 +119,24 @@
           "conditions": [
             { "type": "flag_true", "key": "intro_complete" }
           ],
-          "next_node_id": "choose_path",
+          "next_node_id": "relic_prompt",
           "actions": [
             { "type": "complete_objective", "objective_id": "finish_intro" },
-            { "type": "activate_objective", "objective_id": "choose_path" }
+            { "type": "activate_objective", "objective_id": "reach_relic_prompt" }
           ]
         }
       ]
     },
-    "choose_path": {
-      "mode": "ai_scene",
-      "title": "Choose Path",
-      "summary": "A simple scene where the player picks the obvious path forward.",
-      "objective_text": "Choose the main path.",
-      "allowed_conditions": [
-        { "type": "label_equals", "key": "path_choice", "allowed_values": ["main"] }
+    "relic_prompt": {
+      "mode": "yarn_dialogue",
+      "dialogue_asset_id": "relic_dialogue",
+      "dialogue_start_node": "RelicPrompt",
+      "title": "Relic Prompt",
+      "summary": "The second deterministic systems check.",
+      "objective_text": "Send a message containing take relic to complete the test flow.",
+      "on_enter": [
+        { "type": "start_dialogue", "asset_id": "relic_dialogue", "start_node": "RelicPrompt" }
       ],
-      "completion_rules": [
-        {
-          "conditions": [
-            { "type": "label_equals", "key": "path_choice", "value": "main" }
-          ],
-          "next_node_id": "retrieve_relic",
-          "actions": [
-            { "type": "complete_objective", "objective_id": "choose_path" },
-            { "type": "activate_objective", "objective_id": "grab_relic" }
-          ]
-        }
-      ]
-    },
-    "retrieve_relic": {
-      "mode": "ai_scene",
-      "title": "Retrieve Relic",
-      "summary": "A minimal end-state scene with one easy success condition.",
-      "objective_text": "Take the relic.",
       "allowed_conditions": [
         { "type": "flag_true", "key": "relic_taken" }
       ],
@@ -158,7 +147,9 @@
           ],
           "next_node_id": "complete",
           "actions": [
-            { "type": "complete_objective", "objective_id": "grab_relic" }
+            { "type": "complete_objective", "objective_id": "reach_relic_prompt" },
+            { "type": "activate_objective", "objective_id": "complete_test" },
+            { "type": "complete_objective", "objective_id": "complete_test" }
           ]
         }
       ]
@@ -166,17 +157,14 @@
     "complete": {
       "mode": "ai_scene",
       "title": "Complete",
-      "summary": "The test campaign finishes cleanly.",
-      "objective_text": "The test flow is complete."
+      "summary": "The systems-only runtime test finishes cleanly.",
+      "objective_text": "The systems-only runtime test is complete."
     }
   },
   "start_node_id": "intro",
   "intro_sequence": {
-    "mode": "streamed_briefing",
+    "mode": "systems_probe",
     "opening_node_id": "intro",
-    "opening_text": "This is the smallest authored campaign needed to validate the Phase 7 runtime.",
-    "opening_choices": {
-      "path_choice": ["main"]
-    }
+    "opening_text": "This campaign is a minimal runtime probe for node state and dialogue state."
   }
 }

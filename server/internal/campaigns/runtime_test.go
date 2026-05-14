@@ -65,10 +65,10 @@ func TestAdvanceCampaign_TransitionsAndUpdatesObjectives(t *testing.T) {
 	if !result.Transitioned {
 		t.Fatal("expected campaign to transition")
 	}
-	if g.Campaign.ActiveNodeID != "choose_path" {
-		t.Fatalf("expected active node choose_path, got %q", g.Campaign.ActiveNodeID)
+	if g.Campaign.ActiveNodeID != "relic_prompt" {
+		t.Fatalf("expected active node relic_prompt, got %q", g.Campaign.ActiveNodeID)
 	}
-	if g.Campaign.CurrentObjective != "Choose the main path." {
+	if g.Campaign.CurrentObjective != "Send a message containing take relic to complete the test flow." {
 		t.Fatalf("unexpected current objective %q", g.Campaign.CurrentObjective)
 	}
 	statuses := map[string]string{}
@@ -78,8 +78,11 @@ func TestAdvanceCampaign_TransitionsAndUpdatesObjectives(t *testing.T) {
 	if statuses["finish_intro"] != "completed" {
 		t.Fatalf("expected finish_intro to be completed, got %#v", statuses)
 	}
-	if statuses["choose_path"] != "active" {
-		t.Fatalf("expected choose_path to be active, got %#v", statuses)
+	if statuses["reach_relic_prompt"] != "active" {
+		t.Fatalf("expected reach_relic_prompt to be active, got %#v", statuses)
+	}
+	if g.Campaign.ActiveDialogue == nil || g.Campaign.ActiveDialogue.AssetID != "relic_dialogue" {
+		t.Fatalf("expected active dialogue to move with node transition, got %#v", g.Campaign.ActiveDialogue)
 	}
 }
 
@@ -105,7 +108,7 @@ func TestBootstrapGame_SeedsOpeningDialogueLine(t *testing.T) {
 	if len(history) < 2 {
 		t.Fatalf("expected opening text and dialogue line, got %#v", history)
 	}
-	if history[1].Content != "Welcome to the test campaign." {
+	if history[1].Content != "Intro prompt: send a message containing proceed to advance the systems test." {
 		t.Fatalf("expected seeded dialogue line, got %#v", history)
 	}
 }
@@ -190,6 +193,40 @@ func TestAdvanceCampaign_ReturnsDialogueTextForEnteredHybridNode(t *testing.T) {
 	}
 	if g.Campaign.ActiveDialogue == nil || g.Campaign.ActiveDialogue.AssetID != "choose_entry_plan" {
 		t.Fatalf("expected active dialogue to be started, got %#v", g.Campaign.ActiveDialogue)
+	}
+}
+
+func TestAdvanceCampaign_ClearsDialogueWhenEnteringAIScene(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+	g := game.NewGame("session-4", "user-1")
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:      def.ID,
+		CampaignVersion: def.Version,
+		ActiveNodeID:    "relic_prompt",
+		BoolFlags:       map[string]bool{"relic_taken": true},
+		Labels:          map[string]string{},
+		Counters:        map[string]int{},
+		ActorStates:     map[string]game.ActorRuntimeState{},
+		CompanionStates: map[string]game.CompanionState{},
+		ActiveDialogue:  &game.DialogueRuntimeState{AssetID: "relic_dialogue", CurrentNode: "RelicPrompt"},
+	}
+
+	result, err := campaigns.AdvanceCampaign(def, g)
+	if err != nil {
+		t.Fatalf("advance campaign: %v", err)
+	}
+	if !result.Transitioned || result.ToNodeID != "complete" {
+		t.Fatalf("expected transition to complete, got %#v", result)
+	}
+	if g.Campaign.ActiveDialogue != nil {
+		t.Fatalf("expected active dialogue to be cleared on ai_scene entry, got %#v", g.Campaign.ActiveDialogue)
 	}
 }
 

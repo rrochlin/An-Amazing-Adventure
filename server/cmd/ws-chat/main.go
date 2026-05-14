@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"sync"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -184,6 +185,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		allConnIDs = []string{connID} // fallback to sender only
 	}
 
+	if campaignDef != nil && campaignDef.ID == "test" {
+		return handleDeterministicTestCampaignChat(ctx, dbClient, ws, conn, g, campaignDef, msg.Content, &saveState, preTurnPlayerLoc, allConnIDs)
+	}
+
 	// Step 1: Stream narrator prose — broadcast each chunk to all party members.
 	narratorResult, err := aiClient.NarrateStream(
 		ctx, g, saveState.Narrative, msg.Content,
@@ -342,6 +347,169 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 	log.Printf("ws-chat: complete conn=%s user=%s game=%s turns=%d tokens=%d", connID, userID, conn.GameID, g.ConversationCount, g.TotalTokens)
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+func handleDeterministicTestCampaignChat(
+	ctx context.Context,
+	dbClient *db.Client,
+	ws *wsutil.Sender,
+	conn db.Connection,
+	g *game.Game,
+	campaignDef *campaigns.CampaignDefinition,
+	playerInput string,
+	saveState *game.SaveState,
+	preTurnPlayerLoc string,
+	allConnIDs []string,
+) (events.APIGatewayProxyResponse, error) {
+	connID := conn.ConnectionID
+	userID := string(conn.UserID)
+	engineerResult := ai.EngineerResult{}
+
+	playerText := strings.TrimSpace(playerInput)
+	if playerText == "" {
+		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
+	}
+
+	ack := testCampaignAcknowledgement(g.Campaign.ActiveNodeID)
+	chunkFrame := wsutil.Frame{
+		Type:    wsutil.FrameNarrativeChunk,
+		Payload: map[string]string{"content": ack},
+	}
+	stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
+	for _, s := range stale {
+		_ = dbClient.DeleteConnection(ctx, s)
+	}
+	staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
+	for _, s := range staleEnds {
+		_ = dbClient.DeleteConnection(ctx, s)
+	}
+
+	resolution := deterministicTestCampaignResolution(g.Campaign.ActiveNodeID, playerText)
+	campaigns.ApplyConditionResolution(g.Campaign, resolution)
+	transitionResult, transitionErr := campaigns.AdvanceCampaign(campaignDef, g)
+	if transitionErr != nil {
+		log.Printf("ws-chat: deterministic test campaign transition error: %v", transitionErr)
+		_ = ws.SendError(ctx, connID, "campaign_transition_error")
+		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+	}
+
+	authoredDialogueText := ""
+	if transitionResult.Transitioned && transitionResult.ToNodeID != "" {
+		authoredDialogueText = transitionResult.DialogueText
+		if nextNode, ok := campaignDef.StoryNodes[transitionResult.ToNodeID]; ok && nextNode.ObjectiveText != "" {
+			engineerResult.Events = append(engineerResult.Events, game.WorldEvent{
+				Type:    "campaign_progress",
+				Message: "Objective updated: " + nextNode.ObjectiveText,
+			})
+		}
+	}
+
+	history := saveState.ChatHistory
+	history = append(history, game.ChatMessage{Type: "player", Content: playerText})
+	history = append(history, game.ChatMessage{
+		Type:    "narrative",
+		Content: ack,
+		Events:  engineerResult.Events,
+	})
+	narrative := saveState.Narrative
+	narrative = append(narrative,
+		game.NarrativeMessage{
+			Role:    "user",
+			Content: []game.NarrativeBlock{{Type: "text", Text: playerText}},
+		},
+		game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: ack}},
+		},
+	)
+	if authoredDialogueText != "" {
+		history = append(history, game.ChatMessage{Type: "narrative", Content: authoredDialogueText})
+		narrative = append(narrative, game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: authoredDialogueText}},
+		})
+		chunkFrame := wsutil.Frame{
+			Type:    wsutil.FrameNarrativeChunk,
+			Payload: map[string]string{"content": authoredDialogueText},
+		}
+		stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
+		for _, s := range stale {
+			_ = dbClient.DeleteConnection(ctx, s)
+		}
+		staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
+		for _, s := range staleEnds {
+			_ = dbClient.DeleteConnection(ctx, s)
+		}
+	}
+
+	g.ConversationCount++
+	g.Version++
+	saved := g.ToSaveState(narrative, history)
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := dbClient.PutGame(ctx, saved); err != nil {
+			log.Printf("ws-chat: deterministic test campaign put game attempt %d: %v", attempt+1, err)
+			if attempt == 2 {
+				_ = ws.SendError(ctx, connID, "Failed to save game state")
+				return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+			}
+			fresh, loadErr := dbClient.GetGame(ctx, conn.GameID)
+			if loadErr == nil {
+				saved.Version = fresh.Version + 1
+			}
+			continue
+		}
+		break
+	}
+
+	postTurnOwner, _ := g.OwnerCharacter()
+	postTurnOwnerLoc := postTurnOwner.LocationID
+	freshConns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	for _, gc := range freshConns {
+		memberUID := string(gc.UserID)
+		memberView := g.BuildGameStateView(memberUID, nil)
+		delta := game.StateDelta{
+			Events:   engineerResult.Events,
+			Player:   &memberView.Player,
+			Self:     &memberView.Self,
+			Campaign: g.BuildCampaignStateView(),
+		}
+		if postTurnOwnerLoc != preTurnPlayerLoc || true {
+			delta.CurrentRoom = &memberView.CurrentRoom
+		}
+		if sendErr := ws.SendDelta(ctx, gc.ConnectionID, delta); sendErr != nil {
+			log.Printf("ws-chat: deterministic test campaign send delta to %s: %v", gc.ConnectionID, sendErr)
+			_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)
+		}
+	}
+
+	log.Printf("ws-chat: deterministic test campaign complete conn=%s user=%s game=%s turns=%d", connID, userID, conn.GameID, g.ConversationCount)
+	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+func deterministicTestCampaignResolution(activeNodeID, playerInput string) campaigns.ConditionResolution {
+	input := strings.ToLower(playerInput)
+	switch activeNodeID {
+	case "intro":
+		if strings.Contains(input, "proceed") {
+			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"intro_complete": true}}
+		}
+	case "relic_prompt":
+		if strings.Contains(input, "take relic") {
+			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"relic_taken": true}}
+		}
+	}
+	return campaigns.ConditionResolution{}
+}
+
+func testCampaignAcknowledgement(activeNodeID string) string {
+	switch activeNodeID {
+	case "intro":
+		return "Test runtime acknowledged. For this node, send a message containing proceed."
+	case "relic_prompt":
+		return "Test runtime acknowledged. For this node, send a message containing take relic."
+	default:
+		return "Test runtime acknowledged."
+	}
 }
 
 func main() {

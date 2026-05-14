@@ -21,7 +21,7 @@ func TestOpeningLine_ReturnsFirstDialogueString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening line: %v", err)
 	}
-	if line != "Welcome to the test campaign." {
+	if line != "Intro prompt: send a message containing proceed to advance the systems test." {
 		t.Fatalf("unexpected opening line %q", line)
 	}
 }
