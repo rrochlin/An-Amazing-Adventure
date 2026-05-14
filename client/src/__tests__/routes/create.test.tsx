@@ -265,9 +265,18 @@ describe('CreateRoute wizard — new game mode', () => {
       });
    });
 
-    it('campaign step requires a premade campaign selection', async () => {
+   it('does not crash if campaigns load returns an invalid shape', async () => {
+      mockListCampaigns.mockResolvedValueOnce({} as never);
+
       await renderWizard();
-      const user = await fillName('Borin Stoneguard');
+
+      expect(screen.getByText('Forge Your Adventure')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Character Name/i)).toBeInTheDocument();
+   });
+
+     it('campaign step requires a premade campaign selection', async () => {
+       await renderWizard();
+       const user = await fillName('Borin Stoneguard');
       await clickNext(user); // -> Race
       await user.click(screen.getByText('Human'));
       await clickNext(user); // -> Class

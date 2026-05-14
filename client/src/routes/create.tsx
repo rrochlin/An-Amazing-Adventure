@@ -420,6 +420,11 @@ export function CreateRoute() {
       ListCampaigns()
          .then((response) => {
             if (cancelled) return;
+            if (!Array.isArray(response.campaigns)) {
+               throw new Error(
+                  'Failed to load campaigns. The server returned an invalid response.',
+               );
+            }
             setAvailableCampaigns(response.campaigns);
          })
          .catch((e: unknown) => {
@@ -427,7 +432,7 @@ export function CreateRoute() {
             const msg =
                e instanceof Error
                   ? e.message
-                  : 'Failed to load campaigns. You can still create a procedural adventure.';
+                  : 'Failed to load campaigns. Please try again later.';
             setCampaignLoadError(msg);
          })
          .finally(() => {
