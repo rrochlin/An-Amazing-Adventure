@@ -142,6 +142,17 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 	if err := applyActions(def, g, node.OnEnter); err != nil {
 		return "", err
 	}
+	switch node.Mode {
+	case "ai_scene":
+		g.Campaign.ActiveDialogue = nil
+	case "hybrid", "yarn_dialogue":
+		if g.Campaign.ActiveDialogue == nil || g.Campaign.ActiveDialogue.AssetID != node.DialogueAssetID {
+			g.Campaign.ActiveDialogue = &game.DialogueRuntimeState{
+				AssetID:     node.DialogueAssetID,
+				CurrentNode: node.DialogueStartNode,
+			}
+		}
+	}
 	return currentDialogueOpening(def, g.Campaign), nil
 }
 
