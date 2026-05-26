@@ -176,13 +176,19 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	preTurnPlayerLoc := preTurnOwner.LocationID
 
 	// Build connection ID list for broadcast (refresh after streaming flag is set)
-	allGameConns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	allGameConns, allConnsErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	if allConnsErr != nil {
+		log.Printf("ws-chat: initial connections fallback for game %s: %v", conn.GameID, allConnsErr)
+		allGameConns = []db.Connection{conn}
+	} else {
+		allGameConns = ensureSenderConnection(allGameConns, conn)
+	}
 	allConnIDs := make([]string, 0, len(allGameConns))
 	for _, gc := range allGameConns {
 		allConnIDs = append(allConnIDs, gc.ConnectionID)
 	}
 	if len(allConnIDs) == 0 {
-		allConnIDs = []string{connID} // fallback to sender only
+		allConnIDs = []string{connID}
 	}
 
 	if campaignDef != nil && campaignDef.ID == "test" {
@@ -325,8 +331,16 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	// perspective (their own character's location and inventory).
 	postTurnOwner, _ := g.OwnerCharacter()
 	postTurnOwnerLoc := postTurnOwner.LocationID
-	// Refresh connection list for delta fanout (some may have disconnected)
-	freshConns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	// Refresh connection list for delta fanout (some may have disconnected).
+	// Fall back to the sender connection so campaign/objective UI still updates
+	// even if the connection query is temporarily unavailable.
+	freshConns, freshErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	if freshErr != nil {
+		log.Printf("ws-chat: refresh connections fallback for game %s: %v", conn.GameID, freshErr)
+		freshConns = []db.Connection{conn}
+	} else {
+		freshConns = ensureSenderConnection(freshConns, conn)
+	}
 	for _, gc := range freshConns {
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
@@ -463,7 +477,13 @@ func handleDeterministicTestCampaignChat(
 
 	postTurnOwner, _ := g.OwnerCharacter()
 	postTurnOwnerLoc := postTurnOwner.LocationID
-	freshConns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	freshConns, freshErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	if freshErr != nil {
+		log.Printf("ws-chat: deterministic test campaign refresh connections fallback for game %s: %v", conn.GameID, freshErr)
+		freshConns = []db.Connection{conn}
+	} else {
+		freshConns = ensureSenderConnection(freshConns, conn)
+	}
 	for _, gc := range freshConns {
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
@@ -499,6 +519,15 @@ func deterministicTestCampaignResolution(activeNodeID, playerInput string) campa
 		}
 	}
 	return campaigns.ConditionResolution{}
+}
+
+func ensureSenderConnection(conns []db.Connection, sender db.Connection) []db.Connection {
+	for _, existing := range conns {
+		if existing.ConnectionID == sender.ConnectionID {
+			return conns
+		}
+	}
+	return append(conns, sender)
 }
 
 func testCampaignAcknowledgement(activeNodeID string) string {
