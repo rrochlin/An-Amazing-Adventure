@@ -76,7 +76,15 @@ async function renderWizard() {
    return result;
 }
 
-// ── Helper: complete step 0 (Name) ───────────────────────────────────────────
+// ── Helper: choose campaign in create mode ───────────────────────────────────
+async function selectCampaign(name = 'Test Campaign') {
+   const user = userEvent.setup();
+   await user.click(screen.getByRole('combobox', { name: /^campaign$/i }));
+   await user.click(await screen.findByRole('option', { name }));
+   return user;
+}
+
+// ── Helper: complete name step ───────────────────────────────────────────────
 async function fillName(name = 'Aria Silverwind') {
    const user = userEvent.setup();
    const input = screen.getByLabelText(/Character Name/i);
@@ -94,13 +102,18 @@ async function clickNext(user: ReturnType<typeof userEvent.setup>) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('CreateRoute wizard — new game mode', () => {
-   it('starts on the Name step', async () => {
+   it('starts on the Campaign step', async () => {
       await renderWizard();
-      expect(screen.getByLabelText(/Character Name/i)).toBeInTheDocument();
-      expect(screen.getByText(/What are you called/i)).toBeInTheDocument();
+      expect(screen.getByRole('combobox', { name: /^campaign$/i })).toBeInTheDocument();
+      expect(screen.getByText(/Choose which authored campaign to enter before building your character/i)).toBeInTheDocument();
    });
 
-   it('Back button on step 0 navigates to /', async () => {
+   it('campaign step requires a premade campaign selection', async () => {
+      await renderWizard();
+      expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
+   });
+
+   it('Back button on campaign step navigates to /', async () => {
       await renderWizard();
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /cancel/i }));
@@ -109,43 +122,64 @@ describe('CreateRoute wizard — new game mode', () => {
 
    it('Next button is disabled when name is empty', async () => {
       await renderWizard();
+      const user = await selectCampaign();
+      await clickNext(user);
       const nextBtn = screen.getByRole('button', { name: /next/i });
       expect(nextBtn).toBeDisabled();
    });
 
    it('Next button is disabled when name is only 1 character', async () => {
       await renderWizard();
-      const user = userEvent.setup();
+      const user = await selectCampaign();
+      await clickNext(user);
       await user.type(screen.getByLabelText(/Character Name/i), 'A');
       expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
    });
 
    it('Next button enables with a valid name', async () => {
       await renderWizard();
-      await fillName();
+      let user = await selectCampaign();
+      await clickNext(user);
+      const input = screen.getByLabelText(/Character Name/i);
+      await user.clear(input);
+      await user.type(input, 'Aria Silverwind');
       expect(screen.getByRole('button', { name: /next/i })).toBeEnabled();
+   });
+
+   it('campaign step advances to Name after selection', async () => {
+      await renderWizard();
+      const user = await selectCampaign();
+      expect(screen.getByRole('button', { name: /next/i })).toBeEnabled();
+      await clickNext(user);
+      expect(screen.getByLabelText(/Character Name/i)).toBeInTheDocument();
+      expect(screen.getByText(/What are you called/i)).toBeInTheDocument();
    });
 
    it('advances to Race step after entering a valid name', async () => {
       await renderWizard();
-      const user = await fillName();
+      let user = await selectCampaign();
+      await clickNext(user);
+      user = await fillName();
       await clickNext(user);
       expect(screen.getByText(/Choose your ancestry/i)).toBeInTheDocument();
-      // Should show race cards
       expect(screen.getByText('Human')).toBeInTheDocument();
       expect(screen.getByText('Dwarf')).toBeInTheDocument();
    });
 
    it('Race step: Next disabled until race selected', async () => {
       await renderWizard();
-      const user = await fillName();
+      let user = await selectCampaign();
+      await clickNext(user);
+      user = await fillName();
       await clickNext(user);
       expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
    });
 
    it('Race step: can select a race without subraces and advance', async () => {
       await renderWizard();
-      const user = await fillName();
+      let user = await selectCampaign();
+      await clickNext(user);
+      user = await fillName();
       await clickNext(user);
       await user.click(screen.getByText('Human'));
       expect(screen.getByRole('button', { name: /next/i })).toBeEnabled();
@@ -158,19 +192,21 @@ describe('CreateRoute wizard — new game mode', () => {
 
    it('Race step: cannot advance without subrace for Dwarf', async () => {
       await renderWizard();
-      const user = await fillName();
+      let user = await selectCampaign();
+      await clickNext(user);
+      user = await fillName();
       await clickNext(user);
       await user.click(screen.getByText('Dwarf'));
-      // Subrace required — Next still disabled
       expect(screen.getByRole('button', { name: /next/i })).toBeDisabled();
-      // Must pick a subrace
       await user.click(screen.getByText(/Hill Dwarf/i));
       expect(screen.getByRole('button', { name: /next/i })).toBeEnabled();
    });
 
    it('Class step: Next disabled until class selected', async () => {
       await renderWizard();
-      const user = await fillName();
+      let user = await selectCampaign();
+      await clickNext(user);
+      user = await fillName();
       await clickNext(user);
       await user.click(screen.getByText('Human'));
       await clickNext(user);
@@ -179,18 +215,21 @@ describe('CreateRoute wizard — new game mode', () => {
 
    it('Class step: selecting a class enables Next', async () => {
       await renderWizard();
-      const user = await fillName();
+      let user = await selectCampaign();
+      await clickNext(user);
+      user = await fillName();
       await clickNext(user);
       await user.click(screen.getByText('Human'));
       await clickNext(user);
-      // Click "Barbarian" heading in one of the class cards
       await user.click(screen.getByText('Barbarian'));
       expect(screen.getByRole('button', { name: /next/i })).toBeEnabled();
    });
 
    it('Ability scores: Next disabled until all 6 assigned', async () => {
       await renderWizard();
-      const user = await fillName();
+      let user = await selectCampaign();
+      await clickNext(user); // -> Name
+      user = await fillName();
       await clickNext(user); // → Race
       await user.click(screen.getByText('Human'));
       await clickNext(user); // → Class
@@ -204,16 +243,15 @@ describe('CreateRoute wizard — new game mode', () => {
    });
 
    it('Skills: limited to class skill count', async () => {
-      // Navigate to Skills step by completing all prior steps
       await renderWizard();
-      const user = await fillName();
+      let user = await selectCampaign();
+      await clickNext(user); // -> Name
+      user = await fillName();
       await clickNext(user); // → Race
       await user.click(screen.getByText('Human'));
-      await clickNext(user); // → Class — pick Barbarian (2 skills from 6)
+      await clickNext(user); // → Class
       await user.click(screen.getByText('Barbarian'));
-      await clickNext(user); // → Abilities — assign all 6 via dropdowns
-      // Abilities: open each Select and pick values
-      // We'll use MUI Select — find all comboboxes
+      await clickNext(user); // → Abilities
       const comboboxes = screen.getAllByRole('combobox');
       const abilitySelects = comboboxes.slice(0, 6);
       const values = [15, 14, 13, 12, 10, 8];
@@ -221,10 +259,9 @@ describe('CreateRoute wizard — new game mode', () => {
          await user.click(abilitySelects[i]);
          const listbox = screen.getByRole('listbox');
          const options = within(listbox).getAllByRole('option');
-         // Find the option matching our value (skip the "—" empty option at index 0)
-         const targetOption = options.find(
-            (o) => o.textContent === String(values[i]),
-         );
+          const targetOption = options.find(
+             (o) => o.textContent === String(values[i]),
+          );
          if (targetOption) await user.click(targetOption);
       }
       await clickNext(user); // → Skills
@@ -233,14 +270,11 @@ describe('CreateRoute wizard — new game mode', () => {
             /Choose 2 skill proficiencies from the Barbarian list/i,
          ),
       ).toBeInTheDocument();
-      // Select 2 skills
       await user.click(screen.getByText('Athletics (STR)'));
       expect(screen.getByText('1/2 skills selected')).toBeInTheDocument();
       await user.click(screen.getByText('Survival (WIS)'));
       expect(screen.getByText('2/2 skills selected')).toBeInTheDocument();
-      // Third click should be blocked (chip is disabled)
       const perceptionChip = screen.getByText('Perception (WIS)');
-      // The chip is now at 0.4 opacity (disabled) — clicking it should not add it
       await user.click(perceptionChip);
       expect(screen.getByText('2/2 skills selected')).toBeInTheDocument();
    });
@@ -253,15 +287,15 @@ describe('CreateRoute wizard — new game mode', () => {
    it('stepper shows all 7 steps in create mode', async () => {
       await renderWizard();
       [
+         'Campaign',
          'Name',
          'Race',
          'Class',
          'Ability Scores',
          'Skills',
-         'Campaign',
          'Review',
       ].forEach((label) => {
-         expect(screen.getByText(label)).toBeInTheDocument();
+         expect(screen.getAllByText(label).length).toBeGreaterThan(0);
       });
    });
 
@@ -271,42 +305,14 @@ describe('CreateRoute wizard — new game mode', () => {
       await renderWizard();
 
       expect(screen.getByText('Forge Your Adventure')).toBeInTheDocument();
-      expect(screen.getByLabelText(/Character Name/i)).toBeInTheDocument();
-   });
-
-     it('campaign step requires a premade campaign selection', async () => {
-       await renderWizard();
-       const user = await fillName('Borin Stoneguard');
-      await clickNext(user); // -> Race
-      await user.click(screen.getByText('Human'));
-      await clickNext(user); // -> Class
-      await user.click(screen.getByText('Fighter'));
-      await clickNext(user); // -> Abilities
-      const comboboxes = screen.getAllByRole('combobox');
-      const abilitySelects = comboboxes.slice(0, 6);
-      const values = [15, 14, 13, 12, 10, 8];
-      for (let i = 0; i < abilitySelects.length; i++) {
-         await user.click(abilitySelects[i]);
-         const listbox = screen.getByRole('listbox');
-         const options = within(listbox).getAllByRole('option');
-         const targetOption = options.find(
-            (o) => o.textContent === String(values[i]),
-         );
-         if (targetOption) await user.click(targetOption);
-      }
-      await clickNext(user); // -> Skills
-      await user.click(screen.getByText('Athletics (STR)'));
-      await user.click(screen.getByText('History (INT)'));
-      await clickNext(user); // -> Campaign
-
-      expect(
-         screen.getByRole('button', { name: /next: review/i }),
-      ).toBeDisabled();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
    });
 
    it('allows selecting an authored campaign and submits campaign_id', async () => {
       await renderWizard();
-      const user = await fillName('Borin Stoneguard');
+      let user = await selectCampaign();
+      await clickNext(user); // -> Name
+      user = await fillName('Borin Stoneguard');
       await clickNext(user); // -> Race
       await user.click(screen.getByText('Human'));
       await clickNext(user); // -> Class
@@ -327,19 +333,12 @@ describe('CreateRoute wizard — new game mode', () => {
       await clickNext(user); // -> Skills
       await user.click(screen.getByText('Athletics (STR)'));
       await user.click(screen.getByText('History (INT)'));
-      await clickNext(user); // -> Campaign
-
-      await user.click(
-         screen.getByRole('combobox', { name: /^campaign$/i }),
-      );
-      await user.click(await screen.findByRole('option', { name: 'Test Campaign' }));
+      await clickNext(user); // -> Review
 
       expect(screen.getByText('A tiny authored path.')).toBeInTheDocument();
-      expect(
-         screen.getByText(/launches premade campaigns only/i),
-      ).toBeInTheDocument();
+      expect(screen.getByText(/Authored Campaign/i)).toBeInTheDocument();
+      expect(screen.getByText('Test Campaign')).toBeInTheDocument();
 
-      await clickNext(user); // -> Review
       await user.click(
          screen.getByRole('button', { name: /Begin Adventure/i }),
       );
@@ -431,7 +430,12 @@ describe('CreateRoute wizard — Review step', () => {
    async function navigateToReviewStep(
       user: ReturnType<typeof userEvent.setup>,
    ) {
-      await fillName('Aria Silverwind');
+      await user.click(screen.getByRole('combobox', { name: /^campaign$/i }));
+      await user.click(await screen.findByRole('option', { name: 'Test Campaign' }));
+      await clickNext(user); // → Name
+      const input = screen.getByLabelText(/Character Name/i);
+      await user.clear(input);
+      await user.type(input, 'Aria Silverwind');
       await clickNext(user); // → Race
       await user.click(screen.getByText('Dwarf'));
       await user.click(screen.getByText(/Hill Dwarf/i));
@@ -453,9 +457,6 @@ describe('CreateRoute wizard — Review step', () => {
       await clickNext(user); // → Skills
       await user.click(screen.getByText('Athletics (STR)'));
       await user.click(screen.getByText('Survival (WIS)'));
-      await clickNext(user); // → Campaign
-      await user.click(screen.getByRole('combobox', { name: /^campaign$/i }));
-      await user.click(await screen.findByRole('option', { name: 'Test Campaign' }));
       await clickNext(user); // → Review
    }
 

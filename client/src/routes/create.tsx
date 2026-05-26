@@ -311,12 +311,12 @@ function abilityModifier(score: number): string {
 // ─── Steps ──────────────────────────────────────────────────────────────────
 
 const CREATE_STEPS = [
+   'Campaign',
    'Name',
    'Race',
    'Class',
    'Ability Scores',
    'Skills',
-   'Campaign',
    'Review',
 ];
 const JOIN_STEPS = [
@@ -328,15 +328,24 @@ const JOIN_STEPS = [
    'Review',
 ];
 
-// step indices for each mode
-const STEP = {
+const CREATE_STEP = {
+   CAMPAIGN: 0,
+   NAME: 1,
+   RACE: 2,
+   CLASS: 3,
+   ABILITIES: 4,
+   SKILLS: 5,
+   REVIEW: 6,
+} as const;
+
+const JOIN_STEP = {
+   CAMPAIGN: -1,
    NAME: 0,
    RACE: 1,
    CLASS: 2,
    ABILITIES: 3,
    SKILLS: 4,
-   CAMPAIGN_OR_REVIEW: 5, // "Campaign" in create mode, "Review" in join mode
-   REVIEW: 6, // only in create mode
+   REVIEW: 5,
 } as const;
 
 // ─── Route ──────────────────────────────────────────────────────────────────
@@ -359,23 +368,24 @@ export function CreateRoute() {
    const { session: joinSessionId } = useSearch({ from: '/create' });
    const isJoinMode = !!joinSessionId;
    const STEPS = isJoinMode ? JOIN_STEPS : CREATE_STEPS;
+   const STEP = isJoinMode ? JOIN_STEP : CREATE_STEP;
 
    const [step, setStep] = useState(0);
    const [error, setError] = useState<string | null>(null);
    const [isSubmitting, setIsSubmitting] = useState(false);
 
-   // Step 0 — Name + Backstory
+   // Step 0/1 — Name + Backstory
    const [playerName, setPlayerName] = useState('');
    const [backstory, setBackstory] = useState('');
 
-   // Step 1 — Race
+   // Step 2 — Race
    const [raceID, setRaceID] = useState('');
    const [subraceID, setSubraceID] = useState('');
 
-   // Step 2 — Class
+   // Step 3 — Class
    const [classID, setClassID] = useState('');
 
-   // Step 3 — Ability Scores (standard array)
+   // Step 4 — Ability Scores (standard array)
    const [abilityScores, setAbilityScores] = useState<
       Record<AbilityKey, number>
    >({
@@ -389,10 +399,10 @@ export function CreateRoute() {
    // Derived — no separate state; avoids stale-closure bugs on swap.
    const usedValues = Object.values(abilityScores).filter((v) => v !== 0);
 
-   // Step 4 — Skills
+   // Step 5 — Skills
    const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
 
-   // Step 5 — Campaign selection (create mode only)
+   // Step 0 — Campaign selection (create mode only)
    const [availableCampaigns, setAvailableCampaigns] = useState<
       CampaignManifest[]
    >([]);
@@ -518,10 +528,8 @@ export function CreateRoute() {
    };
 
    // ── Determine if current step is the last action step before submit ──
-   // In join mode: step 5 is Review (no Campaign step)
-   // In create mode: step 5 is Campaign, step 6 is Review
-   const isReviewStep = isJoinMode ? step === 5 : step === 6;
-   const isCampaignStep = !isJoinMode && step === 5;
+   const isReviewStep = step === STEP.REVIEW;
+   const isCampaignStep = step === STEP.CAMPAIGN;
 
    // ── Submit ──
    const buildPayload = (): CreateGameData => ({
@@ -630,7 +638,110 @@ export function CreateRoute() {
                ))}
             </Stepper>
 
-            {/* ── Step 0: Name + Backstory ── */}
+            {/* ── Step 0: Campaign Selection (create mode only) ── */}
+            {isCampaignStep && (
+               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <Typography
+                     variant="body2"
+                     sx={{
+                        color: 'text.secondary',
+                        fontStyle: 'italic',
+                        fontFamily: '"Crimson Text", "Georgia", serif',
+                        fontSize: '1rem',
+                     }}
+                  >
+                     Choose which authored campaign to enter before building your
+                     character. This lets the campaign shape the rest of the
+                     create flow.
+                  </Typography>
+
+                  <Box>
+                     <Typography
+                        variant="subtitle2"
+                        sx={{
+                           mb: 1.5,
+                           textTransform: 'uppercase',
+                           letterSpacing: '0.08em',
+                        }}
+                     >
+                        Campaign
+                     </Typography>
+                     <FormControl fullWidth>
+                        <InputLabel id="campaign-select-label">
+                           Campaign
+                        </InputLabel>
+                        <Select
+                           labelId="campaign-select-label"
+                           label="Campaign"
+                           value={selectedCampaignID}
+                           onChange={(e) => setSelectedCampaignID(e.target.value)}
+                           disabled={isLoadingCampaigns}
+                        >
+                           <MenuItem value="" disabled>
+                              Select a campaign
+                           </MenuItem>
+                           {availableCampaigns.map((campaign) => (
+                              <MenuItem key={campaign.id} value={campaign.id}>
+                                 {campaign.title}
+                              </MenuItem>
+                           ))}
+                        </Select>
+                        <FormHelperText>
+                           {isLoadingCampaigns
+                              ? 'Loading available campaigns...'
+                              : availableCampaigns.length === 0
+                                ? 'No campaigns are currently available.'
+                                : 'Pick one of the available premade campaigns.'}
+                        </FormHelperText>
+                     </FormControl>
+                  </Box>
+
+                  {campaignLoadError && (
+                     <Alert severity="error">{campaignLoadError}</Alert>
+                  )}
+
+                  {selectedCampaign && (
+                     <Paper
+                        variant="outlined"
+                        sx={{
+                           p: 2,
+                           background: 'rgba(106, 78, 157, 0.07)',
+                           borderColor: 'rgba(201, 169, 98, 0.3)',
+                        }}
+                     >
+                        <Typography
+                           variant="h6"
+                           sx={{ fontFamily: '"Cinzel", serif', mb: 0.5 }}
+                        >
+                           {selectedCampaign.title}
+                        </Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                           {selectedCampaign.premise}
+                        </Typography>
+                        {selectedCampaign.description && (
+                           <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mb: selectedCampaign.tone ? 1 : 0 }}
+                           >
+                              {selectedCampaign.description}
+                           </Typography>
+                        )}
+                        {selectedCampaign.tone && (
+                           <Chip
+                              label={`Tone: ${selectedCampaign.tone}`}
+                              size="small"
+                              variant="outlined"
+                           />
+                        )}
+                     </Paper>
+                  )}
+
+                  {navButtons(!!selectedCampaignID, 'Next: Character')}
+               </Box>
+            )}
+
+            {/* ── Step 1: Name + Backstory ── */}
             {step === STEP.NAME && (
                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <TextField
@@ -658,7 +769,7 @@ export function CreateRoute() {
                </Box>
             )}
 
-            {/* ── Step 1: Race ── */}
+            {/* ── Step 2: Race ── */}
             {step === STEP.RACE && (
                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <Typography
@@ -848,7 +959,7 @@ export function CreateRoute() {
                </Box>
             )}
 
-            {/* ── Step 2: Class ── */}
+            {/* ── Step 3: Class ── */}
             {step === STEP.CLASS && (
                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Typography
@@ -965,7 +1076,7 @@ export function CreateRoute() {
                </Box>
             )}
 
-            {/* ── Step 3: Ability Scores ── */}
+            {/* ── Step 4: Ability Scores ── */}
             {step === STEP.ABILITIES && (
                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Typography
@@ -1122,7 +1233,7 @@ export function CreateRoute() {
                </Box>
             )}
 
-            {/* ── Step 4: Skills ── */}
+            {/* ── Step 5: Skills ── */}
             {step === STEP.SKILLS && selectedClass && (
                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Typography
@@ -1177,113 +1288,9 @@ export function CreateRoute() {
                   {navButtons(
                      selectedClass
                          ? selectedSkills.length === selectedClass.skillCount
-                         : false,
-                     isJoinMode ? 'Next: Review' : 'Next: Campaign',
+                          : false,
+                     'Next: Review',
                    )}
-                </Box>
-             )}
-
-             {/* ── Step 5: Campaign Selection (create mode only) ── */}
-             {isCampaignStep && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                   <Typography
-                      variant="body2"
-                     sx={{
-                        color: 'text.secondary',
-                        fontStyle: 'italic',
-                        fontFamily: '"Crimson Text", "Georgia", serif',
-                        fontSize: '1rem',
-                      }}
-                   >
-                     Choose which authored campaign to enter. The game selector
-                     now launches premade campaigns only.
-                   </Typography>
-
-                   <Box>
-                     <Typography
-                        variant="subtitle2"
-                        sx={{
-                           mb: 1.5,
-                           textTransform: 'uppercase',
-                           letterSpacing: '0.08em',
-                        }}
-                     >
-                        Campaign
-                     </Typography>
-                     <FormControl fullWidth>
-                        <InputLabel id="campaign-select-label">
-                           Campaign
-                        </InputLabel>
-                        <Select
-                           labelId="campaign-select-label"
-                           label="Campaign"
-                           value={selectedCampaignID}
-                           onChange={(e) =>
-                              setSelectedCampaignID(e.target.value)
-                           }
-                           disabled={isLoadingCampaigns}
-                        >
-                           <MenuItem value="" disabled>
-                              Select a campaign
-                           </MenuItem>
-                           {availableCampaigns.map((campaign) => (
-                              <MenuItem key={campaign.id} value={campaign.id}>
-                                 {campaign.title}
-                              </MenuItem>
-                           ))}
-                        </Select>
-                        <FormHelperText>
-                           {isLoadingCampaigns
-                              ? 'Loading available campaigns...'
-                              : availableCampaigns.length === 0
-                                ? 'No campaigns are currently available.'
-                                : 'Pick one of the available premade campaigns.'}
-                        </FormHelperText>
-                     </FormControl>
-                  </Box>
-
-                  {campaignLoadError && (
-                     <Alert severity="error">{campaignLoadError}</Alert>
-                  )}
-
-                  {selectedCampaign && (
-                     <Paper
-                        variant="outlined"
-                        sx={{
-                           p: 2,
-                           background: 'rgba(106, 78, 157, 0.07)',
-                           borderColor: 'rgba(201, 169, 98, 0.3)',
-                        }}
-                     >
-                        <Typography
-                           variant="h6"
-                           sx={{ fontFamily: '"Cinzel", serif', mb: 0.5 }}
-                        >
-                           {selectedCampaign.title}
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                           {selectedCampaign.premise}
-                        </Typography>
-                        {selectedCampaign.description && (
-                           <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ mb: selectedCampaign.tone ? 1 : 0 }}
-                           >
-                              {selectedCampaign.description}
-                           </Typography>
-                        )}
-                        {selectedCampaign.tone && (
-                           <Chip
-                              label={`Tone: ${selectedCampaign.tone}`}
-                              size="small"
-                              variant="outlined"
-                           />
-                        )}
-                     </Paper>
-                  )}
-
-                  {navButtons(!!selectedCampaignID, 'Next: Review')}
                 </Box>
              )}
 
