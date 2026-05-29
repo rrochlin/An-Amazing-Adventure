@@ -137,6 +137,8 @@ describe('ListCampaigns', () => {
                   version: '1',
                   title: 'Test Campaign',
                   premise: 'A tiny authored path.',
+                  allowed_classes: ['fighter'],
+                  allowed_races: ['human'],
                },
             ],
          },

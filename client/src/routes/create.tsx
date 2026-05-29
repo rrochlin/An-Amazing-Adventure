@@ -27,7 +27,12 @@ import {
 } from '@mui/material';
 import { useEffect, useState } from 'react';
 import { isAuthenticated } from '@/services/auth.service';
-import { CreateGame, JoinCharacter, ListCampaigns } from '@/services/api.game';
+import {
+   CreateGame,
+   JoinCharacter,
+   ListCampaigns,
+   LoadGame,
+} from '@/services/api.game';
 import type {
    CampaignManifest,
    CreateGameData,
@@ -303,6 +308,20 @@ function getRacialBonuses(
    return merged;
 }
 
+function isAllowedSelection(id: string, allowed?: string[]): boolean {
+   return !allowed || allowed.length === 0 || allowed.includes(id);
+}
+
+function getAvailableSubraces(
+   race: RaceCardData | undefined,
+   campaign: CampaignManifest | undefined,
+): SubraceData[] {
+   if (!race) return [];
+   return race.subraces.filter((subrace) =>
+      isAllowedSelection(subrace.id, campaign?.allowed_subraces),
+   );
+}
+
 function abilityModifier(score: number): string {
    const mod = Math.floor((score - 10) / 2);
    return mod >= 0 ? `+${mod}` : `${mod}`;
@@ -413,16 +432,24 @@ export function CreateRoute() {
    );
 
    // ── Derived ──
-   const selectedRace = RACES.find((r) => r.id === raceID);
-   const selectedClass = CLASSES.find((c) => c.id === classID);
    const selectedCampaign = availableCampaigns.find(
       (campaign) => campaign.id === selectedCampaignID,
    );
+   const availableRaces = RACES.filter(
+      (race) =>
+         isAllowedSelection(race.id, selectedCampaign?.allowed_races) &&
+         (race.subraces.length === 0 ||
+            getAvailableSubraces(race, selectedCampaign).length > 0),
+   );
+   const selectedRace = availableRaces.find((race) => race.id === raceID);
+   const availableSubraces = getAvailableSubraces(selectedRace, selectedCampaign);
+   const availableClasses = CLASSES.filter((cls) =>
+      isAllowedSelection(cls.id, selectedCampaign?.allowed_classes),
+   );
+   const selectedClass = availableClasses.find((cls) => cls.id === classID);
    const racialBonuses = getRacialBonuses(raceID, subraceID);
 
    useEffect(() => {
-      if (isJoinMode) return;
-
       let cancelled = false;
       setIsLoadingCampaigns(true);
       setCampaignLoadError(null);
@@ -453,7 +480,62 @@ export function CreateRoute() {
       return () => {
          cancelled = true;
       };
-   }, [isJoinMode]);
+   }, []);
+
+   useEffect(() => {
+      if (!isJoinMode || !joinSessionId) return;
+
+      let cancelled = false;
+
+      LoadGame(joinSessionId)
+         .then((response) => {
+            if (cancelled) return;
+            if (response.campaign?.campaign_id) {
+               setSelectedCampaignID(response.campaign.campaign_id);
+            }
+         })
+         .catch((e: unknown) => {
+            if (cancelled) return;
+            const msg =
+               e instanceof Error
+                  ? e.message
+                  : 'Failed to load campaign restrictions for this session.';
+            setCampaignLoadError(msg);
+         });
+
+      return () => {
+         cancelled = true;
+      };
+   }, [isJoinMode, joinSessionId]);
+
+   useEffect(() => {
+      if (!selectedCampaign) return;
+
+      const currentRace = RACES.find((race) => race.id === raceID);
+      if (currentRace) {
+         const allowedSubraces = getAvailableSubraces(
+            currentRace,
+            selectedCampaign,
+         );
+         if (
+            !isAllowedSelection(raceID, selectedCampaign.allowed_races) ||
+            (currentRace.subraces.length > 0 && allowedSubraces.length === 0)
+         ) {
+            setRaceID('');
+            setSubraceID('');
+         } else if (
+            subraceID &&
+            !allowedSubraces.some((subrace) => subrace.id === subraceID)
+         ) {
+            setSubraceID('');
+         }
+      }
+
+      if (classID && !isAllowedSelection(classID, selectedCampaign.allowed_classes)) {
+         setClassID('');
+         setSelectedSkills([]);
+      }
+   }, [classID, raceID, selectedCampaign, subraceID]);
 
    // Final scores (base + racial bonus) used in Review step
    const finalScores = ABILITY_KEYS.reduce<Record<AbilityKey, number>>(
@@ -535,12 +617,12 @@ export function CreateRoute() {
    const buildPayload = (): CreateGameData => ({
       name: playerName.trim(),
       backstory: backstory.trim() || undefined,
-      race_id: raceID,
-      subrace_id: subraceID || undefined,
-      class_id: classID,
+      race_id: selectedRace?.id ?? '',
+      subrace_id: availableSubraces.length > 0 ? subraceID || undefined : undefined,
+      class_id: selectedClass?.id ?? '',
       ability_scores: abilityScores,
       selected_skills: selectedSkills,
-      campaign_id: selectedCampaignID,
+      campaign_id: selectedCampaign?.id ?? selectedCampaignID,
    });
 
    const handleSubmit = async () => {
@@ -792,9 +874,13 @@ export function CreateRoute() {
                         gap: 1.5,
                      }}
                   >
-                     {RACES.map((race) => {
+                     {availableRaces.map((race) => {
                         const isSelected = raceID === race.id;
-                        const hasSubraces = race.subraces.length > 0;
+                        const raceSubraces = getAvailableSubraces(
+                           race,
+                           selectedCampaign,
+                        );
+                        const hasSubraces = raceSubraces.length > 0;
                         return (
                            <Card
                               key={race.id}
@@ -910,10 +996,10 @@ export function CreateRoute() {
                                           gap: 0.75,
                                        }}
                                     >
-                                       {race.subraces.map((sr) => (
-                                          <Chip
-                                             key={sr.id}
-                                             label={`${sr.name} (${sr.asiBonusLabel})`}
+                                       {raceSubraces.map((sr) => (
+                                           <Chip
+                                              key={sr.id}
+                                              label={`${sr.name} (${sr.asiBonusLabel})`}
                                              clickable
                                              onClick={(e) => {
                                                 e.stopPropagation();
@@ -952,11 +1038,11 @@ export function CreateRoute() {
                   </Box>
 
                   {navButtons(
-                     !!raceID &&
-                        (!selectedRace?.subraces.length || !!subraceID),
-                     'Next: Class',
-                  )}
-               </Box>
+                      !!selectedRace &&
+                         (availableSubraces.length === 0 || !!subraceID),
+                      'Next: Class',
+                   )}
+                </Box>
             )}
 
             {/* ── Step 3: Class ── */}
@@ -975,8 +1061,8 @@ export function CreateRoute() {
                      special abilities.
                   </Typography>
 
-                  {CLASSES.map((cls) => (
-                     <Card
+                   {availableClasses.map((cls) => (
+                      <Card
                         key={cls.id}
                         variant={classID === cls.id ? 'outlined' : 'elevation'}
                         sx={{
@@ -1072,9 +1158,9 @@ export function CreateRoute() {
                      </Card>
                   ))}
 
-                  {navButtons(!!classID, 'Next: Ability Scores')}
-               </Box>
-            )}
+                   {navButtons(!!selectedClass, 'Next: Ability Scores')}
+                </Box>
+             )}
 
             {/* ── Step 4: Ability Scores ── */}
             {step === STEP.ABILITIES && (
@@ -1295,8 +1381,8 @@ export function CreateRoute() {
              )}
 
             {/* ── Review Step ── */}
-            {isReviewStep && selectedClass && (
-               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+             {isReviewStep && selectedClass && selectedRace && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <Typography
                      variant="body2"
                      sx={{

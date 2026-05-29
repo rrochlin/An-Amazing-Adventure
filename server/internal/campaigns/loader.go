@@ -174,12 +174,15 @@ func (r *Registry) List() []Manifest {
 	out := make([]Manifest, 0, len(r.byID))
 	for _, def := range r.byID {
 		out = append(out, Manifest{
-			ID:          def.ID,
-			Version:     def.Version,
-			Title:       def.Title,
-			Premise:     def.Premise,
-			Description: def.Description,
-			Tone:        def.Tone,
+			ID:              def.ID,
+			Version:         def.Version,
+			Title:           def.Title,
+			Premise:         def.Premise,
+			Description:     def.Description,
+			Tone:            def.Tone,
+			AllowedClasses:  def.CharacterCreation.AllowedClasses,
+			AllowedRaces:    def.CharacterCreation.AllowedRaces,
+			AllowedSubraces: def.CharacterCreation.AllowedSubraces,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })

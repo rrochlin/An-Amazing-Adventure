@@ -26,35 +26,58 @@ vi.mock('@/services/auth.service', () => ({
 }));
 
 // ── API mocks ────────────────────────────────────────────────────────────────
-const { mockCreateGame, mockJoinCharacter, mockListCampaigns } = vi.hoisted(
+const { mockCreateGame, mockJoinCharacter, mockListCampaigns, mockLoadGame } = vi.hoisted(
    () => ({
-   mockCreateGame: vi.fn().mockResolvedValue({
-      session_id: 'abc-123',
-      ready: false,
-      preview_mode: false,
+    mockCreateGame: vi.fn().mockResolvedValue({
+       session_id: 'abc-123',
+       ready: false,
+       preview_mode: false,
    }),
-   mockJoinCharacter: vi
-      .fn()
-      .mockResolvedValue({ session_id: 'existing-session' }),
-      mockListCampaigns: vi.fn().mockResolvedValue({
-         campaigns: [
-            {
-               id: 'test',
-               version: '1',
-               title: 'Test Campaign',
-               premise: 'A tiny authored path.',
-               description: 'Bootstraps a deterministic campaign state.',
-               tone: 'test',
-            },
-         ],
-      }),
-   }),
+      mockJoinCharacter: vi
+        .fn()
+        .mockResolvedValue({ session_id: 'existing-session' }),
+        mockListCampaigns: vi.fn().mockResolvedValue({
+           campaigns: [
+             {
+                id: 'test',
+                version: '1',
+                title: 'Test Campaign',
+                premise: 'A tiny authored path.',
+                description: 'Bootstraps a deterministic campaign state.',
+                tone: 'test',
+                allowed_classes: ['fighter', 'barbarian', 'monk'],
+                allowed_races: ['human', 'dwarf'],
+                allowed_subraces: ['hill-dwarf', 'mountain-dwarf'],
+             },
+             {
+                id: 'fighter-trial',
+                version: '1',
+                title: 'Fighter Trial',
+                premise: 'A narrow martial scenario.',
+                allowed_classes: ['fighter'],
+                allowed_races: ['dwarf'],
+                allowed_subraces: ['hill-dwarf'],
+             },
+           ],
+        }),
+       mockLoadGame: vi.fn().mockResolvedValue({
+          session_id: 'existing-session-id',
+          ready: true,
+          state: {},
+          campaign: {
+             campaign_id: 'test',
+             campaign_version: '1',
+             active_node_id: 'intro',
+          },
+       }),
+    }),
 );
 
 vi.mock('@/services/api.game', () => ({
    CreateGame: mockCreateGame,
    JoinCharacter: mockJoinCharacter,
    ListCampaigns: mockListCampaigns,
+   LoadGame: mockLoadGame,
 }));
 
 // ── Import component directly (bypasses TanStack lazy wrapper) ───────────────
@@ -164,6 +187,41 @@ describe('CreateRoute wizard — new game mode', () => {
       expect(screen.getByText(/Choose your ancestry/i)).toBeInTheDocument();
       expect(screen.getByText('Human')).toBeInTheDocument();
       expect(screen.getByText('Dwarf')).toBeInTheDocument();
+   });
+
+   it('filters race options to the selected campaign', async () => {
+      await renderWizard();
+      let user = await selectCampaign();
+      await clickNext(user);
+      user = await fillName();
+      await clickNext(user);
+
+      expect(screen.getByText('Human')).toBeInTheDocument();
+      expect(screen.getByText('Dwarf')).toBeInTheDocument();
+      expect(screen.queryByText('Elf')).not.toBeInTheDocument();
+      expect(screen.queryByText('Tiefling')).not.toBeInTheDocument();
+   });
+
+   it('filters subraces and classes to the selected campaign', async () => {
+      await renderWizard();
+      let user = await selectCampaign('Fighter Trial');
+      await clickNext(user);
+      user = await fillName();
+      await clickNext(user);
+
+      expect(screen.getByText('Dwarf')).toBeInTheDocument();
+      expect(screen.queryByText('Human')).not.toBeInTheDocument();
+
+      await user.click(screen.getByText('Dwarf'));
+      expect(screen.getByText(/Hill Dwarf/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Mountain Dwarf/i)).not.toBeInTheDocument();
+
+      await user.click(screen.getByText(/Hill Dwarf/i));
+      await clickNext(user);
+
+      expect(screen.getByText('Fighter')).toBeInTheDocument();
+      expect(screen.queryByText('Barbarian')).not.toBeInTheDocument();
+      expect(screen.queryByText('Monk')).not.toBeInTheDocument();
    });
 
    it('Race step: Next disabled until race selected', async () => {
@@ -357,7 +415,7 @@ describe('CreateRoute wizard — new game mode', () => {
 describe('CreateRoute wizard — join game mode', () => {
    beforeEach(() => {
       mockUseSearch.mockReturnValue({ session: 'existing-session-id' });
-   });
+    });
 
    it('shows Join the Adventure heading in join mode', async () => {
       await renderWizard();
@@ -423,6 +481,27 @@ describe('CreateRoute wizard — join game mode', () => {
          }),
       );
       expect(mockCreateGame).not.toHaveBeenCalled();
+   });
+
+   it('filters join-mode race options using the session campaign', async () => {
+      mockLoadGame.mockResolvedValueOnce({
+         session_id: 'existing-session-id',
+         ready: true,
+         state: {},
+         campaign: {
+            campaign_id: 'fighter-trial',
+            campaign_version: '1',
+            active_node_id: 'intro',
+         },
+      });
+
+      await renderWizard();
+      const user = await fillName('Thorin Ironforge');
+      await clickNext(user);
+
+      expect(screen.getByText('Dwarf')).toBeInTheDocument();
+      expect(screen.queryByText('Human')).not.toBeInTheDocument();
+      expect(screen.queryByText('Elf')).not.toBeInTheDocument();
    });
 });
 

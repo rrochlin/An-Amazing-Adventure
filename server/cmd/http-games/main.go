@@ -222,6 +222,9 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	if !ok {
 		return jsonResponse(400, map[string]string{"error": fmt.Sprintf("unknown campaign_id %q", body.CampaignID)}), nil
 	}
+	if validationErr := validateCharacterCreationForCampaign(selectedCampaign, body.CharacterCreationData); validationErr != nil {
+		return jsonResponse(400, map[string]string{"error": validationErr.Error()}), nil
+	}
 
 	dbClient, err := db.New(ctx)
 	if err != nil {
@@ -550,6 +553,24 @@ func handleJoinCharacter(ctx context.Context, req events.APIGatewayV2HTTPRequest
 		return jsonResponse(403, map[string]string{"error": "forbidden"}), nil
 	}
 
+	var selectedCampaign *campaigns.CampaignDefinition
+	if saveState.Campaign != nil && saveState.Campaign.CampaignID != "" {
+		reg, regErr := getCampaignRegistry()
+		if regErr != nil {
+			log.Printf("handleJoinCharacter: load campaigns: %v", regErr)
+			return serverError(), nil
+		}
+		var ok bool
+		selectedCampaign, ok = reg.Get(saveState.Campaign.CampaignID)
+		if !ok {
+			log.Printf("handleJoinCharacter: campaign %q missing for session %s", saveState.Campaign.CampaignID, sessionID)
+			return serverError(), nil
+		}
+	}
+	if validationErr := validateCharacterCreationForCampaign(selectedCampaign, body); validationErr != nil {
+		return jsonResponse(400, map[string]string{"error": validationErr.Error()}), nil
+	}
+
 	g, err := game.FromSaveState(saveState)
 	if err != nil {
 		return serverError(), nil
@@ -605,6 +626,42 @@ func isAuthorizedForSession(ss game.SaveState, userID string) bool {
 		}
 	}
 	return false
+}
+
+func validateCharacterCreationForCampaign(def *campaigns.CampaignDefinition, creation game.CharacterCreationData) error {
+	if def == nil {
+		return nil
+	}
+	if err := validateAllowedCampaignValue("class_id", creation.ClassID, def.CharacterCreation.AllowedClasses, def.ID); err != nil {
+		return err
+	}
+	if err := validateAllowedCampaignValue("race_id", creation.RaceID, def.CharacterCreation.AllowedRaces, def.ID); err != nil {
+		return err
+	}
+	if creation.SubraceID != "" {
+		if err := validateAllowedCampaignValue("subrace_id", creation.SubraceID, def.CharacterCreation.AllowedSubraces, def.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAllowedCampaignValue(field, value string, allowed []string, campaignID string) error {
+	if len(allowed) == 0 {
+		return nil
+	}
+	if value == "" && field != "subrace_id" {
+		return fmt.Errorf("%s is required for campaign %q", field, campaignID)
+	}
+	if value == "" {
+		return nil
+	}
+	for _, candidate := range allowed {
+		if candidate == value {
+			return nil
+		}
+	}
+	return fmt.Errorf("%s %q is not allowed for campaign %q", field, value, campaignID)
 }
 
 func matchesGamePath(path string) bool {

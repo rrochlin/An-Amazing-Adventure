@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/rrochlin/an-amazing-adventure/internal/db"
 )
 
 func assertPanicsWithEnvAbsent(t *testing.T, envVar string, fn func()) {
@@ -137,5 +138,31 @@ func TestChatRequest_Parsed(t *testing.T) {
 	}
 	if req.Action != "chat" {
 		t.Errorf("expected action 'chat', got %q", req.Action)
+	}
+}
+
+func TestEnsureSenderConnectionAddsMissingSender(t *testing.T) {
+	conns := []db.Connection{{ConnectionID: "conn-2"}}
+	sender := db.Connection{ConnectionID: "conn-1"}
+
+	updated := ensureSenderConnection(conns, sender)
+	if len(updated) != 2 {
+		t.Fatalf("expected sender to be added once, got %d connections", len(updated))
+	}
+	if updated[1].ConnectionID != sender.ConnectionID {
+		t.Fatalf("expected appended sender %q, got %q", sender.ConnectionID, updated[1].ConnectionID)
+	}
+}
+
+func TestEnsureSenderConnectionDoesNotDuplicateSender(t *testing.T) {
+	conns := []db.Connection{{ConnectionID: "conn-1"}}
+	sender := db.Connection{ConnectionID: "conn-1"}
+
+	updated := ensureSenderConnection(conns, sender)
+	if len(updated) != 1 {
+		t.Fatalf("expected existing sender connection to remain unique, got %d connections", len(updated))
+	}
+	if updated[0].ConnectionID != sender.ConnectionID {
+		t.Fatalf("expected sender connection %q to be preserved, got %q", sender.ConnectionID, updated[0].ConnectionID)
 	}
 }

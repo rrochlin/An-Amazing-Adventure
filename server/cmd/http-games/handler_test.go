@@ -96,13 +96,37 @@ func TestHandlerListCampaigns_OK(t *testing.T) {
 		t.Fatalf("expected 200, got %d body=%s", resp.StatusCode, resp.Body)
 	}
 	var body struct {
-		Campaigns []map[string]any `json:"campaigns"`
+		Campaigns []struct {
+			ID              string   `json:"id"`
+			AllowedClasses  []string `json:"allowed_classes"`
+			AllowedRaces    []string `json:"allowed_races"`
+			AllowedSubraces []string `json:"allowed_subraces"`
+		} `json:"campaigns"`
 	}
 	if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
 		t.Fatalf("invalid JSON response: %v", err)
 	}
 	if len(body.Campaigns) == 0 {
 		t.Fatal("expected at least one campaign manifest")
+	}
+	foundTest := false
+	for _, campaign := range body.Campaigns {
+		if campaign.ID != "test" {
+			continue
+		}
+		foundTest = true
+		if len(campaign.AllowedClasses) == 0 {
+			t.Fatal("expected test campaign manifest to expose allowed_classes")
+		}
+		if len(campaign.AllowedRaces) == 0 {
+			t.Fatal("expected test campaign manifest to expose allowed_races")
+		}
+		if len(campaign.AllowedSubraces) == 0 {
+			t.Fatal("expected test campaign manifest to expose allowed_subraces")
+		}
+	}
+	if !foundTest {
+		t.Fatal("expected test campaign manifest in response")
 	}
 }
 
@@ -189,6 +213,21 @@ func TestHandlerCreateGame_UnknownCampaignID_Returns400(t *testing.T) {
 	}
 	if resp.StatusCode != 400 {
 		t.Fatalf("expected 400 for unknown campaign id, got %d body=%s", resp.StatusCode, resp.Body)
+	}
+}
+
+func TestHandlerCreateGame_DisallowedClassForCampaign_Returns400(t *testing.T) {
+	body := `{"campaign_id":"test","name":"Aria","race_id":"human","class_id":"wizard"}`
+	req := makeHTTPReq("POST", "/api/games", body, "user-123", nil)
+	resp, err := handler(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected lambda error: %v", err)
+	}
+	if resp.StatusCode != 400 {
+		t.Fatalf("expected 400 for disallowed campaign class, got %d body=%s", resp.StatusCode, resp.Body)
+	}
+	if !strings.Contains(resp.Body, "class_id") {
+		t.Fatalf("expected class_id validation error, got body=%s", resp.Body)
 	}
 }
 

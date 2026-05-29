@@ -172,10 +172,13 @@ type Action struct {
 }
 
 type Manifest struct {
-	ID          string `json:"id"`
-	Version     string `json:"version"`
-	Title       string `json:"title"`
-	Premise     string `json:"premise"`
-	Description string `json:"description,omitempty"`
-	Tone        string `json:"tone,omitempty"`
+	ID              string   `json:"id"`
+	Version         string   `json:"version"`
+	Title           string   `json:"title"`
+	Premise         string   `json:"premise"`
+	Description     string   `json:"description,omitempty"`
+	Tone            string   `json:"tone,omitempty"`
+	AllowedClasses  []string `json:"allowed_classes,omitempty"`
+	AllowedRaces    []string `json:"allowed_races,omitempty"`
+	AllowedSubraces []string `json:"allowed_subraces,omitempty"`
 }

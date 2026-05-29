@@ -33,6 +33,9 @@ export interface CampaignManifest {
    premise: string;
    description?: string;
    tone?: string;
+   allowed_classes?: string[];
+   allowed_races?: string[];
+   allowed_subraces?: string[];
 }
 
 export interface CampaignStateView {
