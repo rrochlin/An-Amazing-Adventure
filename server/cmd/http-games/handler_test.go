@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
 func assertPanicsWithEnvAbsent(t *testing.T, envVar string, fn func()) {
@@ -216,18 +218,35 @@ func TestHandlerCreateGame_UnknownCampaignID_Returns400(t *testing.T) {
 	}
 }
 
-func TestHandlerCreateGame_DisallowedClassForCampaign_Returns400(t *testing.T) {
-	body := `{"campaign_id":"test","name":"Aria","race_id":"human","class_id":"wizard"}`
+func TestHandlerCreateGame_DisallowedRaceForCampaign_Returns400(t *testing.T) {
+	body := `{"campaign_id":"test","name":"Aria","race_id":"tiefling","class_id":"fighter"}`
 	req := makeHTTPReq("POST", "/api/games", body, "user-123", nil)
 	resp, err := handler(context.Background(), req)
 	if err != nil {
 		t.Fatalf("unexpected lambda error: %v", err)
 	}
 	if resp.StatusCode != 400 {
-		t.Fatalf("expected 400 for disallowed campaign class, got %d body=%s", resp.StatusCode, resp.Body)
+		t.Fatalf("expected 400 for disallowed campaign race, got %d body=%s", resp.StatusCode, resp.Body)
 	}
-	if !strings.Contains(resp.Body, "class_id") {
-		t.Fatalf("expected class_id validation error, got body=%s", resp.Body)
+	if !strings.Contains(resp.Body, "race_id") {
+		t.Fatalf("expected race_id validation error, got body=%s", resp.Body)
+	}
+}
+
+func TestValidateCharacterCreationForCampaign_DisallowedClass(t *testing.T) {
+	def := &campaigns.CampaignDefinition{
+		ID: "fighter-only",
+		CharacterCreation: campaigns.CharacterCreationRules{
+			AllowedClasses: []string{"fighter"},
+		},
+	}
+
+	err := validateCharacterCreationForCampaign(def, game.CharacterCreationData{ClassID: "barbarian"})
+	if err == nil {
+		t.Fatal("expected class restriction error")
+	}
+	if !strings.Contains(err.Error(), "class_id") {
+		t.Fatalf("expected class_id in error, got %v", err)
 	}
 }
 
