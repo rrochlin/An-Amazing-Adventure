@@ -21,8 +21,11 @@ func TestLoadCampaignFile_TestCampaign(t *testing.T) {
 	if def.StartNodeID != "intro" {
 		t.Fatalf("expected start_node_id=intro, got %q", def.StartNodeID)
 	}
-	if _, ok := def.StoryNodes["relic_prompt"]; !ok {
-		t.Fatal("expected relic_prompt story node to exist")
+	if _, ok := def.StoryNodes["route_choice"]; !ok {
+		t.Fatal("expected route_choice story node to exist")
+	}
+	if _, ok := def.StoryNodes["hidden_probe"]; !ok {
+		t.Fatal("expected hidden_probe story node to exist")
 	}
 }
 

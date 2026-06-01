@@ -2,8 +2,8 @@
   "id": "test",
   "version": "1",
   "title": "Test Campaign",
-  "premise": "A minimal systems-only campaign used to validate quest state and dialogue state alignment.",
-  "description": "Tiny deterministic runtime probe with no narration-heavy behavior.",
+  "premise": "A deterministic authored campaign used to validate branching quest state, dialogue alignment, and runtime progression features.",
+  "description": "Broader deterministic runtime probe covering labels, counters, objective state, actor state, failure branches, and dialogue alignment.",
   "tone": "test",
   "character_creation": {
     "use_standard_creator": true,
@@ -70,17 +70,36 @@
       "name": "Caretaker",
       "kind": "npc",
       "goal": "Stand in the relic room as a static authored endpoint.",
-      "importance": "secondary"
+      "importance": "secondary",
+      "rail": {
+        "steps": [
+          { "id": "camp_idle", "location_id": "camp" },
+          { "id": "shadowed", "location_id": "crossroads" },
+          { "id": "secured", "location_id": "relic_room" }
+        ]
+      }
     }
   },
   "objectives": {
     "finish_intro": {
       "title": "Complete Intro",
-      "description": "Advance from the intro node to the relic prompt node."
+      "description": "Advance from the intro node to the route choice node."
     },
-    "reach_relic_prompt": {
-      "title": "Reach Relic Prompt",
-      "description": "Advance from the relic prompt node to completion."
+    "choose_route": {
+      "title": "Choose Route",
+      "description": "Pick a deterministic route branch to test label-driven authored transitions."
+    },
+    "advance_hidden_probe": {
+      "title": "Advance Hidden Probe",
+      "description": "Satisfy the counter and actor-step gate on the hidden route."
+    },
+    "verify_hidden_probe": {
+      "title": "Verify Hidden Probe",
+      "description": "Confirm objective-status gating after the hidden route advances."
+    },
+    "inspect_target_probe": {
+      "title": "Inspect Target Probe",
+      "description": "Confirm actor-room gating on the target route."
     },
     "complete_test": {
       "title": "Complete Test",
@@ -93,10 +112,20 @@
       "program": "dialogue/intro.yarnc",
       "strings": "dialogue/intro.csv"
     },
-    "relic_dialogue": {
+    "route_dialogue": {
       "format": "yarn",
-      "program": "dialogue/relic.yarnc",
-      "strings": "dialogue/relic.csv"
+      "program": "dialogue/route.yarnc",
+      "strings": "dialogue/route.csv"
+    },
+    "room_dialogue": {
+      "format": "yarn",
+      "program": "dialogue/room.yarnc",
+      "strings": "dialogue/room.csv"
+    },
+    "verification_dialogue": {
+      "format": "yarn",
+      "program": "dialogue/verification.yarnc",
+      "strings": "dialogue/verification.csv"
     }
   },
   "story_nodes": {
@@ -106,7 +135,7 @@
       "dialogue_start_node": "Intro",
       "title": "Intro",
       "summary": "The first deterministic systems check.",
-      "objective_text": "Send a message containing proceed to move to the relic prompt node.",
+      "objective_text": "Send a message containing proceed to move to the route choice node.",
       "on_enter": [
         { "type": "activate_objective", "objective_id": "finish_intro" },
         { "type": "start_dialogue", "asset_id": "intro_dialogue", "start_node": "Intro" }
@@ -119,40 +148,158 @@
           "conditions": [
             { "type": "flag_true", "key": "intro_complete" }
           ],
-          "next_node_id": "relic_prompt",
+          "next_node_id": "route_choice",
           "actions": [
             { "type": "complete_objective", "objective_id": "finish_intro" },
-            { "type": "activate_objective", "objective_id": "reach_relic_prompt" }
+            { "type": "activate_objective", "objective_id": "choose_route" }
           ]
         }
       ]
     },
-    "relic_prompt": {
-      "mode": "yarn_dialogue",
-      "dialogue_asset_id": "relic_dialogue",
-      "dialogue_start_node": "RelicPrompt",
-      "title": "Relic Prompt",
-      "summary": "The second deterministic systems check.",
-      "objective_text": "Send a message containing take relic to complete the test flow.",
+    "route_choice": {
+      "mode": "hybrid",
+      "dialogue_asset_id": "route_dialogue",
+      "dialogue_start_node": "RouteChoice",
+      "title": "Route Choice",
+      "summary": "A deterministic branching node that tests label-based authored transitions.",
+      "objective_text": "Send a message containing hidden, target, or novice to test label-based branching.",
       "on_enter": [
-        { "type": "start_dialogue", "asset_id": "relic_dialogue", "start_node": "RelicPrompt" }
+        { "type": "start_dialogue", "asset_id": "route_dialogue", "start_node": "RouteChoice" }
       ],
       "allowed_conditions": [
-        { "type": "flag_true", "key": "relic_taken" }
+        { "type": "label_equals", "key": "entry_route", "allowed_values": ["hidden", "target", "novice"] }
+      ],
+      "failure_rules": [
+        {
+          "conditions": [
+            { "type": "label_equals", "key": "entry_route", "value": "novice" }
+          ],
+          "next_node_id": "route_failure",
+          "actions": [
+            { "type": "fail_objective", "objective_id": "choose_route" },
+            { "type": "set_flag", "key": "route_failed", "value": true },
+            { "type": "set_label", "key": "selected_branch", "value": "novice" }
+          ]
+        }
       ],
       "completion_rules": [
         {
           "conditions": [
-            { "type": "flag_true", "key": "relic_taken" }
+            { "type": "label_equals", "key": "entry_route", "value": "hidden" }
           ],
-          "next_node_id": "complete",
+          "next_node_id": "hidden_probe",
           "actions": [
-            { "type": "complete_objective", "objective_id": "reach_relic_prompt" },
-            { "type": "activate_objective", "objective_id": "complete_test" },
-            { "type": "complete_objective", "objective_id": "complete_test" }
+            { "type": "complete_objective", "objective_id": "choose_route" },
+            { "type": "activate_objective", "objective_id": "advance_hidden_probe" },
+            { "type": "set_flag", "key": "hidden_branch_seen", "value": true },
+            { "type": "set_label", "key": "selected_branch", "value": "hidden" },
+            { "type": "move_actor_to_step", "actor_id": "caretaker", "step_id": "shadowed" }
+          ]
+        },
+        {
+          "conditions": [
+            { "type": "label_equals", "key": "entry_route", "value": "target" }
+          ],
+          "next_node_id": "target_probe",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "choose_route" },
+            { "type": "activate_objective", "objective_id": "inspect_target_probe" },
+            { "type": "set_flag", "key": "target_branch_seen", "value": true },
+            { "type": "set_label", "key": "selected_branch", "value": "target" },
+            { "type": "move_actor_to_room", "actor_id": "caretaker", "room_id": "relic_room" }
           ]
         }
       ]
+    },
+    "hidden_probe": {
+      "mode": "ai_scene",
+      "title": "Hidden Probe",
+      "summary": "An AI-scene node that tests counter and actor-step gating.",
+      "objective_text": "Send a message containing scan twice to satisfy the counter-and-actor-step gate.",
+      "allowed_conditions": [
+        { "type": "counter_gte", "key": "scan_count", "allowed_values": ["2"] }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "counter_gte", "key": "scan_count", "value": 2 },
+            { "type": "actor_at_step", "actor_id": "caretaker", "step_id": "shadowed" }
+          ],
+          "next_node_id": "hidden_verification",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "advance_hidden_probe" },
+            { "type": "activate_objective", "objective_id": "verify_hidden_probe" },
+            { "type": "set_flag", "key": "hidden_gate_passed", "value": true },
+            { "type": "set_counter", "key": "hidden_score", "value": 2 }
+          ]
+        }
+      ]
+    },
+    "target_probe": {
+      "mode": "hybrid",
+      "dialogue_asset_id": "room_dialogue",
+      "dialogue_start_node": "RoomProbe",
+      "title": "Target Probe",
+      "summary": "A hybrid node that tests actor-room gating.",
+      "objective_text": "Send a message containing inspect room to satisfy the actor-room gate.",
+      "on_enter": [
+        { "type": "start_dialogue", "asset_id": "room_dialogue", "start_node": "RoomProbe" }
+      ],
+      "allowed_conditions": [
+        { "type": "flag_true", "key": "room_verified" }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "actor_in_room", "actor_id": "caretaker", "room_id": "relic_room" },
+            { "type": "flag_true", "key": "room_verified" }
+          ],
+          "next_node_id": "complete",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "inspect_target_probe" },
+            { "type": "activate_objective", "objective_id": "complete_test" },
+            { "type": "complete_objective", "objective_id": "complete_test" },
+            { "type": "set_flag", "key": "target_gate_passed", "value": true },
+            { "type": "set_label", "key": "outcome", "value": "target_complete" }
+          ]
+        }
+      ]
+    },
+    "hidden_verification": {
+      "mode": "yarn_dialogue",
+      "dialogue_asset_id": "verification_dialogue",
+      "dialogue_start_node": "Verification",
+      "title": "Hidden Verification",
+      "summary": "A dialogue node that tests objective-status gating after a completed authored objective.",
+      "objective_text": "Send a message containing verify to confirm objective-status gating.",
+      "on_enter": [
+        { "type": "start_dialogue", "asset_id": "verification_dialogue", "start_node": "Verification" }
+      ],
+      "allowed_conditions": [
+        { "type": "flag_true", "key": "verification_complete" }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "objective_status", "objective_id": "advance_hidden_probe", "status": "completed" },
+            { "type": "flag_true", "key": "verification_complete" }
+          ],
+          "next_node_id": "complete",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "verify_hidden_probe" },
+            { "type": "activate_objective", "objective_id": "complete_test" },
+            { "type": "complete_objective", "objective_id": "complete_test" },
+            { "type": "set_flag", "key": "verification_passed", "value": true },
+            { "type": "set_label", "key": "outcome", "value": "hidden_complete" }
+          ]
+        }
+      ]
+    },
+    "route_failure": {
+      "mode": "ai_scene",
+      "title": "Route Failure",
+      "summary": "The systems-only runtime test entered the failure branch.",
+      "objective_text": "The systems-only runtime test entered the failure branch."
     },
     "complete": {
       "mode": "ai_scene",
@@ -165,6 +312,6 @@
   "intro_sequence": {
     "mode": "systems_probe",
     "opening_node_id": "intro",
-    "opening_text": "This campaign is a minimal runtime probe for node state and dialogue state."
+    "opening_text": "This campaign is a broader runtime probe for branching, counters, actor state, objective state, and dialogue alignment."
   }
 }
