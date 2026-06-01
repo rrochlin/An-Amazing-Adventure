@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
 func assertPanicsWithEnvAbsent(t *testing.T, envVar string, fn func()) {
@@ -137,5 +139,45 @@ func TestChatRequest_Parsed(t *testing.T) {
 	}
 	if req.Action != "chat" {
 		t.Errorf("expected action 'chat', got %q", req.Action)
+	}
+}
+
+func TestDeterministicTestCampaignResponseText_UsesEnteredDialogue(t *testing.T) {
+	state := &game.CampaignRuntimeState{CurrentObjective: "The systems-only runtime test is complete."}
+	history := []game.ChatMessage{{Type: "narrative", Content: "Intro prompt: send a message containing proceed to advance the systems test."}}
+	response := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{
+		Transitioned: true,
+		ToNodeID:     "relic_prompt",
+		DialogueText: "Relic prompt: send a message containing take relic to complete the systems test.",
+	}, history)
+	if response != "Relic prompt: send a message containing take relic to complete the systems test." {
+		t.Fatalf("expected entered dialogue text, got %q", response)
+	}
+}
+
+func TestDeterministicTestCampaignResponseText_UsesCompletionObjectiveOnce(t *testing.T) {
+	state := &game.CampaignRuntimeState{CurrentObjective: "The systems-only runtime test is complete."}
+	response := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{
+		Transitioned: true,
+		ToNodeID:     "complete",
+	}, []game.ChatMessage{{Type: "narrative", Content: "Relic prompt: send a message containing take relic to complete the systems test."}})
+	if response != "The systems-only runtime test is complete." {
+		t.Fatalf("expected completion objective text, got %q", response)
+	}
+
+	duplicate := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{
+		Transitioned: true,
+		ToNodeID:     "complete",
+	}, []game.ChatMessage{{Type: "narrative", Content: "The systems-only runtime test is complete."}})
+	if duplicate != "" {
+		t.Fatalf("expected duplicate completion text to be suppressed, got %q", duplicate)
+	}
+}
+
+func TestDeterministicTestCampaignResponseText_NoTransitionNoMessage(t *testing.T) {
+	state := &game.CampaignRuntimeState{CurrentObjective: "Send a message containing proceed to move to the relic prompt node."}
+	response := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{}, []game.ChatMessage{{Type: "narrative", Content: "Intro prompt: send a message containing proceed to advance the systems test."}})
+	if response != "" {
+		t.Fatalf("expected no response text when nothing changed, got %q", response)
 	}
 }

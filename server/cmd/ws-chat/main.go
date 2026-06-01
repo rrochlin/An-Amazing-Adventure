@@ -384,20 +384,6 @@ func handleDeterministicTestCampaignChat(
 		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
 	}
 
-	ack := testCampaignAcknowledgement(g.Campaign.ActiveNodeID)
-	chunkFrame := wsutil.Frame{
-		Type:    wsutil.FrameNarrativeChunk,
-		Payload: map[string]string{"content": ack},
-	}
-	stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
-	for _, s := range stale {
-		_ = dbClient.DeleteConnection(ctx, s)
-	}
-	staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
-	for _, s := range staleEnds {
-		_ = dbClient.DeleteConnection(ctx, s)
-	}
-
 	resolution := deterministicTestCampaignResolution(g.Campaign.ActiveNodeID, playerText)
 	campaigns.ApplyConditionResolution(g.Campaign, resolution)
 	transitionResult, transitionErr := campaigns.AdvanceCampaign(campaignDef, g)
@@ -407,9 +393,7 @@ func handleDeterministicTestCampaignChat(
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
-	authoredDialogueText := ""
 	if transitionResult.Transitioned && transitionResult.ToNodeID != "" {
-		authoredDialogueText = transitionResult.DialogueText
 		if nextNode, ok := campaignDef.StoryNodes[transitionResult.ToNodeID]; ok && nextNode.ObjectiveText != "" {
 			engineerResult.Events = append(engineerResult.Events, game.WorldEvent{
 				Type:    "campaign_progress",
@@ -417,34 +401,28 @@ func handleDeterministicTestCampaignChat(
 			})
 		}
 	}
+	responseText := deterministicTestCampaignResponseText(g.Campaign, transitionResult, saveState.ChatHistory)
 
 	history := saveState.ChatHistory
 	history = append(history, game.ChatMessage{Type: "player", Content: playerText})
-	history = append(history, game.ChatMessage{
-		Type:    "narrative",
-		Content: ack,
-		Events:  engineerResult.Events,
-	})
 	narrative := saveState.Narrative
-	narrative = append(narrative,
-		game.NarrativeMessage{
-			Role:    "user",
-			Content: []game.NarrativeBlock{{Type: "text", Text: playerText}},
-		},
-		game.NarrativeMessage{
-			Role:    "assistant",
-			Content: []game.NarrativeBlock{{Type: "text", Text: ack}},
-		},
-	)
-	if authoredDialogueText != "" {
-		history = append(history, game.ChatMessage{Type: "narrative", Content: authoredDialogueText})
+	narrative = append(narrative, game.NarrativeMessage{
+		Role:    "user",
+		Content: []game.NarrativeBlock{{Type: "text", Text: playerText}},
+	})
+	if responseText != "" {
+		history = append(history, game.ChatMessage{
+			Type:    "narrative",
+			Content: responseText,
+			Events:  engineerResult.Events,
+		})
 		narrative = append(narrative, game.NarrativeMessage{
 			Role:    "assistant",
-			Content: []game.NarrativeBlock{{Type: "text", Text: authoredDialogueText}},
+			Content: []game.NarrativeBlock{{Type: "text", Text: responseText}},
 		})
 		chunkFrame := wsutil.Frame{
 			Type:    wsutil.FrameNarrativeChunk,
-			Payload: map[string]string{"content": authoredDialogueText},
+			Payload: map[string]string{"content": responseText},
 		}
 		stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
 		for _, s := range stale {
@@ -513,12 +491,47 @@ func deterministicTestCampaignResolution(activeNodeID, playerInput string) campa
 		if strings.Contains(input, "proceed") {
 			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"intro_complete": true}}
 		}
-	case "relic_prompt":
-		if strings.Contains(input, "take relic") {
-			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"relic_taken": true}}
+	case "route_choice":
+		switch {
+		case strings.Contains(input, "hidden"):
+			return campaigns.ConditionResolution{Labels: map[string]string{"entry_route": "hidden"}}
+		case strings.Contains(input, "target"):
+			return campaigns.ConditionResolution{Labels: map[string]string{"entry_route": "target"}}
+		case strings.Contains(input, "novice"):
+			return campaigns.ConditionResolution{Labels: map[string]string{"entry_route": "novice"}}
+		}
+	case "hidden_probe":
+		if strings.Contains(input, "scan") {
+			return campaigns.ConditionResolution{Counters: map[string]int{"scan_count": 2}}
+		}
+	case "target_probe":
+		if strings.Contains(input, "inspect room") {
+			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"room_verified": true}}
+		}
+	case "hidden_verification":
+		if strings.Contains(input, "verify") {
+			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"verification_complete": true}}
 		}
 	}
 	return campaigns.ConditionResolution{}
+}
+
+func deterministicTestCampaignResponseText(state *game.CampaignRuntimeState, transitionResult campaigns.TransitionResult, history []game.ChatMessage) string {
+	if state == nil {
+		return ""
+	}
+
+	responseText := transitionResult.DialogueText
+	if responseText == "" && transitionResult.Transitioned {
+		responseText = state.CurrentObjective
+	}
+	if responseText == "" {
+		return ""
+	}
+	if lastNarrativeContent(history) == responseText {
+		return ""
+	}
+	return responseText
 }
 
 func ensureSenderConnection(conns []db.Connection, sender db.Connection) []db.Connection {
@@ -530,15 +543,13 @@ func ensureSenderConnection(conns []db.Connection, sender db.Connection) []db.Co
 	return append(conns, sender)
 }
 
-func testCampaignAcknowledgement(activeNodeID string) string {
-	switch activeNodeID {
-	case "intro":
-		return "Test runtime acknowledged. For this node, send a message containing proceed."
-	case "relic_prompt":
-		return "Test runtime acknowledged. For this node, send a message containing take relic."
-	default:
-		return "Test runtime acknowledged."
+func lastNarrativeContent(history []game.ChatMessage) string {
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Type == "narrative" && strings.TrimSpace(history[i].Content) != "" {
+			return history[i].Content
+		}
 	}
+	return ""
 }
 
 func main() {
