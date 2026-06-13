@@ -1,1 +1,12 @@
-placeholder yarn bytecode for route branching asset validation
+name: "test-route"
+nodes: {
+  key: "RouteChoice"
+  value: {
+    name: "RouteChoice"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "route_001" }
+    }
+    instructions: { opcode: STOP }
+  }
+}

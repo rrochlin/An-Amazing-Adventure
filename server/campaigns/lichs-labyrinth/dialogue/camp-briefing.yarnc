@@ -1,1 +1,12 @@
-placeholder yarn bytecode
+name: "lich-camp-briefing"
+nodes: {
+  key: "CampBriefing"
+  value: {
+    name: "CampBriefing"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "camp_001" }
+    }
+    instructions: { opcode: STOP }
+  }
+}

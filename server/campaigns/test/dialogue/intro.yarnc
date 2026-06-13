@@ -1,1 +1,12 @@
-placeholder yarn bytecode for p-o-c asset validation
+name: "test-intro"
+nodes: {
+  key: "Intro"
+  value: {
+    name: "Intro"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "intro_001" }
+    }
+    instructions: { opcode: STOP }
+  }
+}

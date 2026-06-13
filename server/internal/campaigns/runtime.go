@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/dialogue"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
@@ -151,6 +152,8 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 				AssetID:     node.DialogueAssetID,
 				CurrentNode: node.DialogueStartNode,
 			}
+		} else if g.Campaign.ActiveDialogue.CurrentNode == "" {
+			g.Campaign.ActiveDialogue.CurrentNode = node.DialogueStartNode
 		}
 	}
 	return currentDialogueOpening(def, g.Campaign), nil
@@ -205,11 +208,17 @@ func currentDialogueOpening(def *CampaignDefinition, state *game.CampaignRuntime
 	if !ok {
 		return ""
 	}
-	line, err := dialogue.OpeningLine(def.SourceFS, asset.Strings)
+	result, err := dialogue.RunNode(def.SourceFS, asset.Program, asset.Strings, state.ActiveDialogue.CurrentNode, state.ActiveDialogue.Variables)
 	if err != nil {
 		return ""
 	}
-	return line
+	state.ActiveDialogue.CurrentNode = result.CurrentNode
+	state.ActiveDialogue.Variables = result.Variables
+	state.ActiveDialogue.AwaitingChoice = false
+	if len(result.Lines) == 0 {
+		return ""
+	}
+	return strings.Join(result.Lines, "\n")
 }
 
 func conditionsMatch(def *CampaignDefinition, g *game.Game, conditions []Condition) (bool, error) {
