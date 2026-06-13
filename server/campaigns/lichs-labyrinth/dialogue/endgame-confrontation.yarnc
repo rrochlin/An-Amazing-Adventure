@@ -1,1 +1,12 @@
-placeholder yarn bytecode
+name: "lich-endgame"
+nodes: {
+  key: "EndgameConfrontation"
+  value: {
+    name: "EndgameConfrontation"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "end_001" }
+    }
+    instructions: { opcode: STOP }
+  }
+}

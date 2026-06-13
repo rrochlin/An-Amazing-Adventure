@@ -1,1 +1,12 @@
-placeholder yarn bytecode for room probe asset validation
+name: "test-room"
+nodes: {
+  key: "RoomProbe"
+  value: {
+    name: "RoomProbe"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "room_001" }
+    }
+    instructions: { opcode: STOP }
+  }
+}

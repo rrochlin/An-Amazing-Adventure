@@ -1,1 +1,12 @@
-placeholder yarn bytecode for verification asset validation
+name: "test-verification"
+nodes: {
+  key: "Verification"
+  value: {
+    name: "Verification"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "verification_001" }
+    }
+    instructions: { opcode: STOP }
+  }
+}
