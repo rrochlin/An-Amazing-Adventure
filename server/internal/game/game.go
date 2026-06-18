@@ -73,12 +73,20 @@ type DialogueRuntimeState struct {
 	CurrentNode    string            `json:"current_node,omitempty" dynamodbav:"current_node,omitempty"`
 	Variables      map[string]string `json:"variables,omitempty" dynamodbav:"variables,omitempty"`
 	AwaitingChoice bool              `json:"awaiting_choice,omitempty" dynamodbav:"awaiting_choice,omitempty"`
+	PendingChoices []DialogueChoice  `json:"pending_choices,omitempty" dynamodbav:"pending_choices,omitempty"`
+}
+
+// DialogueChoice is a player-selectable option surfaced from a Yarn Options call.
+type DialogueChoice struct {
+	ID   int    `json:"id" dynamodbav:"id"`
+	Text string `json:"text" dynamodbav:"text"`
 }
 
 type DialogueStateView struct {
-	AssetID        string `json:"asset_id"`
-	CurrentNode    string `json:"current_node,omitempty"`
-	AwaitingChoice bool   `json:"awaiting_choice,omitempty"`
+	AssetID        string           `json:"asset_id"`
+	CurrentNode    string           `json:"current_node,omitempty"`
+	AwaitingChoice bool             `json:"awaiting_choice,omitempty"`
+	PendingChoices []DialogueChoice `json:"pending_choices,omitempty"`
 }
 
 type CampaignStateView struct {
@@ -915,6 +923,7 @@ func buildDialogueStateView(state *DialogueRuntimeState) *DialogueStateView {
 		AssetID:        state.AssetID,
 		CurrentNode:    state.CurrentNode,
 		AwaitingChoice: state.AwaitingChoice,
+		PendingChoices: state.PendingChoices,
 	}
 }
 
