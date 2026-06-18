@@ -1,5 +1,5 @@
 // ws-game-action handles direct player actions that mutate game state without AI:
-// move, pick_up, drop, equip, unequip, attack.
+// move, pick_up, drop, equip, unequip, attack, dialogue_choice.
 package main
 
 import (
@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
+	"sync"
 
 	rpgevents "github.com/KirkDiggler/rpg-toolkit/events"
 	dnd5echar "github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/character"
@@ -14,16 +17,30 @@ import (
 	"github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/monster/actions"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/combat"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
 )
 
+var (
+	campaignRegistryOnce sync.Once
+	campaignRegistry     *campaigns.Registry
+	campaignRegistryErr  error
+)
+
+func getCampaignRegistry() (*campaigns.Registry, error) {
+	campaignRegistryOnce.Do(func() {
+		campaignRegistry, campaignRegistryErr = campaigns.LoadEmbeddedRegistry()
+	})
+	return campaignRegistry, campaignRegistryErr
+}
+
 type actionRequest struct {
 	Action    string `json:"action"`
-	SubAction string `json:"sub_action"` // "move" | "pick_up" | "drop" | "equip" | "unequip" | "attack"
-	Payload   string `json:"payload"`    // direction, item name, or target monster ID
+	SubAction string `json:"sub_action"` // "move" | "pick_up" | "drop" | "equip" | "unequip" | "attack" | "dialogue_choice"
+	Payload   string `json:"payload"`    // direction, item name, target monster ID, or choice ID
 	// WeaponID is optional — used only for "attack" sub_action.
 	// If empty the character's equipped main-hand weapon is used.
 	WeaponID string `json:"weapon_id,omitempty"`
@@ -80,6 +97,12 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	ws, err := wsutil.New(ctx)
 	if err != nil {
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+	}
+
+	// dialogue_choice is handled separately: it broadcasts authored text like
+	// ws-chat does instead of sending a full state update.
+	if msg.SubAction == "dialogue_choice" {
+		return handleDialogueChoice(ctx, dbClient, ws, conn, g, &saveState, msg.Payload)
 	}
 
 	// Execute the action
@@ -319,6 +342,156 @@ func handleAttack(ctx context.Context, g *game.Game, userID, targetMonsterID, we
 	}
 
 	return nil
+}
+
+// handleDialogueChoice resumes a paused Yarn dialogue scene with the player's
+// selected choice index. It broadcasts the authored post-choice text using the
+// same narrative frame pattern as ws-chat and sends a state delta.
+func handleDialogueChoice(
+	ctx context.Context,
+	dbClient *db.Client,
+	ws *wsutil.Sender,
+	conn db.Connection,
+	g *game.Game,
+	saveState *game.SaveState,
+	payload string,
+) (events.APIGatewayProxyResponse, error) {
+	connID := conn.ConnectionID
+
+	choiceID, parseErr := strconv.Atoi(strings.TrimSpace(payload))
+	if parseErr != nil {
+		_ = ws.SendError(ctx, connID, "dialogue_choice: invalid choice ID")
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+
+	if g.Campaign == nil || g.Campaign.CampaignID == "" {
+		_ = ws.SendError(ctx, connID, "dialogue_choice: no active campaign")
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+	if g.Campaign.ActiveDialogue == nil || !g.Campaign.ActiveDialogue.AwaitingChoice {
+		_ = ws.SendError(ctx, connID, "dialogue_choice: not awaiting a choice")
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+
+	reg, regErr := getCampaignRegistry()
+	if regErr != nil {
+		log.Printf("ws-game-action: dialogue_choice: load campaigns: %v", regErr)
+		_ = ws.SendError(ctx, connID, "internal_error")
+		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+	}
+	campaignDef, ok := reg.Get(g.Campaign.CampaignID)
+	if !ok {
+		log.Printf("ws-game-action: dialogue_choice: campaign %q not found", g.Campaign.CampaignID)
+		_ = ws.SendError(ctx, connID, "campaign_not_found")
+		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+	}
+
+	choiceText, commands, resumeErr := campaigns.ResumeDialogueWithChoice(campaignDef, g.Campaign, choiceID)
+	if resumeErr != nil {
+		log.Printf("ws-game-action: dialogue_choice: resume: %v", resumeErr)
+		_ = ws.SendError(ctx, connID, resumeErr.Error())
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+
+	// Commands will be processed by the Milestone B command bridge; log for now.
+	if len(commands) > 0 {
+		log.Printf("ws-game-action: dialogue_choice: unprocessed Yarn commands: %v", commands)
+	}
+
+	// Build the per-connection broadcast list.
+	allConns, connsErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	if connsErr != nil {
+		log.Printf("ws-game-action: dialogue_choice: get connections: %v", connsErr)
+		allConns = []db.Connection{conn}
+	}
+	if len(allConns) == 0 {
+		allConns = []db.Connection{conn}
+	}
+	allConnIDs := make([]string, 0, len(allConns))
+	for _, gc := range allConns {
+		allConnIDs = append(allConnIDs, gc.ConnectionID)
+	}
+
+	// Broadcast the authored post-choice text as narrative frames, then check
+	// for a campaign transition that may produce additional narrative.
+	history := saveState.ChatHistory
+	narrative := saveState.Narrative
+
+	if choiceText != "" {
+		chunkFrame := wsutil.Frame{
+			Type:    wsutil.FrameNarrativeChunk,
+			Payload: map[string]string{"content": choiceText},
+		}
+		stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
+		for _, s := range stale {
+			_ = dbClient.DeleteConnection(ctx, s)
+		}
+		staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
+		for _, s := range staleEnds {
+			_ = dbClient.DeleteConnection(ctx, s)
+		}
+		history = append(history, game.ChatMessage{Type: "narrative", Content: choiceText})
+		narrative = append(narrative, game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: choiceText}},
+		})
+	}
+
+	// Check whether the completed dialogue triggers a campaign node transition.
+	transitionResult, transitionErr := campaigns.AdvanceCampaign(campaignDef, g)
+	if transitionErr != nil {
+		log.Printf("ws-game-action: dialogue_choice: campaign transition: %v", transitionErr)
+	} else if transitionResult.Transitioned && transitionResult.DialogueText != "" {
+		text := transitionResult.DialogueText
+		chunkFrame := wsutil.Frame{
+			Type:    wsutil.FrameNarrativeChunk,
+			Payload: map[string]string{"content": text},
+		}
+		stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
+		for _, s := range stale {
+			_ = dbClient.DeleteConnection(ctx, s)
+		}
+		staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
+		for _, s := range staleEnds {
+			_ = dbClient.DeleteConnection(ctx, s)
+		}
+		history = append(history, game.ChatMessage{Type: "narrative", Content: text})
+		narrative = append(narrative, game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: text}},
+		})
+	}
+
+	// Persist.
+	g.Version++
+	saved := g.ToSaveState(narrative, history)
+	if err := dbClient.PutGame(ctx, saved); err != nil {
+		log.Printf("ws-game-action: dialogue_choice: put game: %v", err)
+		_ = ws.SendError(ctx, connID, "Failed to save game state")
+		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
+	}
+
+	// Send state delta to all party members.
+	freshConns, freshErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+	if freshErr != nil {
+		freshConns = []db.Connection{conn}
+	}
+	for _, gc := range freshConns {
+		memberUID := string(gc.UserID)
+		memberView := g.BuildGameStateView(memberUID, nil)
+		delta := game.StateDelta{
+			Player:   &memberView.Player,
+			Self:     &memberView.Self,
+			Campaign: g.BuildCampaignStateView(),
+		}
+		if sendErr := ws.SendDelta(ctx, gc.ConnectionID, delta); sendErr != nil {
+			log.Printf("ws-game-action: dialogue_choice: send delta to %s: %v", gc.ConnectionID, sendErr)
+			_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)
+		}
+	}
+
+	log.Printf("ws-game-action: dialogue_choice: complete conn=%s game=%s choice=%d", connID, conn.GameID, choiceID)
+	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 
 func main() {
