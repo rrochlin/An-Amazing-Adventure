@@ -54,6 +54,12 @@ export interface DialogueStateView {
    asset_id: string;
    current_node?: string;
    awaiting_choice?: boolean;
+   pending_choices?: DialogueChoice[];
+}
+
+export interface DialogueChoice {
+   id: number;
+   text: string;
 }
 
 // D&D 5e mechanical stats returned in CharacterView
