@@ -12,6 +12,7 @@ import {
    CardActionArea,
    CardContent,
    Chip,
+   CircularProgress,
    Divider,
    FormControl,
    FormHelperText,
@@ -518,6 +519,76 @@ export function CreateRoute() {
       });
    };
 
+   // ── Test campaign quick-start ──
+   // Randomizes all required fields using only the test campaign's allowed
+   // races/classes and submits directly — skips the entire wizard.
+   const TEST_ALLOWED_RACES = ['human', 'dwarf'] as const;
+   const TEST_DWARF_SUBRACES = ['hill-dwarf', 'mountain-dwarf'];
+   const TEST_ALLOWED_CLASS_IDS = ['fighter', 'barbarian', 'monk'];
+
+   const handleTestQuickStart = async () => {
+      if (isSubmitting) return;
+      setError(null);
+      setIsSubmitting(true);
+      try {
+         const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+         const name = `Tester-${suffix}`;
+
+         const pickedRace =
+            TEST_ALLOWED_RACES[
+               Math.floor(Math.random() * TEST_ALLOWED_RACES.length)
+            ];
+         const pickedSubrace =
+            pickedRace === 'dwarf'
+               ? TEST_DWARF_SUBRACES[
+                    Math.floor(Math.random() * TEST_DWARF_SUBRACES.length)
+                 ]
+               : undefined;
+
+         const pickedClassID =
+            TEST_ALLOWED_CLASS_IDS[
+               Math.floor(Math.random() * TEST_ALLOWED_CLASS_IDS.length)
+            ];
+         const pickedClass = CLASSES.find((c) => c.id === pickedClassID)!;
+
+         const shuffledScores = [...STANDARD_ARRAY].sort(
+            () => Math.random() - 0.5,
+         );
+         const scores = {} as Record<AbilityKey, number>;
+         ABILITY_KEYS.forEach((key, i) => {
+            scores[key] = shuffledScores[i];
+         });
+
+         const shuffledSkills = [...pickedClass.skills].sort(
+            () => Math.random() - 0.5,
+         );
+         const skills = shuffledSkills
+            .slice(0, pickedClass.skillCount)
+            .map((s) => s.id);
+
+         const result = await CreateGame({
+            name,
+            race_id: pickedRace,
+            subrace_id: pickedSubrace,
+            class_id: pickedClassID,
+            ability_scores: scores,
+            selected_skills: skills,
+            campaign_id: 'test',
+         });
+         navigate({
+            to: '/game-{$sessionUUID}',
+            params: { sessionUUID: result.session_id },
+         });
+      } catch (e: unknown) {
+         const msg =
+            e instanceof Error
+               ? e.message
+               : 'Quick start failed — please try again.';
+         setError(msg);
+         setIsSubmitting(false);
+      }
+   };
+
    const handleNext = () => {
       setStep((s) => s + 1);
       setError(null);
@@ -735,6 +806,45 @@ export function CreateRoute() {
                            />
                         )}
                      </Paper>
+                  )}
+
+                  {/* Quick Start shortcut — only shown for the test campaign */}
+                  {selectedCampaignID === 'test' && (
+                     <Box>
+                        <Divider sx={{ mb: 2 }}>
+                           <Typography
+                              variant="caption"
+                              sx={{
+                                 textTransform: 'uppercase',
+                                 letterSpacing: '0.08em',
+                                 color: 'text.secondary',
+                              }}
+                           >
+                              or
+                           </Typography>
+                        </Divider>
+                        <Button
+                           variant="contained"
+                           color="secondary"
+                           fullWidth
+                           onClick={handleTestQuickStart}
+                           disabled={isSubmitting}
+                           sx={{ fontFamily: '"Cinzel", serif' }}
+                        >
+                           {isSubmitting ? (
+                              <CircularProgress size={20} sx={{ color: 'inherit' }} />
+                           ) : (
+                              '⚡ Quick Start — Randomize & Play'
+                           )}
+                        </Button>
+                        <Typography
+                           variant="caption"
+                           color="text.secondary"
+                           sx={{ display: 'block', textAlign: 'center', mt: 0.75 }}
+                        >
+                           Picks a random name, race, class, ability scores, and skills — skips the wizard
+                        </Typography>
+                     </Box>
                   )}
 
                   {navButtons(!!selectedCampaignID, 'Next: Character')}
