@@ -6,13 +6,14 @@ import {
    Button,
    CircularProgress,
    Paper,
+   Stack,
    TextField,
    Typography,
    useColorScheme,
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useEffect, useRef } from 'react';
-import { type ChatMessageType, type WorldEvent } from '../types/types';
+import { type ChatMessageType, type DialogueChoice, type WorldEvent } from '../types/types';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -450,6 +451,80 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
    );
 };
 
+// ChoicePanel renders authored Yarn dialogue choices as clickable buttons.
+// It is shown when a dialogue scene pauses waiting for a player selection.
+const ChoicePanel = ({
+   choices,
+   onChoiceSelected,
+}: {
+   choices: DialogueChoice[];
+   onChoiceSelected: (id: number) => void;
+}) => {
+   const { mode } = useColorScheme();
+   const isDark = mode === 'dark' || mode === 'system' || !mode;
+
+   return (
+      <Box
+         sx={{
+            px: 2,
+            pb: 1.5,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.5,
+         }}
+      >
+         <Typography
+            sx={{
+               fontFamily: 'Cinzel, Georgia, serif',
+               fontSize: '0.65rem',
+               fontWeight: 600,
+               letterSpacing: '0.08em',
+               textTransform: 'uppercase',
+               color: isDark
+                  ? 'rgba(201, 169, 98, 0.7)'
+                  : 'rgba(107, 86, 56, 0.7)',
+               mb: 0.5,
+            }}
+         >
+            Choose your response
+         </Typography>
+         <Stack direction="column" spacing={0.75}>
+            {choices.map((choice) => (
+               <Button
+                  key={choice.id}
+                  variant="outlined"
+                  size="small"
+                  onClick={() => onChoiceSelected(choice.id)}
+                  sx={{
+                     justifyContent: 'flex-start',
+                     textAlign: 'left',
+                     fontFamily: 'Crimson Text, Georgia, serif',
+                     fontSize: '1rem',
+                     textTransform: 'none',
+                     borderColor: isDark
+                        ? 'rgba(201, 169, 98, 0.4)'
+                        : 'rgba(107, 86, 56, 0.4)',
+                     color: isDark
+                        ? 'rgba(220, 200, 160, 0.9)'
+                        : 'text.primary',
+                     '&:hover': {
+                        borderColor: isDark
+                           ? 'rgba(201, 169, 98, 0.8)'
+                           : 'rgba(107, 86, 56, 0.8)',
+                        backgroundColor: isDark
+                           ? 'rgba(201, 169, 98, 0.08)'
+                           : 'rgba(107, 86, 56, 0.06)',
+                     },
+                  }}
+               >
+                  {choice.text}
+               </Button>
+            ))}
+         </Stack>
+      </Box>
+   );
+};
+
 export const Chat = ({
    chatHistory,
    streamingMessage,
@@ -457,6 +532,8 @@ export const Chat = ({
    setCommand,
    handleCommand,
    isLoading,
+   pendingChoices,
+   onChoiceSelected,
 }: {
    chatHistory: ChatMessageType[];
    /** Raw text chunks accumulating from the current AI stream. When non-empty,
@@ -466,6 +543,10 @@ export const Chat = ({
    setCommand: (cmd: string) => void;
    handleCommand: () => void;
    isLoading: boolean;
+   /** Authored Yarn dialogue choices waiting for a player selection. */
+   pendingChoices?: DialogueChoice[];
+   /** Called when the player selects one of the pending choices. */
+   onChoiceSelected?: (id: number) => void;
 }) => {
    const { mode } = useColorScheme();
    const isDark = mode === 'dark' || mode === 'system' || !mode;
@@ -589,6 +670,15 @@ export const Chat = ({
             <Box ref={chatBottomRef} />
          </Box>
 
+         {/* Authored dialogue choices — shown above the input when a Yarn scene
+             is paused awaiting a player selection. */}
+         {pendingChoices && pendingChoices.length > 0 && onChoiceSelected && (
+            <ChoicePanel
+               choices={pendingChoices}
+               onChoiceSelected={onChoiceSelected}
+            />
+         )}
+
          <Box
             sx={{
                display: 'flex',
@@ -615,7 +705,7 @@ export const Chat = ({
                   }
                }}
                placeholder="Speak thy command..."
-               disabled={isLoading}
+               disabled={isLoading || (pendingChoices && pendingChoices.length > 0)}
                size="small"
                autoComplete="off"
                sx={{
@@ -648,7 +738,7 @@ export const Chat = ({
             <Button
                variant="contained"
                onClick={handleSubmit}
-               disabled={isLoading || !command.trim()}
+               disabled={isLoading || !command.trim() || (pendingChoices && pendingChoices.length > 0)}
                sx={{
                   minWidth: '100px',
                   height: '40px', // Match TextField small size height

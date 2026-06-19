@@ -1,6 +1,7 @@
 package dialogue
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,19 +15,33 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// errAwaitingChoice is a sentinel returned by the Options handler when no
+// choice has been pre-selected. It signals RunNode to stop execution and
+// return the available options to the caller.
+var errAwaitingChoice = errors.New("dialogue awaiting player choice")
+
+// Choice represents one selectable option in a Yarn dialogue.
+type Choice struct {
+	ID   int    `json:"id"`
+	Text string `json:"text"`
+}
+
 type RunResult struct {
-	Lines      []string
-	Commands   []string
-	CurrentNode string
-	Variables  map[string]string
-	Completed  bool
+	Lines          []string
+	Commands       []string
+	CurrentNode    string
+	Variables      map[string]string
+	Completed      bool
+	PendingChoices []Choice // non-empty when execution paused waiting for a player choice
 }
 
 type handler struct {
-	currentNode string
-	lineText    map[string]string
-	lines       []string
-	commands    []string
+	currentNode    string
+	lineText       map[string]string
+	lines          []string
+	commands       []string
+	selectChoice   *int  // when set, use this ID at the next Options call and continue
+	pendingChoices []Choice
 }
 
 func (h *handler) NodeStart(nodeName string) error {
@@ -45,13 +60,40 @@ func (h *handler) Line(line yarnvm.Line) error {
 	return nil
 }
 
+// Options is called by the Yarn VM when it reaches a set of player choices.
+//
+// Resume mode (selectChoice != nil): use the pre-selected option ID, reset the
+// collected lines so only post-choice lines are returned to the caller, and
+// continue VM execution.
+//
+// Pause mode (selectChoice == nil): collect available options and return
+// errAwaitingChoice to halt the VM and hand control back to the caller.
 func (h *handler) Options(options []yarnvm.Option) (int, error) {
-	for _, option := range options {
-		if option.IsAvailable {
-			return option.ID, nil
+	if h.selectChoice != nil {
+		idx := *h.selectChoice
+		for _, opt := range options {
+			if opt.ID == idx && opt.IsAvailable {
+				// Discard lines seen before this choice so the caller only
+				// receives narrative that follows the selected option.
+				h.lines = nil
+				return idx, nil
+			}
 		}
+		return 0, fmt.Errorf("dialogue choice %d is not available", idx)
 	}
-	return 0, fmt.Errorf("dialogue options contained no available choices")
+
+	// Pause: collect available options and halt execution.
+	for _, opt := range options {
+		if !opt.IsAvailable {
+			continue
+		}
+		text := ""
+		if t, ok := h.lineText[opt.Line.ID]; ok {
+			text = substitute(t, opt.Line.Substitutions)
+		}
+		h.pendingChoices = append(h.pendingChoices, Choice{ID: opt.ID, Text: text})
+	}
+	return 0, errAwaitingChoice
 }
 
 func (h *handler) Command(command string) error {
@@ -79,7 +121,15 @@ func OpeningLine(fsys fs.FS, stringsPath string) (string, error) {
 	return "", nil
 }
 
-func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars map[string]string) (RunResult, error) {
+// RunNode executes a compiled Yarn node and returns the result.
+//
+// selectChoice controls how Options prompts are handled:
+//   - nil: pause execution at the first Options call and return PendingChoices.
+//     Completed will be false and PendingChoices will be non-empty.
+//   - non-nil: resume a previously paused node by selecting the given option ID.
+//     The VM re-runs from the node start and applies the choice when the Options
+//     call is reached. Only lines emitted after the choice are returned.
+func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars map[string]string, selectChoice *int) (RunResult, error) {
 	if fsys == nil {
 		return RunResult{}, fmt.Errorf("dialogue source fs is not set")
 	}
@@ -100,13 +150,23 @@ func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars 
 	}
 
 	vars := yarnvm.NewMapVariableStorageFromMap(loadVars(storedVars))
-	h := &handler{lineText: lineText}
+	h := &handler{lineText: lineText, selectChoice: selectChoice}
 	vm := &yarnvm.VirtualMachine{
 		Program: prog,
 		Handler: h,
 		Vars:    vars,
 	}
 	if err := vm.Run(startNode); err != nil {
+		if errors.Is(err, errAwaitingChoice) {
+			return RunResult{
+				Lines:          h.lines,
+				Commands:       h.commands,
+				CurrentNode:    h.currentNode,
+				Variables:      storeVars(vars.Contents()),
+				Completed:      false,
+				PendingChoices: h.pendingChoices,
+			}, nil
+		}
 		return RunResult{}, fmt.Errorf("run dialogue node %q: %w", startNode, err)
 	}
 

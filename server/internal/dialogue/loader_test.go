@@ -36,7 +36,7 @@ func TestRunNode_ExecutesCompiledDialogueProgram(t *testing.T) {
 		t.Fatal("expected test campaign")
 	}
 	asset := def.DialogueAssets["route_dialogue"]
-	result, err := dialogue.RunNode(def.SourceFS, asset.Program, asset.Strings, "RouteChoice", nil)
+	result, err := dialogue.RunNode(def.SourceFS, asset.Program, asset.Strings, "RouteChoice", nil, nil)
 	if err != nil {
 		t.Fatalf("run node: %v", err)
 	}

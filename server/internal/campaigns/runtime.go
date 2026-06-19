@@ -208,17 +208,78 @@ func currentDialogueOpening(def *CampaignDefinition, state *game.CampaignRuntime
 	if !ok {
 		return ""
 	}
-	result, err := dialogue.RunNode(def.SourceFS, asset.Program, asset.Strings, state.ActiveDialogue.CurrentNode, state.ActiveDialogue.Variables)
+	result, err := dialogue.RunNode(def.SourceFS, asset.Program, asset.Strings, state.ActiveDialogue.CurrentNode, state.ActiveDialogue.Variables, nil)
 	if err != nil {
 		return ""
 	}
 	state.ActiveDialogue.CurrentNode = result.CurrentNode
 	state.ActiveDialogue.Variables = result.Variables
-	state.ActiveDialogue.AwaitingChoice = false
+	if len(result.PendingChoices) > 0 {
+		// Dialogue paused waiting for a player choice; surface the options.
+		choices := make([]game.DialogueChoice, len(result.PendingChoices))
+		for i, c := range result.PendingChoices {
+			choices[i] = game.DialogueChoice{ID: c.ID, Text: c.Text}
+		}
+		state.ActiveDialogue.AwaitingChoice = true
+		state.ActiveDialogue.PendingChoices = choices
+	} else {
+		state.ActiveDialogue.AwaitingChoice = false
+		state.ActiveDialogue.PendingChoices = nil
+	}
 	if len(result.Lines) == 0 {
 		return ""
 	}
 	return strings.Join(result.Lines, "\n")
+}
+
+// ResumeDialogueWithChoice resumes a paused Yarn dialogue by re-running the
+// active node with the player's selected choice ID. It returns the narrative
+// text emitted after the choice and any Yarn commands encountered during
+// post-choice execution.
+//
+// The caller is responsible for persisting the updated state and processing
+// any returned commands.
+func ResumeDialogueWithChoice(def *CampaignDefinition, state *game.CampaignRuntimeState, choiceID int) (string, []string, error) {
+	if def == nil || state == nil || state.ActiveDialogue == nil {
+		return "", nil, fmt.Errorf("no active dialogue to resume")
+	}
+	if !state.ActiveDialogue.AwaitingChoice {
+		return "", nil, fmt.Errorf("dialogue is not awaiting a choice")
+	}
+	asset, ok := def.DialogueAssets[state.ActiveDialogue.AssetID]
+	if !ok {
+		return "", nil, fmt.Errorf("dialogue asset %q not found in campaign", state.ActiveDialogue.AssetID)
+	}
+	result, err := dialogue.RunNode(
+		def.SourceFS,
+		asset.Program,
+		asset.Strings,
+		state.ActiveDialogue.CurrentNode,
+		state.ActiveDialogue.Variables,
+		&choiceID,
+	)
+	if err != nil {
+		return "", nil, fmt.Errorf("resume dialogue with choice %d: %w", choiceID, err)
+	}
+
+	// Update runtime state.
+	state.ActiveDialogue.CurrentNode = result.CurrentNode
+	state.ActiveDialogue.Variables = result.Variables
+	if len(result.PendingChoices) > 0 {
+		// Another choice follows immediately; keep awaiting state.
+		choices := make([]game.DialogueChoice, len(result.PendingChoices))
+		for i, c := range result.PendingChoices {
+			choices[i] = game.DialogueChoice{ID: c.ID, Text: c.Text}
+		}
+		state.ActiveDialogue.AwaitingChoice = true
+		state.ActiveDialogue.PendingChoices = choices
+	} else {
+		state.ActiveDialogue.AwaitingChoice = false
+		state.ActiveDialogue.PendingChoices = nil
+	}
+
+	text := strings.Join(result.Lines, "\n")
+	return text, result.Commands, nil
 }
 
 func conditionsMatch(def *CampaignDefinition, g *game.Game, conditions []Condition) (bool, error) {

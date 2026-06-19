@@ -271,6 +271,13 @@ function GamePage() {
       setCommand('');
    };
 
+   const handleChoiceSelected = (choiceId: number) => {
+      sendAction('dialogue_choice', String(choiceId));
+   };
+
+   const pendingChoices =
+      campaignState?.active_dialogue?.pending_choices ?? undefined;
+
    if (loadError) {
       return (
          <Box sx={{ p: 4 }}>
@@ -636,6 +643,8 @@ function GamePage() {
                      wsError === 'ai_access_not_enabled' ||
                      wsError === 'quota_exceeded'
                   }
+                  pendingChoices={pendingChoices}
+                  onChoiceSelected={handleChoiceSelected}
                />
             </Paper>
             {wsError === 'ai_access_not_enabled' && (
