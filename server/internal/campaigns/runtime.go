@@ -156,7 +156,7 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 			g.Campaign.ActiveDialogue.CurrentNode = node.DialogueStartNode
 		}
 	}
-	return currentDialogueOpening(def, g.Campaign), nil
+	return currentDialogueOpening(def, g), nil
 }
 
 func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, error) {
@@ -200,10 +200,11 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 	return TransitionResult{}, nil
 }
 
-func currentDialogueOpening(def *CampaignDefinition, state *game.CampaignRuntimeState) string {
-	if def == nil || state == nil || state.ActiveDialogue == nil || state.ActiveDialogue.AssetID == "" {
+func currentDialogueOpening(def *CampaignDefinition, g *game.Game) string {
+	if def == nil || g == nil || g.Campaign == nil || g.Campaign.ActiveDialogue == nil || g.Campaign.ActiveDialogue.AssetID == "" {
 		return ""
 	}
+	state := g.Campaign
 	asset, ok := def.DialogueAssets[state.ActiveDialogue.AssetID]
 	if !ok {
 		return ""
@@ -211,6 +212,11 @@ func currentDialogueOpening(def *CampaignDefinition, state *game.CampaignRuntime
 	result, err := dialogue.RunNode(def.SourceFS, asset.Program, asset.Strings, state.ActiveDialogue.CurrentNode, state.ActiveDialogue.Variables, nil)
 	if err != nil {
 		return ""
+	}
+	if len(result.Commands) > 0 {
+		if applyErr := ApplyDialogueCommands(def, g, result.Commands); applyErr != nil {
+			return ""
+		}
 	}
 	state.ActiveDialogue.CurrentNode = result.CurrentNode
 	state.ActiveDialogue.Variables = result.Variables
@@ -239,16 +245,17 @@ func currentDialogueOpening(def *CampaignDefinition, state *game.CampaignRuntime
 //
 // The caller is responsible for persisting the updated state and processing
 // any returned commands.
-func ResumeDialogueWithChoice(def *CampaignDefinition, state *game.CampaignRuntimeState, choiceID int) (string, []string, error) {
-	if def == nil || state == nil || state.ActiveDialogue == nil {
-		return "", nil, fmt.Errorf("no active dialogue to resume")
+func ResumeDialogueWithChoice(def *CampaignDefinition, g *game.Game, choiceID int) (string, error) {
+	if def == nil || g == nil || g.Campaign == nil || g.Campaign.ActiveDialogue == nil {
+		return "", fmt.Errorf("no active dialogue to resume")
 	}
+	state := g.Campaign
 	if !state.ActiveDialogue.AwaitingChoice {
-		return "", nil, fmt.Errorf("dialogue is not awaiting a choice")
+		return "", fmt.Errorf("dialogue is not awaiting a choice")
 	}
 	asset, ok := def.DialogueAssets[state.ActiveDialogue.AssetID]
 	if !ok {
-		return "", nil, fmt.Errorf("dialogue asset %q not found in campaign", state.ActiveDialogue.AssetID)
+		return "", fmt.Errorf("dialogue asset %q not found in campaign", state.ActiveDialogue.AssetID)
 	}
 	result, err := dialogue.RunNode(
 		def.SourceFS,
@@ -259,7 +266,12 @@ func ResumeDialogueWithChoice(def *CampaignDefinition, state *game.CampaignRunti
 		&choiceID,
 	)
 	if err != nil {
-		return "", nil, fmt.Errorf("resume dialogue with choice %d: %w", choiceID, err)
+		return "", fmt.Errorf("resume dialogue with choice %d: %w", choiceID, err)
+	}
+	if len(result.Commands) > 0 {
+		if applyErr := ApplyDialogueCommands(def, g, result.Commands); applyErr != nil {
+			return "", fmt.Errorf("apply dialogue commands: %w", applyErr)
+		}
 	}
 
 	// Update runtime state.
@@ -279,7 +291,92 @@ func ResumeDialogueWithChoice(def *CampaignDefinition, state *game.CampaignRunti
 	}
 
 	text := strings.Join(result.Lines, "\n")
-	return text, result.Commands, nil
+	return text, nil
+}
+
+// ApplyDialogueCommands parses and executes a list of Yarn command strings
+// against campaign runtime state via the existing action executor.
+func ApplyDialogueCommands(def *CampaignDefinition, g *game.Game, commands []string) error {
+	if g == nil || g.Campaign == nil || len(commands) == 0 {
+		return nil
+	}
+	actions := make([]Action, 0, len(commands))
+	for _, cmd := range commands {
+		action, err := parseDialogueCommand(cmd)
+		if err != nil {
+			return err
+		}
+		actions = append(actions, action)
+	}
+	return applyActions(def, g, actions)
+}
+
+func parseDialogueCommand(command string) (Action, error) {
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return Action{}, fmt.Errorf("dialogue command is empty")
+	}
+	parts := strings.Fields(trimmed)
+	if len(parts) == 0 {
+		return Action{}, fmt.Errorf("dialogue command is empty")
+	}
+	switch parts[0] {
+	case "set_flag":
+		if len(parts) < 2 {
+			return Action{}, fmt.Errorf("set_flag requires key")
+		}
+		value := true
+		if len(parts) >= 3 {
+			if parts[2] == "false" {
+				value = false
+			} else if parts[2] != "true" {
+				return Action{}, fmt.Errorf("set_flag value must be true or false")
+			}
+		}
+		return Action{Type: "set_flag", Key: parts[1], Value: value}, nil
+	case "set_label":
+		if len(parts) < 3 {
+			return Action{}, fmt.Errorf("set_label requires key and value")
+		}
+		return Action{Type: "set_label", Key: parts[1], Value: strings.Join(parts[2:], " ")}, nil
+	case "inc_counter":
+		if len(parts) < 2 {
+			return Action{}, fmt.Errorf("inc_counter requires key")
+		}
+		if len(parts) >= 3 {
+			return Action{Type: "inc_counter", Key: parts[1], Value: parts[2]}, nil
+		}
+		return Action{Type: "inc_counter", Key: parts[1], Value: 1}, nil
+	case "set_counter":
+		if len(parts) < 3 {
+			return Action{}, fmt.Errorf("set_counter requires key and value")
+		}
+		return Action{Type: "set_counter", Key: parts[1], Value: parts[2]}, nil
+	case "activate_objective":
+		if len(parts) < 2 {
+			return Action{}, fmt.Errorf("activate_objective requires objective ID")
+		}
+		return Action{Type: "activate_objective", ObjectiveID: parts[1]}, nil
+	case "complete_objective":
+		if len(parts) < 2 {
+			return Action{}, fmt.Errorf("complete_objective requires objective ID")
+		}
+		return Action{Type: "complete_objective", ObjectiveID: parts[1]}, nil
+	case "fail_objective":
+		if len(parts) < 2 {
+			return Action{}, fmt.Errorf("fail_objective requires objective ID")
+		}
+		return Action{Type: "fail_objective", ObjectiveID: parts[1]}, nil
+	case "start_dialogue":
+		if len(parts) < 3 {
+			return Action{}, fmt.Errorf("start_dialogue requires asset_id and start_node")
+		}
+		return Action{Type: "start_dialogue", AssetID: parts[1], StartNode: parts[2]}, nil
+	case "end_dialogue":
+		return Action{Type: "end_dialogue"}, nil
+	default:
+		return Action{}, fmt.Errorf("unsupported dialogue command %q", parts[0])
+	}
 }
 
 func conditionsMatch(def *CampaignDefinition, g *game.Game, conditions []Condition) (bool, error) {

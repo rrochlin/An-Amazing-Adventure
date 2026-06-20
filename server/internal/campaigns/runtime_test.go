@@ -7,6 +7,65 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
+func TestApplyDialogueCommands_AppliesStateAndObjectiveMutations(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+	g := game.NewGame("session-cmd-1", "user-1")
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:      def.ID,
+		CampaignVersion: def.Version,
+		ActiveNodeID:    "intro",
+		BoolFlags:       map[string]bool{},
+		Labels:          map[string]string{},
+		Counters:        map[string]int{},
+		ActorStates:     map[string]game.ActorRuntimeState{},
+		CompanionStates: map[string]game.CompanionState{},
+	}
+
+	err = campaigns.ApplyDialogueCommands(def, g, []string{
+		"set_flag intro_complete true",
+		"set_label selected_branch hidden",
+		"inc_counter scan_count 2",
+		"activate_objective choose_route",
+	})
+	if err != nil {
+		t.Fatalf("apply dialogue commands: %v", err)
+	}
+
+	if !g.Campaign.BoolFlags["intro_complete"] {
+		t.Fatalf("expected intro_complete flag set, got %#v", g.Campaign.BoolFlags)
+	}
+	if g.Campaign.Labels["selected_branch"] != "hidden" {
+		t.Fatalf("expected selected_branch label hidden, got %#v", g.Campaign.Labels)
+	}
+	if g.Campaign.Counters["scan_count"] != 2 {
+		t.Fatalf("expected scan_count counter 2, got %#v", g.Campaign.Counters)
+	}
+	statuses := map[string]string{}
+	for _, objective := range g.Campaign.ActiveObjectives {
+		statuses[objective.ID] = objective.Status
+	}
+	if statuses["choose_route"] != "active" {
+		t.Fatalf("expected choose_route active, got %#v", statuses)
+	}
+}
+
+func TestApplyDialogueCommands_ReturnsErrorForUnknownCommand(t *testing.T) {
+	g := game.NewGame("session-cmd-2", "user-1")
+	g.Campaign = &game.CampaignRuntimeState{CampaignID: "test", ActiveNodeID: "intro"}
+
+	err := campaigns.ApplyDialogueCommands(nil, g, []string{"do_magic now"})
+	if err == nil {
+		t.Fatal("expected error for unsupported dialogue command")
+	}
+}
+
 func TestAllowedConditionSpecsForNode_DerivesRuleConditions(t *testing.T) {
 	reg, err := campaigns.LoadEmbeddedRegistry()
 	if err != nil {
