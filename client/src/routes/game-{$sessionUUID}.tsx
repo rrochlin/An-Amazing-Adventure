@@ -506,7 +506,17 @@ function GamePage() {
    return (
       <Box
          sx={{
-            height: `calc(100vh - ${AppTheme.mixins.toolbar.minHeight}px)`,
+            // Header uses MUI Toolbar sizing (56px on xs, 64px on sm+).
+            // Use responsive dvh-based math so the game shell stays on-screen
+            // without slight overflow/scroll bleed.
+            height: {
+               xs: 'calc(100dvh - 56px)',
+               sm: 'calc(100dvh - 64px)',
+            },
+            maxHeight: {
+               xs: 'calc(100dvh - 56px)',
+               sm: 'calc(100dvh - 64px)',
+            },
             display: 'flex',
             flexDirection: 'row',
             overflow: 'hidden',
@@ -659,9 +669,33 @@ function GamePage() {
                   been reached. Contact the admin to increase your limit.
                </Alert>
             )}
+            {wsError === 'session_expired' && (
+               <Alert
+                  severity="error"
+                  sx={{ mt: 1 }}
+                  action={
+                     <Button
+                        color="inherit"
+                        size="small"
+                        onClick={() =>
+                           navigate({
+                              to: '/login',
+                              search: { redirect: window.location.href },
+                           })
+                        }
+                     >
+                        Sign In Again
+                     </Button>
+                  }
+               >
+                  <strong>Session expired</strong> — Your login token has expired.
+                  Please sign in again.
+               </Alert>
+            )}
             {wsError &&
                wsError !== 'ai_access_not_enabled' &&
-               wsError !== 'quota_exceeded' && (
+               wsError !== 'quota_exceeded' &&
+               wsError !== 'session_expired' && (
                   <Alert severity="warning" sx={{ mt: 1 }}>
                      {wsError ?? 'Connection lost — retrying...'}
                   </Alert>

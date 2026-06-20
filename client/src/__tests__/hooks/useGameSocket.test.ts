@@ -3,10 +3,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useGameSocket } from '@/hooks/useGameSocket';
 import { useGameStore } from '@/store/gameStore';
+import { isAuthenticated } from '@/services/auth.service';
 
 // Mock auth so getStoredTokens works without real localStorage entries
 vi.mock('@/services/auth.service', () => ({
    getStoredTokens: vi.fn(() => ({ accessToken: 'test-access-token' })),
+   isAuthenticated: vi.fn(() => true),
 }));
 
 // Stub VITE_WS_ENDPOINT
@@ -165,6 +167,24 @@ describe('useGameSocket', () => {
             payload: 'north',
          }),
       );
+   });
+
+   it('sets session_expired error when sending while socket is closed and auth is expired', async () => {
+      const { result } = renderHook(() =>
+         useGameSocket({ sessionId: 'sess-1' }),
+      );
+      await flushPromises();
+      // Simulate a closed socket and expired auth token.
+      if (lastWs) {
+         lastWs.readyState = 3;
+      }
+      vi.mocked(isAuthenticated).mockReturnValue(false);
+
+      act(() => {
+         result.current.sendChat('hello');
+      });
+
+      expect(useGameStore.getState().wsError).toBe('session_expired');
    });
 
    it('silently ignores malformed JSON frames', async () => {

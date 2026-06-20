@@ -5,7 +5,7 @@
  */
 import { useEffect, useRef, useCallback } from 'react';
 import { useGameStore } from '../store/gameStore';
-import { getStoredTokens } from '../services/auth.service';
+import { getStoredTokens, isAuthenticated } from '../services/auth.service';
 import type {
    WsFrame,
    StateDelta,
@@ -52,6 +52,14 @@ export function useGameSocket({
        appendWorldGenLog,
       setWorldGenReady,
    } = useGameStore();
+
+   const markSendUnavailable = useCallback(() => {
+      if (!isAuthenticated()) {
+         setWsError('session_expired');
+      } else {
+         setWsError('Socket disconnected — reconnecting...');
+      }
+   }, [setWsError]);
 
    const handleMessage = useCallback(
       (event: MessageEvent) => {
@@ -150,6 +158,9 @@ export function useGameSocket({
       ws.onclose = () => {
          if (!isMounted.current) return;
          setWsStatus('disconnected');
+         if (!isAuthenticated()) {
+            setWsError('session_expired');
+         }
          // Exponential backoff: 1s, 2s, 4s, cap at 16s, max 5 retries
          if (retryCount.current < 5) {
             const delay = Math.min(
@@ -162,15 +173,22 @@ export function useGameSocket({
       };
    }, [sessionId, handleMessage, setWsStatus, setWsError]);
 
-   // Send a chat message through the WebSocket
+   // Send a chat message through the WebSocket.
+   // When the socket is not open, surface a useful error instead of silently no-oping.
    const sendChat = useCallback((content: string) => {
-      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+         markSendUnavailable();
+         return;
+      }
       wsRef.current.send(JSON.stringify({ action: 'chat', content }));
-   }, []);
+   }, [markSendUnavailable]);
 
    // Send a game action (move, pick_up, drop)
    const sendAction = useCallback((subAction: string, payload: string) => {
-      if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+      if (wsRef.current?.readyState !== WebSocket.OPEN) {
+         markSendUnavailable();
+         return;
+      }
       wsRef.current.send(
          JSON.stringify({
             action: 'game_action',
@@ -178,7 +196,7 @@ export function useGameSocket({
             payload,
          }),
       );
-   }, []);
+   }, [markSendUnavailable]);
 
    useEffect(() => {
       isMounted.current = true;
