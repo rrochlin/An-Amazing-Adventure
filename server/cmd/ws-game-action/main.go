@@ -386,16 +386,11 @@ func handleDialogueChoice(
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
-	choiceText, commands, resumeErr := campaigns.ResumeDialogueWithChoice(campaignDef, g.Campaign, choiceID)
+	choiceText, resumeErr := campaigns.ResumeDialogueWithChoice(campaignDef, g, choiceID)
 	if resumeErr != nil {
 		log.Printf("ws-game-action: dialogue_choice: resume: %v", resumeErr)
 		_ = ws.SendError(ctx, connID, resumeErr.Error())
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
-	}
-
-	// Commands will be processed by the Milestone B command bridge; log for now.
-	if len(commands) > 0 {
-		log.Printf("ws-game-action: dialogue_choice: unprocessed Yarn commands: %v", commands)
 	}
 
 	// Build the per-connection broadcast list.
