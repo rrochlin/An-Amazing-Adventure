@@ -63,6 +63,24 @@ describe('gameStore', () => {
       expect(chatMessages[0].content).toBe('Hello');
    });
 
+   it('setGameState preserves optimistic chat messages when server history lags', () => {
+      const state = makeGameState({
+         chat_history: [{ type: 'player', content: 'Hello' }],
+      });
+
+      useGameStore.getState().setGameState(state);
+      useGameStore.getState().addChatMessage({
+         type: 'player',
+         content: 'Still here',
+      });
+      useGameStore.getState().setGameState(state);
+
+      const { chatMessages } = useGameStore.getState();
+      expect(chatMessages).toHaveLength(2);
+      expect(chatMessages[0].content).toBe('Hello');
+      expect(chatMessages[1].content).toBe('Still here');
+   });
+
    it('appendStreamChunk accumulates streaming message', () => {
       useGameStore.getState().appendStreamChunk('Hello ');
       useGameStore.getState().appendStreamChunk('world');

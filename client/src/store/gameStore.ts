@@ -14,6 +14,24 @@ import type {
 
 type WsStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
+function sameChatMessage(left: ChatMessage, right: ChatMessage): boolean {
+   if (left.type !== right.type || left.content !== right.content) {
+      return false;
+   }
+
+   const leftEvents = left.events ?? [];
+   const rightEvents = right.events ?? [];
+   if (leftEvents.length !== rightEvents.length) {
+      return false;
+   }
+
+   return leftEvents.every(
+      (event, index) =>
+         event.type === rightEvents[index]?.type &&
+         event.message === rightEvents[index]?.message,
+   );
+}
+
 interface GameStore {
    // State
    gameState: GameStateView | null;
@@ -74,9 +92,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
          self: state.self ?? state.player,
          party: state.party ?? [],
       };
+      const serverChatMessages = state.chat_history ?? [];
+      const currentChatMessages = get().chatMessages;
+      let chatMessages = serverChatMessages;
+
+      if (currentChatMessages.length > serverChatMessages.length) {
+         const prefixMatches = serverChatMessages.every((message, index) =>
+            sameChatMessage(message, currentChatMessages[index]),
+         );
+
+         if (prefixMatches) {
+            chatMessages = [
+               ...serverChatMessages,
+               ...currentChatMessages.slice(serverChatMessages.length),
+            ];
+         }
+      }
+
        set({
           gameState: normalised,
-          chatMessages: state.chat_history ?? [],
+          chatMessages,
           visitedRooms: seeded,
        });
     },
