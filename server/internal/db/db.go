@@ -407,10 +407,7 @@ type mutationEntryDB struct {
 	Result    string         `dynamodbav:"result"`
 }
 
-// PutMutation writes a single MutationEntry to the mutations table.
-// SessionID is marshaled as Binary (B) to match the table's key schema.
-func (c *Client) PutMutation(ctx context.Context, entry game.MutationEntry) error {
-	c.requireMutationsTable()
+func mutationEntryItem(entry game.MutationEntry) (map[string]types.AttributeValue, error) {
 	row := mutationEntryDB{
 		SessionID: entry.SessionID,
 		Ts:        entry.Ts,
@@ -421,10 +418,21 @@ func (c *Client) PutMutation(ctx context.Context, entry game.MutationEntry) erro
 	}
 	item, err := attributevalue.MarshalMap(row)
 	if err != nil {
-		return fmt.Errorf("marshal mutation entry: %w", err)
+		return nil, fmt.Errorf("marshal mutation entry: %w", err)
 	}
-	// Override SessionID key attribute to Binary type
+	// Override SessionID key attribute to Binary type.
 	item["session_id"] = binaryIDVal(entry.SessionID)
+	return item, nil
+}
+
+// PutMutation writes a single MutationEntry to the mutations table.
+// SessionID is marshaled as Binary (B) to match the table's key schema.
+func (c *Client) PutMutation(ctx context.Context, entry game.MutationEntry) error {
+	c.requireMutationsTable()
+	item, err := mutationEntryItem(entry)
+	if err != nil {
+		return err
+	}
 	_, err = c.ddb.PutItem(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(c.mutationsTable),
 		Item:      item,
