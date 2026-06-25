@@ -162,7 +162,7 @@
       "dialogue_start_node": "RouteChoice",
       "title": "Route Choice",
       "summary": "A deterministic branching node that tests label-based authored transitions.",
-      "objective_text": "Send a message containing hidden, target, or novice to test label-based branching.",
+      "objective_text": "Choose one of the presented route options to test deterministic branching.",
       "on_enter": [
         { "type": "start_dialogue", "asset_id": "route_dialogue", "start_node": "RouteChoice" }
       ],

@@ -127,7 +127,7 @@ func TestAdvanceCampaign_TransitionsAndUpdatesObjectives(t *testing.T) {
 	if g.Campaign.ActiveNodeID != "route_choice" {
 		t.Fatalf("expected active node route_choice, got %q", g.Campaign.ActiveNodeID)
 	}
-	if g.Campaign.CurrentObjective != "Send a message containing hidden, target, or novice to test label-based branching." {
+	if g.Campaign.CurrentObjective != "Choose one of the presented route options to test deterministic branching." {
 		t.Fatalf("unexpected current objective %q", g.Campaign.CurrentObjective)
 	}
 	statuses := map[string]string{}
@@ -169,6 +169,109 @@ func TestBootstrapGame_SeedsOpeningDialogueLine(t *testing.T) {
 	}
 	if history[1].Content != "Intro prompt: send a message containing proceed to advance the route-selection test." {
 		t.Fatalf("expected seeded dialogue line, got %#v", history)
+	}
+}
+
+func TestAdvanceCampaign_TestCampaignRouteChoicePausesWithPendingChoices(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+	g, _, err := campaigns.BootstrapGame(
+		def,
+		"session-route-choice",
+		"user-1",
+		game.NewCharacter("Hero", ""),
+		game.CharacterCreationData{Name: "Hero", RaceID: "human", ClassID: "fighter"},
+	)
+	if err != nil {
+		t.Fatalf("bootstrap game: %v", err)
+	}
+
+	campaigns.ApplyConditionResolution(g.Campaign, campaigns.ConditionResolution{
+		BoolFlags: map[string]bool{"intro_complete": true},
+	})
+	result, err := campaigns.AdvanceCampaign(def, g)
+	if err != nil {
+		t.Fatalf("advance campaign to route_choice: %v", err)
+	}
+	if !result.Transitioned || result.ToNodeID != "route_choice" {
+		t.Fatalf("expected transition to route_choice, got %#v", result)
+	}
+	if g.Campaign.ActiveDialogue == nil || !g.Campaign.ActiveDialogue.AwaitingChoice {
+		t.Fatalf("expected route choice dialogue awaiting player choice, got %#v", g.Campaign.ActiveDialogue)
+	}
+	if len(g.Campaign.ActiveDialogue.PendingChoices) != 3 {
+		t.Fatalf("expected three pending choices, got %#v", g.Campaign.ActiveDialogue.PendingChoices)
+	}
+}
+
+func TestResumeDialogueWithChoice_PersistsAndTransitionsRouteBranch(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+	g, _, err := campaigns.BootstrapGame(
+		def,
+		"session-route-resume",
+		"user-1",
+		game.NewCharacter("Hero", ""),
+		game.CharacterCreationData{Name: "Hero", RaceID: "human", ClassID: "fighter"},
+	)
+	if err != nil {
+		t.Fatalf("bootstrap game: %v", err)
+	}
+	campaigns.ApplyConditionResolution(g.Campaign, campaigns.ConditionResolution{
+		BoolFlags: map[string]bool{"intro_complete": true},
+	})
+	if _, err := campaigns.AdvanceCampaign(def, g); err != nil {
+		t.Fatalf("advance campaign to route_choice: %v", err)
+	}
+	if g.Campaign.ActiveDialogue == nil || len(g.Campaign.ActiveDialogue.PendingChoices) == 0 {
+		t.Fatalf("expected pending route choices before save, got %#v", g.Campaign.ActiveDialogue)
+	}
+
+	saved := g.ToSaveState(nil, nil)
+	reloaded, err := game.FromSaveState(saved)
+	if err != nil {
+		t.Fatalf("reload save state: %v", err)
+	}
+	if reloaded.Campaign == nil || reloaded.Campaign.ActiveDialogue == nil || !reloaded.Campaign.ActiveDialogue.AwaitingChoice {
+		t.Fatalf("expected reloaded campaign to still await choice, got %#v", reloaded.Campaign)
+	}
+	if len(reloaded.Campaign.ActiveDialogue.PendingChoices) != 3 {
+		t.Fatalf("expected reloaded pending choices, got %#v", reloaded.Campaign.ActiveDialogue.PendingChoices)
+	}
+
+	choiceID := reloaded.Campaign.ActiveDialogue.PendingChoices[0].ID
+	text, err := campaigns.ResumeDialogueWithChoice(def, reloaded, choiceID)
+	if err != nil {
+		t.Fatalf("resume dialogue with choice: %v", err)
+	}
+	if text != "You commit to the hidden approach." {
+		t.Fatalf("unexpected post-choice text %q", text)
+	}
+	if reloaded.Campaign.ActiveDialogue.AwaitingChoice || len(reloaded.Campaign.ActiveDialogue.PendingChoices) != 0 {
+		t.Fatalf("expected pending choice state cleared after resume, got %#v", reloaded.Campaign.ActiveDialogue)
+	}
+	if reloaded.Campaign.Labels["entry_route"] != "hidden" {
+		t.Fatalf("expected entry_route=hidden from dialogue command, got %#v", reloaded.Campaign.Labels)
+	}
+
+	transition, err := campaigns.AdvanceCampaign(def, reloaded)
+	if err != nil {
+		t.Fatalf("advance campaign after route choice: %v", err)
+	}
+	if !transition.Transitioned || transition.ToNodeID != "hidden_probe" {
+		t.Fatalf("expected transition to hidden_probe, got %#v", transition)
 	}
 }
 
@@ -302,12 +405,12 @@ func TestAdvanceCampaign_TestCampaignHiddenBranchAppliesLabelCounterAndObjective
 	}
 	g := game.NewGame("session-hidden-1", "user-1")
 	g.Campaign = &game.CampaignRuntimeState{
-		CampaignID:      def.ID,
-		CampaignVersion: def.Version,
-		ActiveNodeID:    "route_choice",
-		BoolFlags:       map[string]bool{},
-		Labels:          map[string]string{"entry_route": "hidden"},
-		Counters:        map[string]int{},
+		CampaignID:       def.ID,
+		CampaignVersion:  def.Version,
+		ActiveNodeID:     "route_choice",
+		BoolFlags:        map[string]bool{},
+		Labels:           map[string]string{"entry_route": "hidden"},
+		Counters:         map[string]int{},
 		ActiveObjectives: []game.ObjectiveState{{ID: "choose_route", Status: "active", VisibleText: "Choose Route"}},
 		ActorStates: map[string]game.ActorRuntimeState{
 			"caretaker": {ActorID: "caretaker", CurrentRailStepID: "camp_idle", CurrentLocationID: "camp"},
@@ -405,16 +508,16 @@ func TestAdvanceCampaign_TestCampaignFailureRuleFailsObjective(t *testing.T) {
 	}
 	g := game.NewGame("session-failure-1", "user-1")
 	g.Campaign = &game.CampaignRuntimeState{
-		CampaignID:      def.ID,
-		CampaignVersion: def.Version,
-		ActiveNodeID:    "route_choice",
-		BoolFlags:       map[string]bool{},
-		Labels:          map[string]string{"entry_route": "novice"},
-		Counters:        map[string]int{},
+		CampaignID:       def.ID,
+		CampaignVersion:  def.Version,
+		ActiveNodeID:     "route_choice",
+		BoolFlags:        map[string]bool{},
+		Labels:           map[string]string{"entry_route": "novice"},
+		Counters:         map[string]int{},
 		ActiveObjectives: []game.ObjectiveState{{ID: "choose_route", Status: "active", VisibleText: "Choose Route"}},
-		ActorStates:     map[string]game.ActorRuntimeState{},
-		CompanionStates: map[string]game.CompanionState{},
-		ActiveDialogue:  &game.DialogueRuntimeState{AssetID: "route_dialogue", CurrentNode: "RouteChoice"},
+		ActorStates:      map[string]game.ActorRuntimeState{},
+		CompanionStates:  map[string]game.CompanionState{},
+		ActiveDialogue:   &game.DialogueRuntimeState{AssetID: "route_dialogue", CurrentNode: "RouteChoice"},
 	}
 
 	result, err := campaigns.AdvanceCampaign(def, g)
@@ -449,12 +552,12 @@ func TestAdvanceCampaign_TestCampaignTargetBranchRequiresActorRoom(t *testing.T)
 	}
 	g := game.NewGame("session-target-1", "user-1")
 	g.Campaign = &game.CampaignRuntimeState{
-		CampaignID:      def.ID,
-		CampaignVersion: def.Version,
-		ActiveNodeID:    "target_probe",
-		BoolFlags:       map[string]bool{"room_verified": true},
-		Labels:          map[string]string{"selected_branch": "target"},
-		Counters:        map[string]int{},
+		CampaignID:       def.ID,
+		CampaignVersion:  def.Version,
+		ActiveNodeID:     "target_probe",
+		BoolFlags:        map[string]bool{"room_verified": true},
+		Labels:           map[string]string{"selected_branch": "target"},
+		Counters:         map[string]int{},
 		ActiveObjectives: []game.ObjectiveState{{ID: "inspect_target_probe", Status: "active", VisibleText: "Inspect Target Probe"}},
 		ActorStates: map[string]game.ActorRuntimeState{
 			"caretaker": {ActorID: "caretaker", CurrentLocationID: "relic_room"},

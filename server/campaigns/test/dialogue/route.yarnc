@@ -7,6 +7,62 @@ nodes: {
       opcode: RUN_LINE
       operands: { string_value: "route_001" }
     }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "route_opt_hidden" }
+      operands: { string_value: "HiddenSelected" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "route_opt_target" }
+      operands: { string_value: "TargetSelected" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "route_opt_novice" }
+      operands: { string_value: "NoviceSelected" }
+    }
+    instructions: { opcode: SHOW_OPTIONS }
+    instructions: { opcode: JUMP }
     instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label entry_route hidden" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "route_ack_hidden" }
+    }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label entry_route target" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "route_ack_target" }
+    }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label entry_route novice" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "route_ack_novice" }
+    }
+    instructions: { opcode: STOP }
+    labels: {
+      key: "HiddenSelected"
+      value: 7
+    }
+    labels: {
+      key: "TargetSelected"
+      value: 10
+    }
+    labels: {
+      key: "NoviceSelected"
+      value: 13
+    }
   }
 }

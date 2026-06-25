@@ -167,6 +167,23 @@ describe('useGameSocket', () => {
       );
    });
 
+   it('sendAction sends dialogue_choice action payload over WS', async () => {
+      const { result } = renderHook(() =>
+         useGameSocket({ sessionId: 'sess-1' }),
+      );
+      await flushPromises();
+      act(() => {
+         result.current.sendAction('dialogue_choice', '1');
+      });
+      expect(lastWs?.send).toHaveBeenCalledWith(
+         JSON.stringify({
+            action: 'game_action',
+            sub_action: 'dialogue_choice',
+            payload: '1',
+         }),
+      );
+   });
+
    it('silently ignores malformed JSON frames', async () => {
       renderHook(() => useGameSocket({ sessionId: 'sess-1' }));
       await flushPromises();
