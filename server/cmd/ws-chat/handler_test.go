@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/aws/aws-lambda-go/events"
+	"github.com/rrochlin/an-amazing-adventure/internal/ai"
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
+	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
 )
 
 func assertPanicsWithEnvAbsent(t *testing.T, envVar string, fn func()) {
@@ -98,6 +102,7 @@ var requiredEnvVars = []string{
 	"CONNECTIONS_TABLE",
 	"SESSIONS_TABLE",
 	"USERS_TABLE",
+	"MUTATIONS_TABLE",
 }
 
 func TestAllRequiredEnvVarsPanic(t *testing.T) {
@@ -119,6 +124,9 @@ func TestAllRequiredEnvVarsPanic(t *testing.T) {
 				// Only reachable after GetConnection succeeds — requires real DynamoDB.
 				// Documented here as Terraform config requirements; enforced by code review.
 				t.Skip(env + " panic unreachable without real DynamoDB — verified via Terraform config")
+			case "MUTATIONS_TABLE":
+				// Reached only when engineer emits mutations; covered by dedicated fake-driven tests below.
+				t.Skip(env + " panic covered by ws-chat mutation-path unit tests")
 			}
 
 			assertPanicsWithEnvAbsent(t, env, func() {
@@ -126,6 +134,193 @@ func TestAllRequiredEnvVarsPanic(t *testing.T) {
 			})
 		})
 	}
+}
+
+type fakeDBClient struct {
+	connection      db.Connection
+	user            *db.UserRecord
+	save            game.SaveState
+	connectionsByID []db.Connection
+	putMutations    []game.MutationEntry
+	putGameState    game.SaveState
+	updateTokenArgs []int
+}
+
+func (f *fakeDBClient) GetConnection(context.Context, string) (db.Connection, error) {
+	return f.connection, nil
+}
+func (f *fakeDBClient) GetConnectionsByGameID(context.Context, string) ([]db.Connection, error) {
+	if len(f.connectionsByID) == 0 {
+		return []db.Connection{f.connection}, nil
+	}
+	return f.connectionsByID, nil
+}
+func (f *fakeDBClient) SetStreaming(context.Context, string, bool) error { return nil }
+func (f *fakeDBClient) DeleteConnection(context.Context, string) error   { return nil }
+func (f *fakeDBClient) GetUser(context.Context, string) (*db.UserRecord, error) {
+	return f.user, nil
+}
+func (f *fakeDBClient) GetGame(context.Context, string) (game.SaveState, error) {
+	return f.save, nil
+}
+func (f *fakeDBClient) PutMutation(_ context.Context, entry game.MutationEntry) error {
+	f.putMutations = append(f.putMutations, entry)
+	return nil
+}
+func (f *fakeDBClient) PutGame(_ context.Context, save game.SaveState) error {
+	f.putGameState = save
+	return nil
+}
+func (f *fakeDBClient) UpdateUserTokens(_ context.Context, _ string, delta int) error {
+	f.updateTokenArgs = append(f.updateTokenArgs, delta)
+	return nil
+}
+
+type fakeAIClient struct {
+	narrator ai.NarratorResult
+	engineer ai.EngineerResult
+}
+
+func (f *fakeAIClient) NarrateStream(_ context.Context, _ *game.Game, _ []game.NarrativeMessage, _ string, onChunk func(string)) (ai.NarratorResult, error) {
+	if onChunk != nil {
+		onChunk("chunk-a")
+	}
+	return f.narrator, nil
+}
+func (f *fakeAIClient) EngineerScan(context.Context, *game.Game, string) (ai.EngineerResult, error) {
+	return f.engineer, nil
+}
+func (f *fakeAIClient) ResolveCampaignConditions(context.Context, *game.Game, *campaigns.CampaignDefinition, string, string) (ai.CampaignConditionResolutionResult, error) {
+	return ai.CampaignConditionResolutionResult{}, errors.New("unexpected call")
+}
+
+type fakeWSSender struct {
+	deltas     []game.StateDelta
+	broadcasts []wsutil.Frame
+}
+
+func (f *fakeWSSender) Send(context.Context, string, wsutil.Frame) error { return nil }
+func (f *fakeWSSender) SendError(context.Context, string, string) error  { return nil }
+func (f *fakeWSSender) Broadcast(_ context.Context, _ []string, frame wsutil.Frame) ([]string, error) {
+	f.broadcasts = append(f.broadcasts, frame)
+	return nil, nil
+}
+func (f *fakeWSSender) SendDelta(_ context.Context, _ string, delta any) error {
+	stateDelta, ok := delta.(game.StateDelta)
+	if !ok {
+		return errors.New("unexpected delta type")
+	}
+	f.deltas = append(f.deltas, stateDelta)
+	return nil
+}
+
+func makeNonDeterministicSaveState(t *testing.T) game.SaveState {
+	t.Helper()
+	g := game.NewGame("game-1", "user-1")
+	g.SetPlayerCharacter("user-1", game.NewCharacter("Hero", "The hero"))
+	room := game.NewArea("Hall", "Stone hall")
+	if err := g.AddRoom(room); err != nil {
+		t.Fatalf("add room: %v", err)
+	}
+	if err := g.PlacePlayer(room.ID); err != nil {
+		t.Fatalf("place player: %v", err)
+	}
+	return g.ToSaveState(nil, nil)
+}
+
+func TestHandlerChat_PropagatesEventsAndWritesMutations(t *testing.T) {
+	t.Setenv("MUTATIONS_TABLE", "mutations-test")
+	dbFake := &fakeDBClient{
+		connection: db.Connection{ConnectionID: "conn-1", GameID: "game-1", UserID: db.BinaryID("user-1")},
+		user: &db.UserRecord{
+			UserID:    db.BinaryID("user-1"),
+			AIEnabled: true,
+		},
+		save: makeNonDeterministicSaveState(t),
+	}
+	wsFake := &fakeWSSender{}
+	events := []game.WorldEvent{{Type: "damage", Message: "You take 5 damage."}}
+	mutations := []game.MutationEntry{
+		{SessionID: "game-1", Turn: 1, Tool: "damage_character", Result: "ok"},
+		{SessionID: "game-1", Turn: 1, Tool: "move_character", Result: "ok"},
+	}
+	aiFake := &fakeAIClient{
+		narrator: ai.NarratorResult{
+			Narrative: "A goblin strikes.",
+			NewMessages: []game.NarrativeMessage{
+				{Role: "user", Content: []game.NarrativeBlock{{Type: "text", Text: "attack"}}},
+				{Role: "assistant", Content: []game.NarrativeBlock{{Type: "text", Text: "A goblin strikes."}}},
+			},
+		},
+		engineer: ai.EngineerResult{Events: events, Mutations: mutations},
+	}
+
+	origNewDBClient, origNewWSSender, origNewAIClient := newDBClient, newWSSender, newAIClient
+	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
+	newWSSender = func(context.Context) (wsSender, error) { return wsFake, nil }
+	newAIClient = func(context.Context) (aiClient, error) { return aiFake, nil }
+	t.Cleanup(func() {
+		newDBClient = origNewDBClient
+		newWSSender = origNewWSSender
+		newAIClient = origNewAIClient
+	})
+
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "attack"})
+	resp, err := handler(context.Background(), makeWSChatReq("conn-1", string(body)))
+	if err != nil {
+		t.Fatalf("handler err: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if len(dbFake.putMutations) != len(mutations) {
+		t.Fatalf("expected %d mutation writes, got %d", len(mutations), len(dbFake.putMutations))
+	}
+	if len(wsFake.deltas) != 1 {
+		t.Fatalf("expected one state delta, got %d", len(wsFake.deltas))
+	}
+	if len(wsFake.deltas[0].Events) != 1 || wsFake.deltas[0].Events[0].Type != "damage" {
+		t.Fatalf("expected propagated damage event in state delta, got %+v", wsFake.deltas[0].Events)
+	}
+	history := dbFake.putGameState.ChatHistory
+	if len(history) < 2 || len(history[len(history)-1].Events) != 1 {
+		t.Fatalf("expected narrative history message with events, got %+v", history)
+	}
+}
+
+func TestHandlerChat_PanicsWhenMutationsTableMissingAndMutationWriteNeeded(t *testing.T) {
+	t.Setenv("MUTATIONS_TABLE", "")
+	dbFake := &fakeDBClient{
+		connection: db.Connection{ConnectionID: "conn-1", GameID: "game-1", UserID: db.BinaryID("user-1")},
+		user: &db.UserRecord{
+			UserID:    db.BinaryID("user-1"),
+			AIEnabled: true,
+		},
+		save: makeNonDeterministicSaveState(t),
+	}
+	wsFake := &fakeWSSender{}
+	aiFake := &fakeAIClient{
+		narrator: ai.NarratorResult{Narrative: "Something changes."},
+		engineer: ai.EngineerResult{
+			Mutations: []game.MutationEntry{{SessionID: "game-1", Turn: 1, Tool: "create_room"}},
+		},
+	}
+
+	origNewDBClient, origNewWSSender, origNewAIClient := newDBClient, newWSSender, newAIClient
+	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
+	newWSSender = func(context.Context) (wsSender, error) { return wsFake, nil }
+	newAIClient = func(context.Context) (aiClient, error) { return aiFake, nil }
+	t.Cleanup(func() {
+		newDBClient = origNewDBClient
+		newWSSender = origNewWSSender
+		newAIClient = origNewAIClient
+	})
+
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "do it"})
+	req := makeWSChatReq("conn-1", string(body))
+	assertPanicsWithEnvAbsent(t, "MUTATIONS_TABLE", func() {
+		handler(context.Background(), req) //nolint:errcheck
+	})
 }
 
 func TestChatRequest_Parsed(t *testing.T) {

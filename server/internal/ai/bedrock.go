@@ -28,8 +28,15 @@ const (
 
 // Client wraps the Bedrock runtime client.
 type Client struct {
-	br *bedrockruntime.Client
+	br bedrockRuntimeClient
 }
+
+type bedrockRuntimeClient interface {
+	Converse(context.Context, *bedrockruntime.ConverseInput, ...func(*bedrockruntime.Options)) (*bedrockruntime.ConverseOutput, error)
+	ConverseStream(context.Context, *bedrockruntime.ConverseStreamInput, ...func(*bedrockruntime.Options)) (*bedrockruntime.ConverseStreamOutput, error)
+}
+
+var dispatchToolFn = DispatchTool
 
 // New creates a Client from the current AWS environment.
 func New(ctx context.Context) (*Client, error) {
@@ -273,7 +280,7 @@ func (c *Client) EngineerScan(
 			raw, _ := json.Marshal(tu.Value.Input)
 			_ = json.Unmarshal(raw, &input)
 
-			toolResult, event, dispatchErr := DispatchTool(ctx, g, toolName, input)
+			toolResult, event, dispatchErr := dispatchToolFn(ctx, g, toolName, input)
 			if dispatchErr != nil {
 				log.Printf("[engineer] round=%d tool=%s FAILED: %v", round, toolName, dispatchErr)
 				toolResult = fmt.Sprintf("error: %v", dispatchErr)
