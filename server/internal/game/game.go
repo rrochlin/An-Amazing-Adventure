@@ -94,6 +94,9 @@ type CampaignStateView struct {
 	CampaignVersion  string             `json:"campaign_version"`
 	ActiveNodeID     string             `json:"active_node_id"`
 	CurrentObjective string             `json:"current_objective,omitempty"`
+	BoolFlags        map[string]bool    `json:"bool_flags,omitempty"`
+	Labels           map[string]string  `json:"labels,omitempty"`
+	Counters         map[string]int     `json:"counters,omitempty"`
 	ActiveObjectives []ObjectiveState   `json:"active_objectives,omitempty"`
 	ActiveDialogue   *DialogueStateView `json:"active_dialogue,omitempty"`
 }
@@ -905,12 +908,19 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 	if g == nil || g.Campaign == nil {
 		return nil
 	}
+	var activeObjectives []ObjectiveState
+	if len(g.Campaign.ActiveObjectives) > 0 {
+		activeObjectives = append([]ObjectiveState(nil), g.Campaign.ActiveObjectives...)
+	}
 	return &CampaignStateView{
 		CampaignID:       g.Campaign.CampaignID,
 		CampaignVersion:  g.Campaign.CampaignVersion,
 		ActiveNodeID:     g.Campaign.ActiveNodeID,
 		CurrentObjective: g.Campaign.CurrentObjective,
-		ActiveObjectives: g.Campaign.ActiveObjectives,
+		BoolFlags:        copyBoolMap(g.Campaign.BoolFlags),
+		Labels:           copyStringMap(g.Campaign.Labels),
+		Counters:         copyIntMap(g.Campaign.Counters),
+		ActiveObjectives: activeObjectives,
 		ActiveDialogue:   buildDialogueStateView(g.Campaign.ActiveDialogue),
 	}
 }
@@ -919,12 +929,49 @@ func buildDialogueStateView(state *DialogueRuntimeState) *DialogueStateView {
 	if state == nil {
 		return nil
 	}
+	var pendingChoices []DialogueChoice
+	if len(state.PendingChoices) > 0 {
+		pendingChoices = append([]DialogueChoice(nil), state.PendingChoices...)
+	}
 	return &DialogueStateView{
 		AssetID:        state.AssetID,
 		CurrentNode:    state.CurrentNode,
 		AwaitingChoice: state.AwaitingChoice,
-		PendingChoices: state.PendingChoices,
+		PendingChoices: pendingChoices,
 	}
+}
+
+func copyBoolMap(src map[string]bool) map[string]bool {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]bool, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func copyStringMap(src map[string]string) map[string]string {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]string, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func copyIntMap(src map[string]int) map[string]int {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]int, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 // NewSessionID returns a new random UUID string for use as a session ID.

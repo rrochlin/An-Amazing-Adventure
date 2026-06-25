@@ -40,6 +40,9 @@ export interface CampaignStateView {
    campaign_version: string;
    active_node_id: string;
    current_objective?: string;
+   bool_flags?: Record<string, boolean>;
+   labels?: Record<string, string>;
+   counters?: Record<string, number>;
    active_objectives?: ObjectiveStateView[];
    active_dialogue?: DialogueStateView | null;
 }

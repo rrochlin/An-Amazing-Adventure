@@ -463,6 +463,9 @@ func TestBuildCampaignStateView(t *testing.T) {
 		CampaignVersion:  "1",
 		ActiveNodeID:     "intro",
 		CurrentObjective: "Finish Intro",
+		BoolFlags:        map[string]bool{"intro_complete": false},
+		Labels:           map[string]string{"entry_route": "hidden"},
+		Counters:         map[string]int{"scan_count": 2},
 		ActiveObjectives: []game.ObjectiveState{{ID: "finish_intro", Status: "active", VisibleText: "Finish Intro"}},
 		ActiveDialogue:   &game.DialogueRuntimeState{AssetID: "intro_dialogue", CurrentNode: "Intro", AwaitingChoice: true},
 	}
@@ -476,8 +479,30 @@ func TestBuildCampaignStateView(t *testing.T) {
 	if len(view.ActiveObjectives) != 1 || view.ActiveObjectives[0].ID != "finish_intro" {
 		t.Fatalf("expected active objectives in view, got %#v", view)
 	}
+	if view.BoolFlags["intro_complete"] {
+		t.Fatalf("expected intro_complete false in view, got %#v", view.BoolFlags)
+	}
+	if view.Labels["entry_route"] != "hidden" {
+		t.Fatalf("expected labels in view, got %#v", view.Labels)
+	}
+	if view.Counters["scan_count"] != 2 {
+		t.Fatalf("expected counters in view, got %#v", view.Counters)
+	}
 	if view.ActiveDialogue == nil || view.ActiveDialogue.AssetID != "intro_dialogue" {
 		t.Fatalf("expected active dialogue in view, got %#v", view)
+	}
+
+	g.Campaign.BoolFlags["intro_complete"] = true
+	g.Campaign.Labels["entry_route"] = "target"
+	g.Campaign.Counters["scan_count"] = 3
+	if view.BoolFlags["intro_complete"] {
+		t.Fatalf("expected bool flags to be copied, got %#v", view.BoolFlags)
+	}
+	if view.Labels["entry_route"] != "hidden" {
+		t.Fatalf("expected labels to be copied, got %#v", view.Labels)
+	}
+	if view.Counters["scan_count"] != 2 {
+		t.Fatalf("expected counters to be copied, got %#v", view.Counters)
 	}
 }
 

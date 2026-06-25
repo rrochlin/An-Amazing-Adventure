@@ -447,6 +447,67 @@ func TestHandleDeterministicTestCampaignChat_BlocksFreeformWhileAwaitingChoice(t
 	}
 }
 
+func TestHandleDeterministicTestCampaignChat_DeltaIncludesUpdatedCampaignFlags(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load campaign registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+
+	g := game.NewGame("game-choice-2", "user-1")
+	g.SetPlayerCharacter("user-1", game.NewCharacter("Hero", ""))
+	room := game.NewArea("Camp", "Camp room")
+	if err := g.AddRoom(room); err != nil {
+		t.Fatalf("add room: %v", err)
+	}
+	if err := g.PlacePlayer(room.ID); err != nil {
+		t.Fatalf("place player: %v", err)
+	}
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:      "test",
+		CampaignVersion: "1",
+		ActiveNodeID:    "intro",
+		BoolFlags:       map[string]bool{},
+		Labels:          map[string]string{},
+		Counters:        map[string]int{},
+	}
+
+	dbFake := &fakeDBClient{
+		connection:      db.Connection{ConnectionID: "conn-1", GameID: "game-choice-2", UserID: db.BinaryID("user-1")},
+		connectionsByID: []db.Connection{{ConnectionID: "conn-1", GameID: "game-choice-2", UserID: db.BinaryID("user-1")}},
+	}
+	wsFake := &fakeWSSender{}
+	save := g.ToSaveState(nil, nil)
+
+	resp, err := handleDeterministicTestCampaignChat(
+		context.Background(),
+		dbFake,
+		wsFake,
+		dbFake.connection,
+		g,
+		def,
+		"proceed",
+		&save,
+		room.ID,
+		[]string{"conn-1"},
+	)
+	if err != nil {
+		t.Fatalf("handler err: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if len(wsFake.deltas) == 0 || wsFake.deltas[0].Campaign == nil {
+		t.Fatalf("expected campaign state in delta, got %#v", wsFake.deltas)
+	}
+	if !wsFake.deltas[0].Campaign.BoolFlags["intro_complete"] {
+		t.Fatalf("expected intro_complete flag in delta, got %#v", wsFake.deltas[0].Campaign.BoolFlags)
+	}
+}
+
 // ---- Phase 7: Mutation log and world events wiring tests ----
 // These tests document the expected behavior of mutation persistence and events attachment.
 // Full integration tests with DB mocking would be in a separate integration test suite.
