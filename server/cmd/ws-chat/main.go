@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 	"strings"
 	"sync"
 
@@ -31,6 +32,37 @@ var (
 	campaignRegistryOnce sync.Once
 	campaignRegistry     *campaigns.Registry
 	campaignRegistryErr  error
+)
+
+type dbClient interface {
+	GetConnection(context.Context, string) (db.Connection, error)
+	GetConnectionsByGameID(context.Context, string) ([]db.Connection, error)
+	SetStreaming(context.Context, string, bool) error
+	DeleteConnection(context.Context, string) error
+	GetUser(context.Context, string) (*db.UserRecord, error)
+	GetGame(context.Context, string) (game.SaveState, error)
+	PutMutation(context.Context, game.MutationEntry) error
+	PutGame(context.Context, game.SaveState) error
+	UpdateUserTokens(context.Context, string, int) error
+}
+
+type aiClient interface {
+	NarrateStream(context.Context, *game.Game, []game.NarrativeMessage, string, func(string)) (ai.NarratorResult, error)
+	EngineerScan(context.Context, *game.Game, string) (ai.EngineerResult, error)
+	ResolveCampaignConditions(context.Context, *game.Game, *campaigns.CampaignDefinition, string, string) (ai.CampaignConditionResolutionResult, error)
+}
+
+type wsSender interface {
+	Send(context.Context, string, wsutil.Frame) error
+	Broadcast(context.Context, []string, wsutil.Frame) ([]string, error)
+	SendDelta(context.Context, string, any) error
+	SendError(context.Context, string, string) error
+}
+
+var (
+	newDBClient = func(ctx context.Context) (dbClient, error) { return db.New(ctx) }
+	newAIClient = func(ctx context.Context) (aiClient, error) { return ai.New(ctx) }
+	newWSSender = func(ctx context.Context) (wsSender, error) { return wsutil.New(ctx) }
 )
 
 type chatRequest struct {
@@ -60,7 +92,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
 	}
 
-	dbClient, err := db.New(ctx)
+	dbClient, err := newDBClient(ctx)
 	if err != nil {
 		log.Printf("ws-chat: db init: %v", err)
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
@@ -97,7 +129,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}()
 
 	// Set up WebSocket sender early so we can send error frames during RBAC check
-	ws, err := wsutil.New(ctx)
+	ws, err := newWSSender(ctx)
 	if err != nil {
 		log.Printf("ws-chat: ws sender init: %v", err)
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
@@ -164,7 +196,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}
 
 	// Set up Bedrock client
-	aiClient, err := ai.New(ctx)
+	aiClient, err := newAIClient(ctx)
 	if err != nil {
 		log.Printf("ws-chat: ai init: %v", err)
 		_ = ws.SendError(ctx, connID, "AI unavailable")
@@ -291,11 +323,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}
 
 	// Step 4: Persist mutation audit log entries (best-effort — failure is non-fatal).
-	for _, m := range engineerResult.Mutations {
-		if err := dbClient.PutMutation(ctx, m); err != nil {
-			log.Printf("ws-chat: put mutation (tool=%s): %v", m.Tool, err)
-		}
-	}
+	putMutations(ctx, dbClient, engineerResult.Mutations)
 
 	// Update stats (include both Narrator and Engineer token usage).
 	g.ConversationCount++
@@ -365,8 +393,8 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 func handleDeterministicTestCampaignChat(
 	ctx context.Context,
-	dbClient *db.Client,
-	ws *wsutil.Sender,
+	dbClient dbClient,
+	ws wsSender,
 	conn db.Connection,
 	g *game.Game,
 	campaignDef *campaigns.CampaignDefinition,
@@ -518,6 +546,20 @@ func deterministicTestCampaignResolution(state *game.CampaignRuntimeState, activ
 		}
 	}
 	return campaigns.ConditionResolution{}
+}
+
+func putMutations(ctx context.Context, dbClient dbClient, mutations []game.MutationEntry) {
+	if len(mutations) == 0 {
+		return
+	}
+	if os.Getenv("MUTATIONS_TABLE") == "" {
+		panic("required env var MUTATIONS_TABLE is not set")
+	}
+	for _, m := range mutations {
+		if err := dbClient.PutMutation(ctx, m); err != nil {
+			log.Printf("ws-chat: put mutation (tool=%s): %v", m.Tool, err)
+		}
+	}
 }
 
 func deterministicTestCampaignResponseText(state *game.CampaignRuntimeState, transitionResult campaigns.TransitionResult, history []game.ChatMessage) string {
