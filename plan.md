@@ -96,31 +96,15 @@ Acceptance checks:
 
 ### 3. Define the Multi-Turn Scene Flow Contract
 
-Once choices and commands work, formalize how a Yarn scene progresses across WebSocket turns and client state.
+Status: **Decision captured for Milestone C minimal PR scope.**
 
-Why third:
+Formalized contract for authored scene progression across WebSocket turns and client state:
 
-- the transport and orchestration boundary is still blurry
-- authored scenes need a clear model for waiting, resuming, and completing
-- this should be settled before larger refactors move code around
-
-Primary touch points:
-
-- `server/cmd/ws-chat/main.go`
-- `client/src/hooks/useGameSocket.ts`
-- `client/src/store/gameStore.ts`
-- any WebSocket frame definitions that need to represent authored dialogue state transitions
-
-Decision points to settle:
-
-- whether choice submission is represented as chat input, game action, or a dedicated authored-dialogue action
-- which frames communicate “awaiting choice”, “choice submitted”, and “scene complete”
-- when narrative streaming ends relative to authored scene state updates
-
-Acceptance checks:
-
-- the turn model is explicit for narrative turn, awaiting choice, choice submitted, and scene completion
-- there is no ambiguous split of responsibility between streamed narration and authored dialogue progression
+- **Awaiting choice state:** server is source-of-truth via `campaign.active_dialogue.awaiting_choice=true` with `pending_choices`. While true, freeform chat is rejected with `dialogue_choice_required` (deterministic and non-deterministic parity).
+- **Choice submission transport:** client submits via WebSocket `game_action` with `sub_action: "dialogue_choice"` and payload choice id. No new frame type is introduced.
+- **In-flight choice behavior:** after first click, client blocks repeated `dialogue_choice` sends until the next state or error update resolves the submission.
+- **Scene complete state:** scene completion/advance is represented by updated campaign state (`awaiting_choice=false` or next dialogue/node state) delivered in normal state frames.
+- **Frame order contract:** for narrative turns, server emits `narrative_chunk*` → `narrative_end` → `state_delta`/`game_state_update` containing updated campaign/dialogue state. Choice turns follow action submit → state/error response; no extra bespoke choice-ack frame.
 
 ### 4. Extract Authored Orchestration from ws-chat
 
@@ -229,7 +213,7 @@ Minimal Yarn command bridge plus persisted scene state.
 
 ### Milestone C
 
-Extract authored orchestration from `ws-chat`.
+Scene flow contract finalized and enforced (guard parity + client choice-submit debounce).
 
 ### Milestone D
 

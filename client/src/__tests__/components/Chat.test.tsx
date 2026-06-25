@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
+import { useRef, useState } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
@@ -196,5 +197,50 @@ describe('Chat component', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Take the Novice Route.' }));
       expect(onChoiceSelected).toHaveBeenCalledWith(2);
+   });
+
+   it('disables choice buttons while choice submission is in-flight', () => {
+      renderChat({
+         pendingChoices: [{ id: 3, text: 'Hold your ground.' }],
+         onChoiceSelected: vi.fn(),
+         isSubmittingChoice: true,
+      });
+
+      expect(screen.getByRole('button', { name: 'Hold your ground.' })).toBeDisabled();
+   });
+
+   it('prevents rapid double-click resubmission in choice handler flow', async () => {
+      const onChoiceSelected = vi.fn();
+      const Harness = () => {
+         const [submitting, setSubmitting] = useState(false);
+         const lockRef = useRef(false);
+         return (
+            <ThemeProvider theme={AppTheme}>
+               <Chat
+                  chatHistory={[]}
+                  command=""
+                  setCommand={vi.fn()}
+                  handleCommand={vi.fn()}
+                  isLoading={false}
+                  pendingChoices={[{ id: 4, text: 'Advance cautiously.' }]}
+                  isSubmittingChoice={submitting}
+                  onChoiceSelected={(id) => {
+                     if (lockRef.current) return;
+                     lockRef.current = true;
+                     onChoiceSelected(id);
+                     setSubmitting(true);
+                  }}
+               />
+            </ThemeProvider>
+         );
+      };
+
+      render(<Harness />);
+      const button = screen.getByRole('button', { name: 'Advance cautiously.' });
+      fireEvent.click(button);
+      fireEvent.click(button);
+
+      expect(onChoiceSelected).toHaveBeenCalledTimes(1);
+      expect(button).toBeDisabled();
    });
 });

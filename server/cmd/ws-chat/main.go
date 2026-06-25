@@ -226,6 +226,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	if campaignDef != nil && campaignDef.ID == "test" {
 		return handleDeterministicTestCampaignChat(ctx, dbClient, ws, conn, g, campaignDef, msg.Content, &saveState, preTurnPlayerLoc, allConnIDs)
 	}
+	if g.Campaign != nil && g.Campaign.ActiveDialogue != nil && g.Campaign.ActiveDialogue.AwaitingChoice {
+		_ = ws.SendError(ctx, connID, "dialogue_choice_required")
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
 
 	// Step 1: Stream narrator prose — broadcast each chunk to all party members.
 	narratorResult, err := aiClient.NarrateStream(

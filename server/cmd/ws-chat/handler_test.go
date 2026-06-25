@@ -177,20 +177,26 @@ func (f *fakeDBClient) UpdateUserTokens(_ context.Context, _ string, delta int) 
 }
 
 type fakeAIClient struct {
-	narrator ai.NarratorResult
-	engineer ai.EngineerResult
+	narrator      ai.NarratorResult
+	engineer      ai.EngineerResult
+	narratorCalls int
+	engineerCalls int
+	resolverCalls int
 }
 
 func (f *fakeAIClient) NarrateStream(_ context.Context, _ *game.Game, _ []game.NarrativeMessage, _ string, onChunk func(string)) (ai.NarratorResult, error) {
+	f.narratorCalls++
 	if onChunk != nil {
 		onChunk("chunk-a")
 	}
 	return f.narrator, nil
 }
 func (f *fakeAIClient) EngineerScan(context.Context, *game.Game, string) (ai.EngineerResult, error) {
+	f.engineerCalls++
 	return f.engineer, nil
 }
 func (f *fakeAIClient) ResolveCampaignConditions(context.Context, *game.Game, *campaigns.CampaignDefinition, string, string) (ai.CampaignConditionResolutionResult, error) {
+	f.resolverCalls++
 	return ai.CampaignConditionResolutionResult{}, errors.New("unexpected call")
 }
 
@@ -230,6 +236,68 @@ func makeNonDeterministicSaveState(t *testing.T) game.SaveState {
 		t.Fatalf("place player: %v", err)
 	}
 	return g.ToSaveState(nil, nil)
+}
+
+func makeAwaitingChoiceCampaignSaveState(t *testing.T) game.SaveState {
+	t.Helper()
+	save := makeNonDeterministicSaveState(t)
+	save.Campaign = &game.CampaignRuntimeState{
+		CampaignID:      "lichs-labyrinth",
+		CampaignVersion: "1",
+		ActiveNodeID:    "camp_briefing",
+		ActiveDialogue: &game.DialogueRuntimeState{
+			AssetID:        "camp_briefing",
+			CurrentNode:    "RouteChoice",
+			AwaitingChoice: true,
+			PendingChoices: []game.DialogueChoice{
+				{ID: 0, Text: "Take the hidden route."},
+				{ID: 1, Text: "Take the direct route."},
+			},
+		},
+	}
+	return save
+}
+
+func TestHandlerChat_NonDeterministicCampaignBlocksFreeformWhileAwaitingChoice(t *testing.T) {
+	t.Setenv("MUTATIONS_TABLE", "mutations-test")
+	dbFake := &fakeDBClient{
+		connection: db.Connection{ConnectionID: "conn-1", GameID: "game-choice-blocked", UserID: db.BinaryID("user-1")},
+		user: &db.UserRecord{
+			UserID:    db.BinaryID("user-1"),
+			AIEnabled: true,
+		},
+		save: makeAwaitingChoiceCampaignSaveState(t),
+	}
+	wsFake := &fakeWSSender{}
+	aiFake := &fakeAIClient{}
+
+	origNewDBClient, origNewWSSender, origNewAIClient := newDBClient, newWSSender, newAIClient
+	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
+	newWSSender = func(context.Context) (wsSender, error) { return wsFake, nil }
+	newAIClient = func(context.Context) (aiClient, error) { return aiFake, nil }
+	t.Cleanup(func() {
+		newDBClient = origNewDBClient
+		newWSSender = origNewWSSender
+		newAIClient = origNewAIClient
+	})
+
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "I rush in"})
+	resp, err := handler(context.Background(), makeWSChatReq("conn-1", string(body)))
+	if err != nil {
+		t.Fatalf("handler err: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if len(wsFake.errors) != 1 || wsFake.errors[0] != "dialogue_choice_required" {
+		t.Fatalf("expected dialogue_choice_required error, got %#v", wsFake.errors)
+	}
+	if aiFake.narratorCalls != 0 || aiFake.engineerCalls != 0 || aiFake.resolverCalls != 0 {
+		t.Fatalf("expected no AI calls while awaiting choice, got narrator=%d engineer=%d resolver=%d", aiFake.narratorCalls, aiFake.engineerCalls, aiFake.resolverCalls)
+	}
+	if len(wsFake.broadcasts) != 0 {
+		t.Fatalf("expected no broadcasts while awaiting choice, got %#v", wsFake.broadcasts)
+	}
 }
 
 func TestHandlerChat_PropagatesEventsAndWritesMutations(t *testing.T) {
