@@ -46,6 +46,18 @@ type actionRequest struct {
 	WeaponID string `json:"weapon_id,omitempty"`
 }
 
+type dialogueChoiceDB interface {
+	GetConnectionsByGameID(context.Context, string) ([]db.Connection, error)
+	DeleteConnection(context.Context, string) error
+	PutGame(context.Context, game.SaveState) error
+}
+
+type dialogueChoiceSender interface {
+	SendError(context.Context, string, string) error
+	Broadcast(context.Context, []string, wsutil.Frame) ([]string, error)
+	SendDelta(context.Context, string, any) error
+}
+
 func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
 	connID := req.RequestContext.ConnectionID
 	reqID := req.RequestContext.RequestID
@@ -349,8 +361,8 @@ func handleAttack(ctx context.Context, g *game.Game, userID, targetMonsterID, we
 // same narrative frame pattern as ws-chat and sends a state delta.
 func handleDialogueChoice(
 	ctx context.Context,
-	dbClient *db.Client,
-	ws *wsutil.Sender,
+	dbClient dialogueChoiceDB,
+	ws dialogueChoiceSender,
 	conn db.Connection,
 	g *game.Game,
 	saveState *game.SaveState,

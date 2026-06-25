@@ -1,2 +1,8 @@
 id,text
-route_001,"Route prompt: send hidden, target, or novice to test label-based branching."
+route_001,"Route prompt: choose Hidden Route, Target Route, or Novice Route."
+route_opt_hidden,"Take the Hidden Route."
+route_opt_target,"Take the Target Route."
+route_opt_novice,"Take the Novice Route."
+route_ack_hidden,"You commit to the hidden approach."
+route_ack_target,"You commit to the target approach."
+route_ack_novice,"You commit to the novice approach."

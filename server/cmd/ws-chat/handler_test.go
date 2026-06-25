@@ -197,10 +197,14 @@ func (f *fakeAIClient) ResolveCampaignConditions(context.Context, *game.Game, *c
 type fakeWSSender struct {
 	deltas     []game.StateDelta
 	broadcasts []wsutil.Frame
+	errors     []string
 }
 
 func (f *fakeWSSender) Send(context.Context, string, wsutil.Frame) error { return nil }
-func (f *fakeWSSender) SendError(context.Context, string, string) error  { return nil }
+func (f *fakeWSSender) SendError(_ context.Context, _ string, message string) error {
+	f.errors = append(f.errors, message)
+	return nil
+}
 func (f *fakeWSSender) Broadcast(_ context.Context, _ []string, frame wsutil.Frame) ([]string, error) {
 	f.broadcasts = append(f.broadcasts, frame)
 	return nil, nil
@@ -374,6 +378,72 @@ func TestDeterministicTestCampaignResponseText_NoTransitionNoMessage(t *testing.
 	response := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{}, []game.ChatMessage{{Type: "narrative", Content: "Intro prompt: send a message containing proceed to advance the systems test."}})
 	if response != "" {
 		t.Fatalf("expected no response text when nothing changed, got %q", response)
+	}
+}
+
+func TestHandleDeterministicTestCampaignChat_BlocksFreeformWhileAwaitingChoice(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load campaign registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+
+	g := game.NewGame("game-choice-1", "user-1")
+	g.SetPlayerCharacter("user-1", game.NewCharacter("Hero", ""))
+	room := game.NewArea("Camp", "Camp room")
+	if err := g.AddRoom(room); err != nil {
+		t.Fatalf("add room: %v", err)
+	}
+	if err := g.PlacePlayer(room.ID); err != nil {
+		t.Fatalf("place player: %v", err)
+	}
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:      "test",
+		CampaignVersion: "1",
+		ActiveNodeID:    "route_choice",
+		ActiveDialogue: &game.DialogueRuntimeState{
+			AssetID:        "route_dialogue",
+			CurrentNode:    "RouteChoice",
+			AwaitingChoice: true,
+			PendingChoices: []game.DialogueChoice{
+				{ID: 0, Text: "Take the Hidden Route."},
+			},
+		},
+	}
+
+	dbFake := &fakeDBClient{
+		connection:      db.Connection{ConnectionID: "conn-1", GameID: "game-choice-1", UserID: db.BinaryID("user-1")},
+		connectionsByID: []db.Connection{{ConnectionID: "conn-1", GameID: "game-choice-1", UserID: db.BinaryID("user-1")}},
+	}
+	wsFake := &fakeWSSender{}
+	save := g.ToSaveState(nil, nil)
+
+	resp, err := handleDeterministicTestCampaignChat(
+		context.Background(),
+		dbFake,
+		wsFake,
+		dbFake.connection,
+		g,
+		def,
+		"hidden",
+		&save,
+		room.ID,
+		[]string{"conn-1"},
+	)
+	if err != nil {
+		t.Fatalf("handler err: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if len(wsFake.errors) != 1 || wsFake.errors[0] != "dialogue_choice_required" {
+		t.Fatalf("expected dialogue_choice_required error, got %#v", wsFake.errors)
+	}
+	if len(wsFake.broadcasts) != 0 {
+		t.Fatalf("expected no narrative broadcasts while awaiting choice, got %#v", wsFake.broadcasts)
 	}
 }
 

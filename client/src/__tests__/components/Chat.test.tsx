@@ -170,4 +170,31 @@ describe('Chat component', () => {
          screen.queryByRole('button', { name: /World Events/i }),
       ).not.toBeInTheDocument();
    });
+
+   it('renders pending choices and disables freeform input while awaiting choice', () => {
+      renderChat({
+         command: 'Go north',
+         pendingChoices: [
+            { id: 0, text: 'Take the Hidden Route.' },
+            { id: 1, text: 'Take the Target Route.' },
+         ],
+         onChoiceSelected: vi.fn(),
+      });
+
+      expect(screen.getByText('Choose your response')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Take the Hidden Route.' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /send/i })).toBeDisabled();
+      expect(screen.getByPlaceholderText('Speak thy command...')).toBeDisabled();
+   });
+
+   it('calls onChoiceSelected when a pending choice is clicked', async () => {
+      const onChoiceSelected = vi.fn();
+      renderChat({
+         pendingChoices: [{ id: 2, text: 'Take the Novice Route.' }],
+         onChoiceSelected,
+      });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Take the Novice Route.' }));
+      expect(onChoiceSelected).toHaveBeenCalledWith(2);
+   });
 });
