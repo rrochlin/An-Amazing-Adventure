@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -184,6 +185,7 @@ type fakeDialogueChoiceSender struct {
 	errors     []string
 	frames     []wsutil.Frame
 	deltaCount int
+	deltas     []game.StateDelta
 }
 
 func (f *fakeDialogueChoiceSender) SendError(_ context.Context, _ string, message string) error {
@@ -196,8 +198,13 @@ func (f *fakeDialogueChoiceSender) Broadcast(_ context.Context, _ []string, fram
 	return nil, nil
 }
 
-func (f *fakeDialogueChoiceSender) SendDelta(context.Context, string, any) error {
+func (f *fakeDialogueChoiceSender) SendDelta(_ context.Context, _ string, delta any) error {
+	stateDelta, ok := delta.(game.StateDelta)
+	if !ok {
+		return errors.New("unexpected delta type")
+	}
 	f.deltaCount++
+	f.deltas = append(f.deltas, stateDelta)
 	return nil
 }
 
@@ -274,6 +281,12 @@ func TestHandleDialogueChoice_Success(t *testing.T) {
 	}
 	if wsFake.deltaCount == 0 {
 		t.Fatal("expected at least one state delta")
+	}
+	if len(wsFake.deltas) == 0 || wsFake.deltas[0].Campaign == nil {
+		t.Fatalf("expected campaign state in delta, got %#v", wsFake.deltas)
+	}
+	if wsFake.deltas[0].Campaign.Labels["entry_route"] != "hidden" {
+		t.Fatalf("expected updated campaign label in delta, got %#v", wsFake.deltas[0].Campaign.Labels)
 	}
 }
 
