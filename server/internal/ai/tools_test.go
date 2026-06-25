@@ -410,6 +410,110 @@ func TestGetRoomInfo_NoEvent(t *testing.T) {
 	}
 }
 
+func TestDamageCharacter_PlayerAlwaysProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
+		"character_name": "player",
+		"amount":         float64(12),
+	})
+	if err != nil {
+		t.Fatalf("damage_character player: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent for player damage, got nil")
+	}
+	if ev.Type != "damage" {
+		t.Fatalf("expected type 'damage', got %q", ev.Type)
+	}
+	if !strings.Contains(ev.Message, "You take 12 damage") {
+		t.Fatalf("expected damage message, got %q", ev.Message)
+	}
+}
+
+func TestDamageCharacter_NPCInDifferentRoom_NoEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, _ = dispatch(g, "create_character", map[string]any{
+		"name":        "Scout",
+		"description": "A sneaky scout",
+		"backstory":   "Keeps watch",
+		"room_name":   "Alley",
+	})
+
+	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
+		"character_name": "Scout",
+		"amount":         float64(5),
+	})
+	if err != nil {
+		t.Fatalf("damage_character npc different room: %v", err)
+	}
+	if ev != nil {
+		t.Fatalf("expected nil event for unseen NPC damage, got %+v", ev)
+	}
+}
+
+func TestDamageCharacter_NPCInPlayerRoom_ProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, _ = dispatch(g, "create_character", map[string]any{
+		"name":        "Guard",
+		"description": "A tired guard",
+		"backstory":   "Night shift",
+		"room_name":   "Tavern",
+	})
+
+	_, ev, err := dispatchWithEvent(g, "damage_character", map[string]any{
+		"character_name": "Guard",
+		"amount":         float64(7),
+	})
+	if err != nil {
+		t.Fatalf("damage_character npc same room: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent for visible NPC damage, got nil")
+	}
+	if ev.Type != "damage" {
+		t.Fatalf("expected type 'damage', got %q", ev.Type)
+	}
+	if !strings.Contains(ev.Message, "Guard takes 7 damage") {
+		t.Fatalf("expected visible npc damage message, got %q", ev.Message)
+	}
+}
+
+func TestSetCharacterAlive_ReviveVisibleNPC_ProducesEvent(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+	_, _ = dispatch(g, "create_character", map[string]any{
+		"name":        "Cleric",
+		"description": "Wounded but steady",
+		"backstory":   "Temple envoy",
+		"room_name":   "Tavern",
+	})
+
+	_, _, err := dispatchWithEvent(g, "damage_character", map[string]any{
+		"character_name": "Cleric",
+		"amount":         float64(100),
+	})
+	if err != nil {
+		t.Fatalf("damage_character kill cleric: %v", err)
+	}
+
+	_, ev, err := dispatchWithEvent(g, "set_character_alive", map[string]any{
+		"character_name": "Cleric",
+		"alive":          true,
+		"health":         float64(25),
+	})
+	if err != nil {
+		t.Fatalf("set_character_alive revive cleric: %v", err)
+	}
+	if ev == nil {
+		t.Fatal("expected WorldEvent for visible revive, got nil")
+	}
+	if ev.Type != "revive" {
+		t.Fatalf("expected type 'revive', got %q", ev.Type)
+	}
+	if !strings.Contains(ev.Message, "Cleric is revived") {
+		t.Fatalf("expected revive message, got %q", ev.Message)
+	}
+}
+
 func TestDispatchMoveCharacter_PartialNameMatch(t *testing.T) {
 	g, _, _ := newTestGameWithRooms(t)
 	_, _ = dispatch(g, "create_character", map[string]any{

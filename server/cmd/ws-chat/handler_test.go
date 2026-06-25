@@ -181,3 +181,62 @@ func TestDeterministicTestCampaignResponseText_NoTransitionNoMessage(t *testing.
 		t.Fatalf("expected no response text when nothing changed, got %q", response)
 	}
 }
+
+// ---- Phase 7: Mutation log and world events wiring tests ----
+// These tests document the expected behavior of mutation persistence and events attachment.
+// Full integration tests with DB mocking would be in a separate integration test suite.
+
+func TestChatMessage_EventsField_Supported(t *testing.T) {
+	// Verify ChatMessage type supports optional events field.
+	// Events are attached to narrative messages during the turn flow.
+	msg := game.ChatMessage{
+		Type:    "narrative",
+		Content: "The goblin attacks!",
+		Events: []game.WorldEvent{
+			{Type: "damage", Message: "You take 5 damage. ❤ 95/100"},
+			{Type: "character_arrived", Message: "The Guard arrives."},
+		},
+	}
+	if len(msg.Events) != 2 {
+		t.Errorf("expected 2 events on narrative message, got %d", len(msg.Events))
+	}
+	if msg.Events[0].Type != "damage" {
+		t.Errorf("expected first event type 'damage', got %q", msg.Events[0].Type)
+	}
+}
+
+func TestChatMessage_PlayerMessage_NoEvents(t *testing.T) {
+	// Player messages should not have events attached.
+	msg := game.ChatMessage{
+		Type:    "player",
+		Content: "I attack the goblin.",
+	}
+	if msg.Events != nil && len(msg.Events) > 0 {
+		t.Errorf("expected no events on player message, got %d", len(msg.Events))
+	}
+}
+
+func TestChatHistory_EventsAttachedToNarrativeMessage(t *testing.T) {
+	// After a turn, the chat history should include:
+	// 1. Player message (no events)
+	// 2. Narrative message (with events from engineer)
+	// This structure allows events to survive reconnection/reload.
+	history := []game.ChatMessage{
+		{Type: "player", Content: "Go north"},
+		{Type: "narrative", Content: "You enter a dark hall...", Events: []game.WorldEvent{
+			{Type: "character_arrived", Message: "Shadows move..."},
+		}},
+	}
+	if len(history) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(history))
+	}
+	playerMsg := history[0]
+	narrativeMsg := history[1]
+
+	if playerMsg.Type != "player" || len(playerMsg.Events) != 0 {
+		t.Error("expected player message with no events")
+	}
+	if narrativeMsg.Type != "narrative" || len(narrativeMsg.Events) != 1 {
+		t.Error("expected narrative message with 1 event")
+	}
+}

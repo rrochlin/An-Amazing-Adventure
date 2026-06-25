@@ -70,6 +70,31 @@ func NarratorTools() []types.Tool {
 			),
 			[]string{"character_name", "room_name"},
 		),
+		tool("damage_character",
+			"Apply damage to a character (player or NPC).",
+			props(
+				req("character_name", "string", "Character name, or 'player' for the current player"),
+				req("amount", "integer", "Amount of damage to apply (1-100)"),
+			),
+			[]string{"character_name", "amount"},
+		),
+		tool("heal_character",
+			"Heal a living character (player or NPC).",
+			props(
+				req("character_name", "string", "Character name, or 'player' for the current player"),
+				req("amount", "integer", "Amount of healing to apply (1-100)"),
+			),
+			[]string{"character_name", "amount"},
+		),
+		tool("set_character_alive",
+			"Force a character's alive state. Set alive=false to kill, alive=true to revive.",
+			props(
+				req("character_name", "string", "Character name, or 'player' for the current player"),
+				req("alive", "boolean", "Target alive state"),
+				opt("health", "integer", "Revive health when alive=true (default 1)"),
+			),
+			[]string{"character_name", "alive"},
+		),
 		tool("give_item_to_player",
 			"Move an item from anywhere into the player's inventory.",
 			props(
@@ -140,6 +165,12 @@ func DispatchTool(ctx context.Context, g *game.Game, name string, input map[stri
 		result, event, err = execCreateCharacter(g, input)
 	case "move_character":
 		result, event, err = execMoveCharacter(g, input)
+	case "damage_character":
+		result, event, err = execDamageCharacter(g, input)
+	case "heal_character":
+		result, event, err = execHealCharacter(g, input)
+	case "set_character_alive":
+		result, event, err = execSetCharacterAlive(g, input)
 	case "give_item_to_player":
 		result, event, err = execGiveItemToPlayer(g, input)
 	case "take_item_from_player":
@@ -297,6 +328,139 @@ func execMoveCharacter(g *game.Game, in map[string]any) (string, *game.WorldEven
 		ev = &game.WorldEvent{Type: "character_departed", Message: fmt.Sprintf("%s leaves.", charName)}
 	}
 	return fmt.Sprintf("Moved %q to %q", charName, roomName), ev, nil
+}
+
+func execDamageCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	charName := strArg(in, "character_name")
+	amount := int(numArg(in, "amount"))
+	if amount <= 0 {
+		return "", nil, fmt.Errorf("amount must be greater than 0")
+	}
+
+	character, isPlayer, ownerID, err := resolveCharacterByName(g, charName)
+	if err != nil {
+		return "", nil, err
+	}
+	wasAlive := character.Alive
+	if err := character.TakeDamage(amount); err != nil {
+		return "", nil, err
+	}
+
+	if isPlayer {
+		g.SetPlayerCharacter(ownerID, character)
+	} else {
+		g.NPCs[character.ID] = character
+	}
+
+	owner, _ := g.OwnerCharacter()
+	visible := isPlayer || character.LocationID == owner.LocationID
+	if !visible {
+		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), nil, nil
+	}
+
+	if !character.Alive && wasAlive {
+		if isPlayer {
+			return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "death", Message: "You have fallen."}, nil
+		}
+		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "death", Message: fmt.Sprintf("%s has been slain.", character.Name)}, nil
+	}
+
+	if isPlayer {
+		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. ❤ %d/100", amount, character.Health)}, nil
+	}
+	return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("%s takes %d damage. ❤ %d/100", character.Name, amount, character.Health)}, nil
+}
+
+func execHealCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	charName := strArg(in, "character_name")
+	amount := int(numArg(in, "amount"))
+	if amount <= 0 {
+		return "", nil, fmt.Errorf("amount must be greater than 0")
+	}
+
+	character, isPlayer, ownerID, err := resolveCharacterByName(g, charName)
+	if err != nil {
+		return "", nil, err
+	}
+	if err := character.Heal(amount); err != nil {
+		return "", nil, err
+	}
+
+	if isPlayer {
+		g.SetPlayerCharacter(ownerID, character)
+	} else {
+		g.NPCs[character.ID] = character
+	}
+
+	owner, _ := g.OwnerCharacter()
+	visible := isPlayer || character.LocationID == owner.LocationID
+	if !visible {
+		return fmt.Sprintf("Healed %q by %d", character.Name, amount), nil, nil
+	}
+
+	if isPlayer {
+		return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. ❤ %d/100", amount, character.Health)}, nil
+	}
+	return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("%s recovers %d health. ❤ %d/100", character.Name, amount, character.Health)}, nil
+}
+
+func execSetCharacterAlive(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	charName := strArg(in, "character_name")
+	alive, ok := in["alive"].(bool)
+	if !ok {
+		return "", nil, fmt.Errorf("alive must be a boolean")
+	}
+
+	character, isPlayer, ownerID, err := resolveCharacterByName(g, charName)
+	if err != nil {
+		return "", nil, err
+	}
+
+	if !alive {
+		if character.Alive {
+			if err := character.TakeDamage(character.Health); err != nil {
+				return "", nil, err
+			}
+		}
+	} else {
+		reviveHealth := 1
+		if _, hasHealth := in["health"]; hasHealth {
+			reviveHealth = int(numArg(in, "health"))
+		}
+		if character.Alive {
+			return "", nil, fmt.Errorf("character %q is already alive", character.Name)
+		}
+		if err := character.Revive(reviveHealth); err != nil {
+			return "", nil, err
+		}
+	}
+
+	if isPlayer {
+		g.SetPlayerCharacter(ownerID, character)
+	} else {
+		g.NPCs[character.ID] = character
+	}
+
+	owner, _ := g.OwnerCharacter()
+	visible := isPlayer || character.LocationID == owner.LocationID
+	if !visible {
+		if alive {
+			return fmt.Sprintf("Set %q alive", character.Name), nil, nil
+		}
+		return fmt.Sprintf("Set %q dead", character.Name), nil, nil
+	}
+
+	if alive {
+		if isPlayer {
+			return fmt.Sprintf("Set %q alive", character.Name), &game.WorldEvent{Type: "revive", Message: fmt.Sprintf("You are revived. ❤ %d/100", character.Health)}, nil
+		}
+		return fmt.Sprintf("Set %q alive", character.Name), &game.WorldEvent{Type: "revive", Message: fmt.Sprintf("%s is revived. ❤ %d/100", character.Name, character.Health)}, nil
+	}
+
+	if isPlayer {
+		return fmt.Sprintf("Set %q dead", character.Name), &game.WorldEvent{Type: "death", Message: "You have fallen."}, nil
+	}
+	return fmt.Sprintf("Set %q dead", character.Name), &game.WorldEvent{Type: "death", Message: fmt.Sprintf("%s has been slain.", character.Name)}, nil
 }
 
 func execGiveItemToPlayer(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
@@ -545,6 +709,56 @@ func resolveNPCByName(g *game.Game, name string) (game.Character, error) {
 	return game.Character{}, fmt.Errorf("NPC named %q not found; known NPCs: %s", name, strings.Join(npcNames(g), ", "))
 }
 
+func resolveCharacterByName(g *game.Game, name string) (game.Character, bool, string, error) {
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return game.Character{}, false, "", fmt.Errorf("owner/player character not found")
+	}
+
+	normTarget := normalizeLookupKey(name)
+	if normTarget == "" {
+		return game.Character{}, false, "", fmt.Errorf("character name is required")
+	}
+	if normTarget == "player" || normTarget == "you" || normTarget == "self" || normTarget == "owner" {
+		return owner, true, g.OwnerID, nil
+	}
+
+	if normalizeLookupKey(owner.Name) == normTarget {
+		return owner, true, g.OwnerID, nil
+	}
+
+	type candidate struct {
+		character game.Character
+		isPlayer  bool
+	}
+	var partial []candidate
+	for _, npc := range g.NPCs {
+		normNPC := normalizeLookupKey(npc.Name)
+		if normNPC == normTarget {
+			return npc, false, "", nil
+		}
+		if strings.Contains(normNPC, normTarget) || strings.Contains(normTarget, normNPC) {
+			partial = append(partial, candidate{character: npc, isPlayer: false})
+		}
+	}
+	if strings.Contains(normalizeLookupKey(owner.Name), normTarget) || strings.Contains(normTarget, normalizeLookupKey(owner.Name)) {
+		partial = append(partial, candidate{character: owner, isPlayer: true})
+	}
+
+	if len(partial) == 1 {
+		c := partial[0]
+		if c.isPlayer {
+			return c.character, true, g.OwnerID, nil
+		}
+		return c.character, false, "", nil
+	}
+	if len(partial) > 1 {
+		return game.Character{}, false, "", fmt.Errorf("character name %q is ambiguous; candidates: %s", name, strings.Join(characterNames(g), ", "))
+	}
+
+	return game.Character{}, false, "", fmt.Errorf("character named %q not found; known characters: %s", name, strings.Join(characterNames(g), ", "))
+}
+
 func normalizeLookupKey(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if s == "" {
@@ -595,6 +809,21 @@ func itemNames(g *game.Game) []string {
 
 func npcNames(g *game.Game) []string {
 	names := make([]string, 0, len(g.NPCs))
+	for _, npc := range g.NPCs {
+		names = append(names, npc.Name)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return []string{"(none)"}
+	}
+	return names
+}
+
+func characterNames(g *game.Game) []string {
+	names := make([]string, 0, len(g.NPCs)+1)
+	if owner, ok := g.OwnerCharacter(); ok {
+		names = append(names, owner.Name)
+	}
 	for _, npc := range g.NPCs {
 		names = append(names, npc.Name)
 	}

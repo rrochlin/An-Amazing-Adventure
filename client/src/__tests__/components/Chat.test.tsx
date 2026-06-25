@@ -118,4 +118,56 @@ describe('Chat component', () => {
       fireEvent.keyPress(input, { key: 'Enter', charCode: 13, shiftKey: true });
       expect(handleCommand).not.toHaveBeenCalled();
    });
+
+   it('renders world events accordion for narrative messages with events', async () => {
+      const history: ChatMessage[] = [
+         {
+            type: 'narrative',
+            content: 'A goblin lunges from the shadows.',
+            events: [
+               { type: 'damage', message: 'You take 5 damage. ❤ 95/100' },
+               { type: 'item_appeared', message: 'A Rusty Key appears nearby.' },
+            ],
+         },
+      ];
+      renderChat({ chatHistory: history });
+
+      const summaryButton = screen.getByRole('button', {
+         name: /World Events \(2\)/i,
+      });
+      expect(summaryButton).toBeInTheDocument();
+
+      await userEvent.click(summaryButton);
+      expect(screen.getByText('You take 5 damage. ❤ 95/100')).toBeInTheDocument();
+      expect(screen.getByText('A Rusty Key appears nearby.')).toBeInTheDocument();
+   });
+
+   it('does not render world events accordion when narrative message has no events', () => {
+      const history: ChatMessage[] = [
+         {
+            type: 'narrative',
+            content: 'The corridor falls silent.',
+         },
+      ];
+      renderChat({ chatHistory: history });
+
+      expect(
+         screen.queryByRole('button', { name: /World Events/i }),
+      ).not.toBeInTheDocument();
+   });
+
+   it('does not render world events accordion for player messages', () => {
+      const history: ChatMessage[] = [
+         {
+            type: 'player',
+            content: 'I brace for impact.',
+            events: [{ type: 'damage', message: 'This should never render.' }],
+         },
+      ];
+      renderChat({ chatHistory: history });
+
+      expect(
+         screen.queryByRole('button', { name: /World Events/i }),
+      ).not.toBeInTheDocument();
+   });
 });

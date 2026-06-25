@@ -384,7 +384,7 @@ func handleDeterministicTestCampaignChat(
 		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
 	}
 
-	resolution := deterministicTestCampaignResolution(g.Campaign.ActiveNodeID, playerText)
+	resolution := deterministicTestCampaignResolution(g.Campaign, g.Campaign.ActiveNodeID, playerText)
 	campaigns.ApplyConditionResolution(g.Campaign, resolution)
 	transitionResult, transitionErr := campaigns.AdvanceCampaign(campaignDef, g)
 	if transitionErr != nil {
@@ -484,7 +484,7 @@ func handleDeterministicTestCampaignChat(
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 
-func deterministicTestCampaignResolution(activeNodeID, playerInput string) campaigns.ConditionResolution {
+func deterministicTestCampaignResolution(state *game.CampaignRuntimeState, activeNodeID, playerInput string) campaigns.ConditionResolution {
 	input := strings.ToLower(playerInput)
 	switch activeNodeID {
 	case "intro":
@@ -502,7 +502,11 @@ func deterministicTestCampaignResolution(activeNodeID, playerInput string) campa
 		}
 	case "hidden_probe":
 		if strings.Contains(input, "scan") {
-			return campaigns.ConditionResolution{Counters: map[string]int{"scan_count": 2}}
+			nextCount := 1
+			if state != nil && state.Counters != nil {
+				nextCount = state.Counters["scan_count"] + 1
+			}
+			return campaigns.ConditionResolution{Counters: map[string]int{"scan_count": nextCount}}
 		}
 	case "target_probe":
 		if strings.Contains(input, "inspect room") {
