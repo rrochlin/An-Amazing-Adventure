@@ -148,26 +148,44 @@ DURING GAMEPLAY:
          ├─→ Add message to chatHistory
          │   (type: "player", content: command)
          │
-         └─→ POST /chat/{sessionUUID}
-             Body: { chat: "look around" }
+         └─→ WebSocket send
+             { action: "chat", content: "look around" }
                         ↓
              ┌──────────────────────────────┐
-             │ Backend processes command    │
-             │ Updates game state           │
-             │ Returns response             │
+             │ ws-chat handler processes    │
+             │ and streams response         │
              └──────────────────────────────┘
                         ↓
-             Response: {
-               game_state: GameState (updated)
-             }
+             Server frame order:
+             1) narrative_chunk* (0..N)
+             2) narrative_end
+             3) state_delta / game_state_update
                         ↓
              ┌──────────────────────────────┐
-             │ Update gameState              │
-             │ Extract new chat_history     │
-             │ Clear input field            │
-             │ Cache to localStorage        │
-             │ Re-render components         │
+             │ Store reducers update:       │
+             │ - streaming message          │
+             │ - committed chat history     │
+             │ - campaign/dialogue state    │
+             │ - room/player deltas         │
              └──────────────────────────────┘
+
+AUTHORED DIALOGUE CHOICE TURN:
+┌──────────────────────────────────────┐
+│ campaign.active_dialogue.awaiting_   │
+│ choice = true with pending choices   │
+└──────────────────────────────────────┘
+         │
+         ├─→ Chat input disabled; choice buttons shown
+         ├─→ Client sends once:
+         │   { action: "game_action",
+         │     sub_action: "dialogue_choice",
+         │     payload: "<choice-id>" }
+         │
+         ├─→ Client debounces repeated sends while submission is in-flight
+         │   (unblocks on next state update or error frame)
+         │
+         └─→ Server responds via normal state_delta/error frames
+             (no dedicated choice-ack frame)
 
 GAME DISPLAY (Parallel Processes):
 ┌────────────────────────────┬──────────────────────────┐
@@ -189,8 +207,8 @@ GAME DISPLAY (Parallel Processes):
          ↑                            ↑
          │                            │
          └────────────────────────────┘
-             Updates from API
-             Every command response
+             Updates from WebSocket frames
+             Every streamed turn/state delta
 
 GAME INFO SIDEBAR:
 ┌──────────────────────────────────────┐
@@ -203,7 +221,7 @@ GAME INFO SIDEBAR:
 └──────────────────────────────────────┘
          │
          └─→ Updated when gameState changes
-             (every chat response)
+             (every state_delta/game_state_update)
 ```
 
 ---

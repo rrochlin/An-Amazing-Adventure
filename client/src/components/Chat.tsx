@@ -456,9 +456,11 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
 const ChoicePanel = ({
    choices,
    onChoiceSelected,
+   isSubmittingChoice,
 }: {
    choices: DialogueChoice[];
    onChoiceSelected: (id: number) => void;
+   isSubmittingChoice?: boolean;
 }) => {
    const { mode } = useColorScheme();
    const isDark = mode === 'dark' || mode === 'system' || !mode;
@@ -495,6 +497,7 @@ const ChoicePanel = ({
                   variant="outlined"
                   size="small"
                   onClick={() => onChoiceSelected(choice.id)}
+                  disabled={isSubmittingChoice}
                   sx={{
                      justifyContent: 'flex-start',
                      textAlign: 'left',
@@ -534,6 +537,7 @@ export const Chat = ({
    isLoading,
    pendingChoices,
    onChoiceSelected,
+   isSubmittingChoice = false,
 }: {
    chatHistory: ChatMessageType[];
    /** Raw text chunks accumulating from the current AI stream. When non-empty,
@@ -547,6 +551,8 @@ export const Chat = ({
    pendingChoices?: DialogueChoice[];
    /** Called when the player selects one of the pending choices. */
    onChoiceSelected?: (id: number) => void;
+   /** Prevent duplicate dialogue_choice submissions while awaiting server resolution. */
+   isSubmittingChoice?: boolean;
 }) => {
    const { mode } = useColorScheme();
    const isDark = mode === 'dark' || mode === 'system' || !mode;
@@ -676,6 +682,7 @@ export const Chat = ({
             <ChoicePanel
                choices={pendingChoices}
                onChoiceSelected={onChoiceSelected}
+               isSubmittingChoice={isSubmittingChoice}
             />
          )}
 

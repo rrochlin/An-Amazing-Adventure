@@ -80,6 +80,8 @@ function GamePage() {
    const [reconnectToast, setReconnectToast] = useState(false);
    const [ownerID, setOwnerID] = useState<string | null>(null);
    const [adventureTitle, setAdventureTitle] = useState<string | null>(null);
+   const [isSubmittingChoice, setIsSubmittingChoice] = useState(false);
+   const choiceSubmitLockRef = useRef(false);
     // Stuck world-gen detection: set after 90s with no world_gen_ready and still not-ready
    const [worldGenStuck, setWorldGenStuck] = useState(false);
    const [retrying, setRetrying] = useState(false);
@@ -244,6 +246,8 @@ function GamePage() {
 
    useEffect(() => {
       reset();
+      choiceSubmitLockRef.current = false;
+      setIsSubmittingChoice(false);
       loadGameRef.current = false;
       setTransitionPhase('terminal');
       loadGame();
@@ -272,11 +276,27 @@ function GamePage() {
    };
 
    const handleChoiceSelected = (choiceId: number) => {
+      if (choiceSubmitLockRef.current) return;
+      choiceSubmitLockRef.current = true;
+      setIsSubmittingChoice(true);
       sendAction('dialogue_choice', String(choiceId));
    };
 
    const pendingChoices =
       campaignState?.active_dialogue?.pending_choices ?? undefined;
+
+   useEffect(() => {
+      if (!isSubmittingChoice) return;
+      if (wsError) {
+         choiceSubmitLockRef.current = false;
+         setIsSubmittingChoice(false);
+         return;
+      }
+      if (!campaignState?.active_dialogue?.awaiting_choice) {
+         choiceSubmitLockRef.current = false;
+         setIsSubmittingChoice(false);
+      }
+   }, [campaignState, isSubmittingChoice, wsError]);
 
    if (loadError) {
       return (
@@ -645,6 +665,7 @@ function GamePage() {
                   }
                   pendingChoices={pendingChoices}
                   onChoiceSelected={handleChoiceSelected}
+                  isSubmittingChoice={isSubmittingChoice}
                />
             </Paper>
             {wsError === 'ai_access_not_enabled' && (
