@@ -6,25 +6,28 @@ This document captures the current recommended execution plan for the Phase 7 au
 
 ## Current Context
 
-The project is in Phase 7 alpha and is centered on a campaign-first, deterministic runtime model:
+Phase 7 authored-runtime foundation is now complete through the implementation milestones already landed on `main`, and this branch is wrapping the documentation reconciliation work:
 
 - authored campaign content lives under `server/campaigns/`
-- deterministic runtime state lives under `server/internal/campaigns/`
+- deterministic runtime/orchestration lives under `server/internal/campaigns/`
 - Yarn-backed dialogue execution lives under `server/internal/dialogue/`
-- WebSocket-driven turn handling currently still carries orchestration weight in `server/cmd/ws-chat/`
+- client runtime state is surfaced through `CampaignStateView` / `DialogueStateView` and stored in `client/src/store/gameStore.ts`
+- dialogue choice turns are enforced through `ws-game-action` using `sub_action: "dialogue_choice"`
 - the `test` campaign remains the primary systems probe for validating authored runtime correctness
+- the current in-scope work is tightening docs so they match the shipped behavior from PRs #62-#67
+- the planned `Lich's Labyrinth` vertical slice remains future content work rather than part of this docs wrap-up
 
 The main backlog remains in `docs/TODO.md`, but the sequence below is dependency-ordered rather than document-ordered.
 
 ## Priority Order
 
-The next three execution items should be handled in this order:
+The current active wrap-up order is:
 
-1. Interactive Yarn choices
-2. Yarn command to campaign-state bridge
-3. Multi-turn scene flow contract
+1. Reconcile the top-level client/runtime docs with the shipped Phase 7 implementation
+2. Capture one concise current-status authored-runtime document under `docs/`
+3. Leave broader future runtime/content follow-ups in `docs/TODO.md` rather than expanding this milestone
 
-That order matters because item 1 is the current hard blocker, item 2 makes authored progression deterministic without AI guesswork, and item 3 defines the stable boundary before any broader orchestration refactor.
+The authored-runtime implementation blockers are largely resolved; this plan is now mainly recording the finished runtime path plus the remaining documentation wrap-up and future content milestone.
 
 ## Detailed Plan
 
@@ -192,8 +195,8 @@ Primary touch points:
 
 - `CLIENT_ARCHITECTURE.md`
 - `CLIENT_DATA_FLOWS.md`
-- `docs/README.md`
-- a new or updated authored-runtime milestone/status document under `docs/`
+- `docs/PHASE_7_STATUS.md`
+- any small follow-up doc corrections kept tightly scoped to the shipped runtime
 
 Acceptance checks:
 
@@ -203,23 +206,23 @@ Acceptance checks:
 
 ## Suggested Milestones
 
-### Milestone A
+### Milestone A — Complete
 
 Interactive choices on the `test` campaign.
 
-### Milestone B
+### Milestone B — Complete
 
 Minimal Yarn command bridge plus persisted scene state.
 
-### Milestone C
+### Milestone C — Complete
 
 Scene flow contract finalized and enforced (guard parity + client choice-submit debounce).
 
-### Milestone D
+### Milestone D — Pending future content work
 
 `Lich's Labyrinth` camp-briefing-to-route-choice vertical slice.
 
-### Milestone E
+### Milestone E — Wrapping
 
 Documentation reconciliation and authored-runtime status write-up.
 
