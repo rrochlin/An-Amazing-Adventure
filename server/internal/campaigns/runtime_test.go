@@ -538,6 +538,51 @@ func TestAdvanceCampaign_TestCampaignHiddenBranchAppliesLabelCounterAndObjective
 	}
 }
 
+func TestAdvanceCampaign_TestCampaignHiddenVerificationWaitsForCompletedObjective(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+	g := game.NewGame("session-hidden-gate-1", "user-1")
+	g.Campaign = &game.CampaignRuntimeState{
+		CampaignID:      def.ID,
+		CampaignVersion: def.Version,
+		ActiveNodeID:    "hidden_verification",
+		BoolFlags:       map[string]bool{"verification_complete": true},
+		Labels:          map[string]string{"selected_branch": "hidden"},
+		Counters:        map[string]int{},
+		ActiveObjectives: []game.ObjectiveState{
+			{ID: "advance_hidden_probe", Status: "active", VisibleText: "Advance Hidden Probe"},
+			{ID: "verify_hidden_probe", Status: "active", VisibleText: "Verify Hidden Probe"},
+		},
+		ActorStates:     map[string]game.ActorRuntimeState{},
+		CompanionStates: map[string]game.CompanionState{},
+		ActiveDialogue:  &game.DialogueRuntimeState{AssetID: "verification_dialogue", CurrentNode: "Verification"},
+	}
+
+	result, err := campaigns.AdvanceCampaign(def, g)
+	if err != nil {
+		t.Fatalf("advance campaign hidden verification gate: %v", err)
+	}
+	if result.Transitioned {
+		t.Fatalf("expected hidden verification gate to block transition, got %#v", result)
+	}
+	if g.Campaign.ActiveNodeID != "hidden_verification" {
+		t.Fatalf("expected to remain on hidden_verification, got %q", g.Campaign.ActiveNodeID)
+	}
+	statuses := map[string]string{}
+	for _, objective := range g.Campaign.ActiveObjectives {
+		statuses[objective.ID] = objective.Status
+	}
+	if statuses["advance_hidden_probe"] != "active" || statuses["verify_hidden_probe"] != "active" {
+		t.Fatalf("expected objective statuses unchanged while gate is blocked, got %#v", statuses)
+	}
+}
+
 func TestAdvanceCampaign_TestCampaignFailureRuleFailsObjective(t *testing.T) {
 	reg, err := campaigns.LoadEmbeddedRegistry()
 	if err != nil {

@@ -252,41 +252,147 @@ func makeDialogueChoiceGame(t *testing.T, awaiting bool) (*game.Game, *campaigns
 	return g, def, conn, save
 }
 
-func TestHandleDialogueChoice_Success(t *testing.T) {
-	g, _, conn, save := makeDialogueChoiceGame(t, true)
-	dbFake := &fakeDialogueChoiceDB{connections: []db.Connection{conn}}
-	wsFake := &fakeDialogueChoiceSender{}
+func objectiveStatuses(objectives []game.ObjectiveState) map[string]string {
+	statuses := make(map[string]string, len(objectives))
+	for _, objective := range objectives {
+		statuses[objective.ID] = objective.Status
+	}
+	return statuses
+}
 
-	resp, err := handleDialogueChoice(context.Background(), dbFake, wsFake, conn, g, &save, "0")
-	if err != nil {
-		t.Fatalf("handleDialogueChoice: %v", err)
+func TestHandleDialogueChoice_RouteChoiceProgression(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name                 string
+		payload              string
+		wantNode             string
+		wantSelectedBranch   string
+		wantEvent            string
+		wantNarrative        []string
+		wantDialogueAsset    string
+		wantObjectiveStatus  map[string]string
+		wantBoolFlags        map[string]bool
+		expectDialogueClears bool
+	}{
+		{
+			name:               "hidden",
+			payload:            "0",
+			wantNode:           "hidden_probe",
+			wantSelectedBranch: "hidden",
+			wantEvent:          "Objective updated: Send a message containing scan twice to satisfy the counter-and-actor-step gate.",
+			wantNarrative:      []string{"You commit to the hidden approach."},
+			wantObjectiveStatus: map[string]string{
+				"choose_route":         "completed",
+				"advance_hidden_probe": "active",
+			},
+			wantBoolFlags:        map[string]bool{"hidden_branch_seen": true},
+			expectDialogueClears: true,
+		},
+		{
+			name:               "target",
+			payload:            "1",
+			wantNode:           "target_probe",
+			wantSelectedBranch: "target",
+			wantEvent:          "Objective updated: Send a message containing inspect room to satisfy the actor-room gate.",
+			wantNarrative: []string{
+				"You commit to the target approach.",
+				"Room prompt: send a message containing inspect room to satisfy the actor-room gate.",
+			},
+			wantDialogueAsset: "room_dialogue",
+			wantObjectiveStatus: map[string]string{
+				"choose_route":         "completed",
+				"inspect_target_probe": "active",
+			},
+			wantBoolFlags: map[string]bool{"target_branch_seen": true},
+		},
+		{
+			name:               "novice",
+			payload:            "2",
+			wantNode:           "route_failure",
+			wantSelectedBranch: "novice",
+			wantEvent:          "Objective updated: The systems-only runtime test entered the failure branch.",
+			wantNarrative:      []string{"You commit to the novice approach."},
+			wantObjectiveStatus: map[string]string{
+				"choose_route": "failed",
+			},
+			wantBoolFlags:        map[string]bool{"route_failed": true},
+			expectDialogueClears: true,
+		},
 	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("expected status 200, got %d", resp.StatusCode)
-	}
-	if len(wsFake.errors) != 0 {
-		t.Fatalf("expected no ws errors, got %#v", wsFake.errors)
-	}
-	if g.Campaign.ActiveNodeID != "hidden_probe" {
-		t.Fatalf("expected campaign to advance to hidden_probe, got %q", g.Campaign.ActiveNodeID)
-	}
-	if g.Campaign.ActiveDialogue != nil {
-		t.Fatalf("expected active dialogue to be cleared after hidden_probe transition, got %#v", g.Campaign.ActiveDialogue)
-	}
-	if g.Campaign.Labels["entry_route"] != "hidden" {
-		t.Fatalf("expected dialogue command to set hidden route, got %#v", g.Campaign.Labels)
-	}
-	if dbFake.putGame.SessionID == "" {
-		t.Fatal("expected updated game state to be persisted")
-	}
-	if wsFake.deltaCount == 0 {
-		t.Fatal("expected at least one state delta")
-	}
-	if len(wsFake.deltas) == 0 || wsFake.deltas[0].Campaign == nil {
-		t.Fatalf("expected campaign state in delta, got %#v", wsFake.deltas)
-	}
-	if wsFake.deltas[0].Campaign.Labels["entry_route"] != "hidden" {
-		t.Fatalf("expected updated campaign label in delta, got %#v", wsFake.deltas[0].Campaign.Labels)
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			g, _, conn, save := makeDialogueChoiceGame(t, true)
+			dbFake := &fakeDialogueChoiceDB{connections: []db.Connection{conn}}
+			wsFake := &fakeDialogueChoiceSender{}
+
+			resp, err := handleDialogueChoice(context.Background(), dbFake, wsFake, conn, g, &save, tc.payload)
+			if err != nil {
+				t.Fatalf("handleDialogueChoice: %v", err)
+			}
+			if resp.StatusCode != 200 {
+				t.Fatalf("expected status 200, got %d", resp.StatusCode)
+			}
+			if len(wsFake.errors) != 0 {
+				t.Fatalf("expected no ws errors, got %#v", wsFake.errors)
+			}
+			if g.Campaign.ActiveNodeID != tc.wantNode {
+				t.Fatalf("expected campaign to advance to %s, got %q", tc.wantNode, g.Campaign.ActiveNodeID)
+			}
+			if got := g.Campaign.Labels["entry_route"]; got != tc.wantSelectedBranch {
+				t.Fatalf("expected entry_route=%q, got %#v", tc.wantSelectedBranch, g.Campaign.Labels)
+			}
+			if got := g.Campaign.Labels["selected_branch"]; got != tc.wantSelectedBranch {
+				t.Fatalf("expected selected_branch=%q, got %#v", tc.wantSelectedBranch, g.Campaign.Labels)
+			}
+			for key, want := range tc.wantBoolFlags {
+				if got := g.Campaign.BoolFlags[key]; got != want {
+					t.Fatalf("expected flag %s=%t, got %#v", key, want, g.Campaign.BoolFlags)
+				}
+			}
+			if tc.expectDialogueClears {
+				if g.Campaign.ActiveDialogue != nil {
+					t.Fatalf("expected active dialogue cleared, got %#v", g.Campaign.ActiveDialogue)
+				}
+			} else if g.Campaign.ActiveDialogue == nil || g.Campaign.ActiveDialogue.AssetID != tc.wantDialogueAsset {
+				t.Fatalf("expected active dialogue %q, got %#v", tc.wantDialogueAsset, g.Campaign.ActiveDialogue)
+			}
+			if dbFake.putGame.SessionID == "" {
+				t.Fatal("expected updated game state to be persisted")
+			}
+			if len(dbFake.putGame.ChatHistory) != len(tc.wantNarrative) {
+				t.Fatalf("expected %d narrative history messages, got %#v", len(tc.wantNarrative), dbFake.putGame.ChatHistory)
+			}
+			for i, want := range tc.wantNarrative {
+				if got := dbFake.putGame.ChatHistory[i].Content; got != want {
+					t.Fatalf("expected chat history[%d]=%q, got %#v", i, want, dbFake.putGame.ChatHistory)
+				}
+			}
+			lastHistory := dbFake.putGame.ChatHistory[len(dbFake.putGame.ChatHistory)-1]
+			if len(lastHistory.Events) != 1 || lastHistory.Events[0].Message != tc.wantEvent {
+				t.Fatalf("expected progress event on persisted narrative, got %#v", lastHistory.Events)
+			}
+			if wsFake.deltaCount == 0 || len(wsFake.deltas) == 0 {
+				t.Fatal("expected at least one state delta")
+			}
+			delta := wsFake.deltas[0]
+			if delta.Campaign == nil {
+				t.Fatalf("expected campaign state in delta, got %#v", delta)
+			}
+			if len(delta.Events) != 1 || delta.Events[0].Message != tc.wantEvent {
+				t.Fatalf("expected campaign-progress event in delta, got %#v", delta.Events)
+			}
+			if delta.Campaign.Labels["selected_branch"] != tc.wantSelectedBranch {
+				t.Fatalf("expected delta selected_branch=%q, got %#v", tc.wantSelectedBranch, delta.Campaign.Labels)
+			}
+			for id, want := range tc.wantObjectiveStatus {
+				if got := objectiveStatuses(delta.Campaign.ActiveObjectives)[id]; got != want {
+					t.Fatalf("expected objective %s=%s, got %#v", id, want, delta.Campaign.ActiveObjectives)
+				}
+			}
+		})
 	}
 }
 
@@ -305,17 +411,41 @@ func TestHandleDialogueChoice_ErrorPaths(t *testing.T) {
 	if len(wsFake.errors) == 0 || wsFake.errors[0] != "dialogue_choice: invalid choice ID" {
 		t.Fatalf("expected invalid choice ID error, got %#v", wsFake.errors)
 	}
+	if dbFake.putGame.SessionID != "" || wsFake.deltaCount != 0 {
+		t.Fatalf("expected invalid choice to skip persistence and deltas, save=%#v deltas=%#v", dbFake.putGame, wsFake.deltas)
+	}
 
 	wsFake.errors = nil
-	g.Campaign.ActiveDialogue.AwaitingChoice = false
-	resp, err = handleDialogueChoice(context.Background(), dbFake, wsFake, conn, g, &save, "0")
+	resp, err = handleDialogueChoice(context.Background(), dbFake, wsFake, conn, g, &save, "99")
 	if err != nil {
-		t.Fatalf("handleDialogueChoice not awaiting: %v", err)
+		t.Fatalf("handleDialogueChoice out of range: %v", err)
 	}
 	if resp.StatusCode != 200 {
-		t.Fatalf("expected status 200 for not-awaiting case, got %d", resp.StatusCode)
+		t.Fatalf("expected status 200 for out-of-range case, got %d", resp.StatusCode)
+	}
+	if len(wsFake.errors) == 0 || (!strings.Contains(wsFake.errors[0], "choice") && !strings.Contains(wsFake.errors[0], "option")) {
+		t.Fatalf("expected out-of-range choice error, got %#v", wsFake.errors)
+	}
+	if dbFake.putGame.SessionID != "" || wsFake.deltaCount != 0 {
+		t.Fatalf("expected out-of-range choice to skip persistence and deltas, save=%#v deltas=%#v", dbFake.putGame, wsFake.deltas)
+	}
+
+	wsFake.errors = nil
+	g, _, conn, save = makeDialogueChoiceGame(t, true)
+	dbFake = &fakeDialogueChoiceDB{connections: []db.Connection{conn}}
+	wsFake = &fakeDialogueChoiceSender{}
+	if _, err = handleDialogueChoice(context.Background(), dbFake, wsFake, conn, g, &save, "0"); err != nil {
+		t.Fatalf("handleDialogueChoice first choice: %v", err)
+	}
+	wsFake.errors = nil
+	resp, err = handleDialogueChoice(context.Background(), dbFake, wsFake, conn, g, &save, "0")
+	if err != nil {
+		t.Fatalf("handleDialogueChoice stale choice: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected status 200 for stale choice, got %d", resp.StatusCode)
 	}
 	if len(wsFake.errors) == 0 || wsFake.errors[0] != "dialogue_choice: not awaiting a choice" {
-		t.Fatalf("expected not-awaiting error, got %#v", wsFake.errors)
+		t.Fatalf("expected stale choice to be rejected, got %#v", wsFake.errors)
 	}
 }

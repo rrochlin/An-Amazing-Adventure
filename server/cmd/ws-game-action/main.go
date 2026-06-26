@@ -445,11 +445,11 @@ func handleDialogueChoice(
 	}
 
 	// Check whether the completed dialogue triggers a campaign node transition.
-	transitionResult, transitionErr := campaigns.AdvanceCampaign(campaignDef, g)
+	turnResult, transitionErr := campaigns.OrchestrateTurn(campaignDef, g, campaigns.ConditionResolution{})
 	if transitionErr != nil {
 		log.Printf("ws-game-action: dialogue_choice: campaign transition: %v", transitionErr)
-	} else if transitionResult.Transitioned && transitionResult.DialogueText != "" {
-		text := transitionResult.DialogueText
+	} else if turnResult.Transition.Transitioned && turnResult.Transition.DialogueText != "" {
+		text := turnResult.Transition.DialogueText
 		chunkFrame := wsutil.Frame{
 			Type:    wsutil.FrameNarrativeChunk,
 			Payload: map[string]string{"content": text},
@@ -467,6 +467,15 @@ func handleDialogueChoice(
 			Role:    "assistant",
 			Content: []game.NarrativeBlock{{Type: "text", Text: text}},
 		})
+	}
+	if len(turnResult.Events) > 0 {
+		for i := len(history) - 1; i >= 0; i-- {
+			if history[i].Type != "narrative" {
+				continue
+			}
+			history[i].Events = append([]game.WorldEvent(nil), turnResult.Events...)
+			break
+		}
 	}
 
 	// Persist.
@@ -487,6 +496,7 @@ func handleDialogueChoice(
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
 		delta := game.StateDelta{
+			Events:   append([]game.WorldEvent(nil), turnResult.Events...),
 			Player:   &memberView.Player,
 			Self:     &memberView.Self,
 			Campaign: g.BuildCampaignStateView(),
