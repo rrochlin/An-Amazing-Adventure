@@ -93,6 +93,47 @@ func TestAllowedConditionSpecsForNode_DerivesRuleConditions(t *testing.T) {
 	}
 }
 
+func TestOrchestrateTurn_FiltersResolutionTransitionsAndEmitsObjectiveEvent(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load registry: %v", err)
+	}
+	def, ok := reg.Get("test")
+	if !ok {
+		t.Fatal("expected test campaign")
+	}
+	g, _, err := campaigns.BootstrapGame(
+		def,
+		"session-orchestrate",
+		"user-1",
+		game.NewCharacter("Hero", ""),
+		game.CharacterCreationData{Name: "Hero", RaceID: "human", ClassID: "fighter"},
+	)
+	if err != nil {
+		t.Fatalf("bootstrap game: %v", err)
+	}
+
+	result, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{
+		BoolFlags: map[string]bool{"intro_complete": true},
+		Labels:    map[string]string{"entry_route": "novice"},
+	})
+	if err != nil {
+		t.Fatalf("orchestrate turn: %v", err)
+	}
+	if !result.Transition.Transitioned || result.Transition.ToNodeID != "route_choice" {
+		t.Fatalf("expected transition to route_choice, got %#v", result.Transition)
+	}
+	if result.Transition.DialogueText != "Route prompt: choose Hidden Route, Target Route, or Novice Route." {
+		t.Fatalf("unexpected dialogue text %q", result.Transition.DialogueText)
+	}
+	if len(result.Events) != 1 || result.Events[0].Message != "Objective updated: Choose one of the presented route options to test deterministic branching." {
+		t.Fatalf("expected campaign progress event, got %#v", result.Events)
+	}
+	if got := g.Campaign.Labels["entry_route"]; got != "" {
+		t.Fatalf("expected disallowed label resolution to be ignored on intro node, got %q", got)
+	}
+}
+
 func TestAdvanceCampaign_TransitionsAndUpdatesObjectives(t *testing.T) {
 	reg, err := campaigns.LoadEmbeddedRegistry()
 	if err != nil {

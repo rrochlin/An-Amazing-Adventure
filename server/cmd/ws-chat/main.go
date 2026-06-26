@@ -16,7 +16,6 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -223,9 +222,6 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		allConnIDs = []string{connID}
 	}
 
-	if campaignDef != nil && campaignDef.ID == "test" {
-		return handleDeterministicTestCampaignChat(ctx, dbClient, ws, conn, g, campaignDef, msg.Content, &saveState, preTurnPlayerLoc, allConnIDs)
-	}
 	if g.Campaign != nil && g.Campaign.ActiveDialogue != nil && g.Campaign.ActiveDialogue.AwaitingChoice {
 		_ = ws.SendError(ctx, connID, "dialogue_choice_required")
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
@@ -268,7 +264,6 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	authoredDialogueText := ""
 
 	if campaignDef != nil {
-		allowedSpecs := campaigns.AllowedConditionSpecsForNode(campaignDef.StoryNodes[g.Campaign.ActiveNodeID])
 		resolverResult, resolveErr := aiClient.ResolveCampaignConditions(
 			ctx,
 			g,
@@ -279,18 +274,12 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		if resolveErr != nil {
 			log.Printf("ws-chat: campaign condition resolution error: %v", resolveErr)
 		} else {
-			campaigns.ApplyConditionResolution(g.Campaign, campaigns.FilterConditionResolution(allowedSpecs, resolverResult.Resolution))
-			transitionResult, transitionErr := campaigns.AdvanceCampaign(campaignDef, g)
+			turnResult, transitionErr := campaigns.OrchestrateTurn(campaignDef, g, resolverResult.Resolution)
 			if transitionErr != nil {
 				log.Printf("ws-chat: campaign transition error: %v", transitionErr)
-			} else if transitionResult.Transitioned && transitionResult.ToNodeID != "" {
-				authoredDialogueText = transitionResult.DialogueText
-				if nextNode, ok := campaignDef.StoryNodes[transitionResult.ToNodeID]; ok && nextNode.ObjectiveText != "" {
-					engineerResult.Events = append(engineerResult.Events, game.WorldEvent{
-						Type:    "campaign_progress",
-						Message: "Objective updated: " + nextNode.ObjectiveText,
-					})
-				}
+			} else {
+				authoredDialogueText = turnResult.Transition.DialogueText
+				engineerResult.Events = append(engineerResult.Events, turnResult.Events...)
 			}
 			engineerResult.Tokens.InputTokens += resolverResult.Tokens.InputTokens
 			engineerResult.Tokens.OutputTokens += resolverResult.Tokens.OutputTokens
@@ -395,158 +384,6 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 
-func handleDeterministicTestCampaignChat(
-	ctx context.Context,
-	dbClient dbClient,
-	ws wsSender,
-	conn db.Connection,
-	g *game.Game,
-	campaignDef *campaigns.CampaignDefinition,
-	playerInput string,
-	saveState *game.SaveState,
-	preTurnPlayerLoc string,
-	allConnIDs []string,
-) (events.APIGatewayProxyResponse, error) {
-	connID := conn.ConnectionID
-	userID := string(conn.UserID)
-	engineerResult := ai.EngineerResult{}
-
-	playerText := strings.TrimSpace(playerInput)
-	if playerText == "" {
-		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
-	}
-	if g.Campaign != nil && g.Campaign.ActiveDialogue != nil && g.Campaign.ActiveDialogue.AwaitingChoice {
-		_ = ws.SendError(ctx, connID, "dialogue_choice_required")
-		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
-	}
-
-	resolution := deterministicTestCampaignResolution(g.Campaign, g.Campaign.ActiveNodeID, playerText)
-	campaigns.ApplyConditionResolution(g.Campaign, resolution)
-	transitionResult, transitionErr := campaigns.AdvanceCampaign(campaignDef, g)
-	if transitionErr != nil {
-		log.Printf("ws-chat: deterministic test campaign transition error: %v", transitionErr)
-		_ = ws.SendError(ctx, connID, "campaign_transition_error")
-		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
-	}
-
-	if transitionResult.Transitioned && transitionResult.ToNodeID != "" {
-		if nextNode, ok := campaignDef.StoryNodes[transitionResult.ToNodeID]; ok && nextNode.ObjectiveText != "" {
-			engineerResult.Events = append(engineerResult.Events, game.WorldEvent{
-				Type:    "campaign_progress",
-				Message: "Objective updated: " + nextNode.ObjectiveText,
-			})
-		}
-	}
-	responseText := deterministicTestCampaignResponseText(g.Campaign, transitionResult, saveState.ChatHistory)
-
-	history := saveState.ChatHistory
-	history = append(history, game.ChatMessage{Type: "player", Content: playerText})
-	narrative := saveState.Narrative
-	narrative = append(narrative, game.NarrativeMessage{
-		Role:    "user",
-		Content: []game.NarrativeBlock{{Type: "text", Text: playerText}},
-	})
-	if responseText != "" {
-		history = append(history, game.ChatMessage{
-			Type:    "narrative",
-			Content: responseText,
-			Events:  engineerResult.Events,
-		})
-		narrative = append(narrative, game.NarrativeMessage{
-			Role:    "assistant",
-			Content: []game.NarrativeBlock{{Type: "text", Text: responseText}},
-		})
-		chunkFrame := wsutil.Frame{
-			Type:    wsutil.FrameNarrativeChunk,
-			Payload: map[string]string{"content": responseText},
-		}
-		stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
-		for _, s := range stale {
-			_ = dbClient.DeleteConnection(ctx, s)
-		}
-		staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
-		for _, s := range staleEnds {
-			_ = dbClient.DeleteConnection(ctx, s)
-		}
-	}
-
-	g.ConversationCount++
-	g.Version++
-	saved := g.ToSaveState(narrative, history)
-	for attempt := 0; attempt < 3; attempt++ {
-		if err := dbClient.PutGame(ctx, saved); err != nil {
-			log.Printf("ws-chat: deterministic test campaign put game attempt %d: %v", attempt+1, err)
-			if attempt == 2 {
-				_ = ws.SendError(ctx, connID, "Failed to save game state")
-				return events.APIGatewayProxyResponse{StatusCode: 500}, nil
-			}
-			fresh, loadErr := dbClient.GetGame(ctx, conn.GameID)
-			if loadErr == nil {
-				saved.Version = fresh.Version + 1
-			}
-			continue
-		}
-		break
-	}
-
-	postTurnOwner, _ := g.OwnerCharacter()
-	postTurnOwnerLoc := postTurnOwner.LocationID
-	freshConns, freshErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
-	if freshErr != nil {
-		log.Printf("ws-chat: deterministic test campaign refresh connections fallback for game %s: %v", conn.GameID, freshErr)
-		freshConns = []db.Connection{conn}
-	} else {
-		freshConns = ensureSenderConnection(freshConns, conn)
-	}
-	for _, gc := range freshConns {
-		memberUID := string(gc.UserID)
-		memberView := g.BuildGameStateView(memberUID, nil)
-		delta := game.StateDelta{
-			Events:   engineerResult.Events,
-			Player:   &memberView.Player,
-			Self:     &memberView.Self,
-			Campaign: g.BuildCampaignStateView(),
-		}
-		if postTurnOwnerLoc != preTurnPlayerLoc || true {
-			delta.CurrentRoom = &memberView.CurrentRoom
-		}
-		if sendErr := ws.SendDelta(ctx, gc.ConnectionID, delta); sendErr != nil {
-			log.Printf("ws-chat: deterministic test campaign send delta to %s: %v", gc.ConnectionID, sendErr)
-			_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)
-		}
-	}
-
-	log.Printf("ws-chat: deterministic test campaign complete conn=%s user=%s game=%s turns=%d", connID, userID, conn.GameID, g.ConversationCount)
-	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
-}
-
-func deterministicTestCampaignResolution(state *game.CampaignRuntimeState, activeNodeID, playerInput string) campaigns.ConditionResolution {
-	input := strings.ToLower(playerInput)
-	switch activeNodeID {
-	case "intro":
-		if strings.Contains(input, "proceed") {
-			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"intro_complete": true}}
-		}
-	case "hidden_probe":
-		if strings.Contains(input, "scan") {
-			nextCount := 1
-			if state != nil && state.Counters != nil {
-				nextCount = state.Counters["scan_count"] + 1
-			}
-			return campaigns.ConditionResolution{Counters: map[string]int{"scan_count": nextCount}}
-		}
-	case "target_probe":
-		if strings.Contains(input, "inspect room") {
-			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"room_verified": true}}
-		}
-	case "hidden_verification":
-		if strings.Contains(input, "verify") {
-			return campaigns.ConditionResolution{BoolFlags: map[string]bool{"verification_complete": true}}
-		}
-	}
-	return campaigns.ConditionResolution{}
-}
-
 func putMutations(ctx context.Context, dbClient dbClient, mutations []game.MutationEntry) {
 	if len(mutations) == 0 {
 		return
@@ -561,24 +398,6 @@ func putMutations(ctx context.Context, dbClient dbClient, mutations []game.Mutat
 	}
 }
 
-func deterministicTestCampaignResponseText(state *game.CampaignRuntimeState, transitionResult campaigns.TransitionResult, history []game.ChatMessage) string {
-	if state == nil {
-		return ""
-	}
-
-	responseText := transitionResult.DialogueText
-	if responseText == "" && transitionResult.Transitioned {
-		responseText = state.CurrentObjective
-	}
-	if responseText == "" {
-		return ""
-	}
-	if lastNarrativeContent(history) == responseText {
-		return ""
-	}
-	return responseText
-}
-
 func ensureSenderConnection(conns []db.Connection, sender db.Connection) []db.Connection {
 	for _, existing := range conns {
 		if existing.ConnectionID == sender.ConnectionID {
@@ -586,15 +405,6 @@ func ensureSenderConnection(conns []db.Connection, sender db.Connection) []db.Co
 		}
 	}
 	return append(conns, sender)
-}
-
-func lastNarrativeContent(history []game.ChatMessage) string {
-	for i := len(history) - 1; i >= 0; i-- {
-		if history[i].Type == "narrative" && strings.TrimSpace(history[i].Content) != "" {
-			return history[i].Content
-		}
-	}
-	return ""
 }
 
 func main() {
