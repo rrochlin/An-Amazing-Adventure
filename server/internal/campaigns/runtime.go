@@ -23,6 +23,11 @@ type TransitionResult struct {
 	DialogueText string
 }
 
+type TurnOrchestrationResult struct {
+	Transition TransitionResult
+	Events     []game.WorldEvent
+}
+
 func AllowedConditionSpecsForNode(node StoryNode) []AllowedConditionSpec {
 	merged := make(map[string]AllowedConditionSpec)
 	for _, spec := range node.AllowedConditions {
@@ -198,6 +203,39 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 		}
 	}
 	return TransitionResult{}, nil
+}
+
+func OrchestrateTurn(def *CampaignDefinition, g *game.Game, resolution ConditionResolution) (TurnOrchestrationResult, error) {
+	if def == nil || g == nil || g.Campaign == nil {
+		return TurnOrchestrationResult{}, nil
+	}
+
+	node, ok := def.StoryNodes[g.Campaign.ActiveNodeID]
+	if !ok {
+		return TurnOrchestrationResult{}, fmt.Errorf("active story node %q not found", g.Campaign.ActiveNodeID)
+	}
+
+	ApplyConditionResolution(g.Campaign, FilterConditionResolution(AllowedConditionSpecsForNode(node), resolution))
+
+	transition, err := AdvanceCampaign(def, g)
+	if err != nil {
+		return TurnOrchestrationResult{}, err
+	}
+
+	result := TurnOrchestrationResult{Transition: transition}
+	if !transition.Transitioned || transition.ToNodeID == "" {
+		return result, nil
+	}
+
+	nextNode, ok := def.StoryNodes[transition.ToNodeID]
+	if ok && nextNode.ObjectiveText != "" {
+		result.Events = append(result.Events, game.WorldEvent{
+			Type:    "campaign_progress",
+			Message: "Objective updated: " + nextNode.ObjectiveText,
+		})
+	}
+
+	return result, nil
 }
 
 func currentDialogueOpening(def *CampaignDefinition, g *game.Game) string {

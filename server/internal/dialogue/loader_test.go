@@ -2,6 +2,7 @@ package dialogue_test
 
 import (
 	"testing"
+	"testing/fstest"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/dialogue"
@@ -96,5 +97,70 @@ func TestRunNode_ResumesDialogueWithSelectedChoice(t *testing.T) {
 	}
 	if len(resumed.Lines) != 1 || resumed.Lines[0] != "You commit to the target approach." {
 		t.Fatalf("expected post-choice acknowledgement line, got %#v", resumed.Lines)
+	}
+}
+
+func TestRunNode_ResumeDoesNotRepeatPreChoiceCommands(t *testing.T) {
+	fsys := fstest.MapFS{
+		"resume-bug.yarnc": &fstest.MapFile{Data: []byte(`name: "resume-bug"
+nodes: {
+  key: "ChoiceNode"
+  value: {
+    name: "ChoiceNode"
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_flag prompt_seen true" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "choice_prompt" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "choice_hidden" }
+      operands: { string_value: "HiddenSelected" }
+    }
+    instructions: { opcode: SHOW_OPTIONS }
+    instructions: { opcode: JUMP }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label entry_route hidden" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "choice_ack" }
+    }
+    instructions: { opcode: STOP }
+    labels: {
+      key: "HiddenSelected"
+      value: 6
+    }
+  }
+}`)},
+		"resume-bug.csv": &fstest.MapFile{Data: []byte("id,text\nchoice_prompt,\"Choose a route.\"\nchoice_hidden,\"Take the hidden route.\"\nchoice_ack,\"You slip into the shadows.\"\n")},
+	}
+
+	paused, err := dialogue.RunNode(fsys, "resume-bug.yarnc", "resume-bug.csv", "ChoiceNode", nil, nil)
+	if err != nil {
+		t.Fatalf("run node (pause): %v", err)
+	}
+	if len(paused.Commands) != 1 || paused.Commands[0] != "set_flag prompt_seen true" {
+		t.Fatalf("expected pre-choice command before pause, got %#v", paused.Commands)
+	}
+	if len(paused.PendingChoices) != 1 {
+		t.Fatalf("expected one pending choice, got %#v", paused.PendingChoices)
+	}
+
+	choiceID := paused.PendingChoices[0].ID
+	resumed, err := dialogue.RunNode(fsys, "resume-bug.yarnc", "resume-bug.csv", "ChoiceNode", paused.Variables, &choiceID)
+	if err != nil {
+		t.Fatalf("run node (resume): %v", err)
+	}
+	if len(resumed.Commands) != 1 || resumed.Commands[0] != "set_label entry_route hidden" {
+		t.Fatalf("expected only post-choice command after resume, got %#v", resumed.Commands)
+	}
+	if len(resumed.Lines) != 1 || resumed.Lines[0] != "You slip into the shadows." {
+		t.Fatalf("expected post-choice line after resume, got %#v", resumed.Lines)
 	}
 }

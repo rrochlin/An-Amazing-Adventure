@@ -179,6 +179,8 @@ func (f *fakeDBClient) UpdateUserTokens(_ context.Context, _ string, delta int) 
 type fakeAIClient struct {
 	narrator      ai.NarratorResult
 	engineer      ai.EngineerResult
+	resolver      ai.CampaignConditionResolutionResult
+	resolverErr   error
 	narratorCalls int
 	engineerCalls int
 	resolverCalls int
@@ -197,7 +199,7 @@ func (f *fakeAIClient) EngineerScan(context.Context, *game.Game, string) (ai.Eng
 }
 func (f *fakeAIClient) ResolveCampaignConditions(context.Context, *game.Game, *campaigns.CampaignDefinition, string, string) (ai.CampaignConditionResolutionResult, error) {
 	f.resolverCalls++
-	return ai.CampaignConditionResolutionResult{}, errors.New("unexpected call")
+	return f.resolver, f.resolverErr
 }
 
 type fakeWSSender struct {
@@ -256,6 +258,43 @@ func makeAwaitingChoiceCampaignSaveState(t *testing.T) game.SaveState {
 		},
 	}
 	return save
+}
+
+func makeBootstrappedCampaignSaveState(t *testing.T, campaignID string) game.SaveState {
+	t.Helper()
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatalf("load campaign registry: %v", err)
+	}
+	def, ok := reg.Get(campaignID)
+	if !ok {
+		t.Fatalf("expected campaign %q", campaignID)
+	}
+	g, history, err := campaigns.BootstrapGame(
+		def,
+		"game-"+campaignID,
+		"user-1",
+		game.NewCharacter("Hero", ""),
+		game.CharacterCreationData{Name: "Hero", RaceID: "human", ClassID: "fighter"},
+	)
+	if err != nil {
+		t.Fatalf("bootstrap game: %v", err)
+	}
+	return g.ToSaveState(historyToNarrative(history), history)
+}
+
+func historyToNarrative(history []game.ChatMessage) []game.NarrativeMessage {
+	narrative := make([]game.NarrativeMessage, 0, len(history))
+	for _, msg := range history {
+		if msg.Type != "narrative" {
+			continue
+		}
+		narrative = append(narrative, game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: msg.Content}},
+		})
+	}
+	return narrative
 }
 
 func TestHandlerChat_NonDeterministicCampaignBlocksFreeformWhileAwaitingChoice(t *testing.T) {
@@ -409,170 +448,122 @@ func TestChatRequest_Parsed(t *testing.T) {
 	}
 }
 
-func TestDeterministicTestCampaignResponseText_UsesEnteredDialogue(t *testing.T) {
-	state := &game.CampaignRuntimeState{CurrentObjective: "The systems-only runtime test is complete."}
-	history := []game.ChatMessage{{Type: "narrative", Content: "Intro prompt: send a message containing proceed to advance the systems test."}}
-	response := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{
-		Transitioned: true,
-		ToNodeID:     "relic_prompt",
-		DialogueText: "Relic prompt: send a message containing take relic to complete the systems test.",
-	}, history)
-	if response != "Relic prompt: send a message containing take relic to complete the systems test." {
-		t.Fatalf("expected entered dialogue text, got %q", response)
+func TestHandlerChat_TestCampaignUsesAuthoredRuntimeFlow(t *testing.T) {
+	t.Setenv("MUTATIONS_TABLE", "mutations-test")
+	save := makeBootstrappedCampaignSaveState(t, "test")
+	dbFake := &fakeDBClient{
+		connection:      db.Connection{ConnectionID: "conn-1", GameID: save.SessionID, UserID: db.BinaryID("user-1")},
+		connectionsByID: []db.Connection{{ConnectionID: "conn-1", GameID: save.SessionID, UserID: db.BinaryID("user-1")}},
+		user:            &db.UserRecord{UserID: db.BinaryID("user-1"), AIEnabled: true},
+		save:            save,
 	}
-}
-
-func TestDeterministicTestCampaignResponseText_UsesCompletionObjectiveOnce(t *testing.T) {
-	state := &game.CampaignRuntimeState{CurrentObjective: "The systems-only runtime test is complete."}
-	response := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{
-		Transitioned: true,
-		ToNodeID:     "complete",
-	}, []game.ChatMessage{{Type: "narrative", Content: "Relic prompt: send a message containing take relic to complete the systems test."}})
-	if response != "The systems-only runtime test is complete." {
-		t.Fatalf("expected completion objective text, got %q", response)
-	}
-
-	duplicate := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{
-		Transitioned: true,
-		ToNodeID:     "complete",
-	}, []game.ChatMessage{{Type: "narrative", Content: "The systems-only runtime test is complete."}})
-	if duplicate != "" {
-		t.Fatalf("expected duplicate completion text to be suppressed, got %q", duplicate)
-	}
-}
-
-func TestDeterministicTestCampaignResponseText_NoTransitionNoMessage(t *testing.T) {
-	state := &game.CampaignRuntimeState{CurrentObjective: "Send a message containing proceed to move to the relic prompt node."}
-	response := deterministicTestCampaignResponseText(state, campaigns.TransitionResult{}, []game.ChatMessage{{Type: "narrative", Content: "Intro prompt: send a message containing proceed to advance the systems test."}})
-	if response != "" {
-		t.Fatalf("expected no response text when nothing changed, got %q", response)
-	}
-}
-
-func TestHandleDeterministicTestCampaignChat_BlocksFreeformWhileAwaitingChoice(t *testing.T) {
-	reg, err := campaigns.LoadEmbeddedRegistry()
-	if err != nil {
-		t.Fatalf("load campaign registry: %v", err)
-	}
-	def, ok := reg.Get("test")
-	if !ok {
-		t.Fatal("expected test campaign")
-	}
-
-	g := game.NewGame("game-choice-1", "user-1")
-	g.SetPlayerCharacter("user-1", game.NewCharacter("Hero", ""))
-	room := game.NewArea("Camp", "Camp room")
-	if err := g.AddRoom(room); err != nil {
-		t.Fatalf("add room: %v", err)
-	}
-	if err := g.PlacePlayer(room.ID); err != nil {
-		t.Fatalf("place player: %v", err)
-	}
-	g.Campaign = &game.CampaignRuntimeState{
-		CampaignID:      "test",
-		CampaignVersion: "1",
-		ActiveNodeID:    "route_choice",
-		ActiveDialogue: &game.DialogueRuntimeState{
-			AssetID:        "route_dialogue",
-			CurrentNode:    "RouteChoice",
-			AwaitingChoice: true,
-			PendingChoices: []game.DialogueChoice{
-				{ID: 0, Text: "Take the Hidden Route."},
+	wsFake := &fakeWSSender{}
+	aiFake := &fakeAIClient{
+		narrator: ai.NarratorResult{
+			Narrative: "You decide to proceed.",
+			NewMessages: []game.NarrativeMessage{
+				{Role: "user", Content: []game.NarrativeBlock{{Type: "text", Text: "proceed"}}},
+				{Role: "assistant", Content: []game.NarrativeBlock{{Type: "text", Text: "You decide to proceed."}}},
 			},
+		},
+		resolver: ai.CampaignConditionResolutionResult{
+			Resolution: campaigns.ConditionResolution{BoolFlags: map[string]bool{"intro_complete": true}},
 		},
 	}
 
-	dbFake := &fakeDBClient{
-		connection:      db.Connection{ConnectionID: "conn-1", GameID: "game-choice-1", UserID: db.BinaryID("user-1")},
-		connectionsByID: []db.Connection{{ConnectionID: "conn-1", GameID: "game-choice-1", UserID: db.BinaryID("user-1")}},
-	}
-	wsFake := &fakeWSSender{}
-	save := g.ToSaveState(nil, nil)
+	origNewDBClient, origNewWSSender, origNewAIClient := newDBClient, newWSSender, newAIClient
+	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
+	newWSSender = func(context.Context) (wsSender, error) { return wsFake, nil }
+	newAIClient = func(context.Context) (aiClient, error) { return aiFake, nil }
+	t.Cleanup(func() {
+		newDBClient = origNewDBClient
+		newWSSender = origNewWSSender
+		newAIClient = origNewAIClient
+	})
 
-	resp, err := handleDeterministicTestCampaignChat(
-		context.Background(),
-		dbFake,
-		wsFake,
-		dbFake.connection,
-		g,
-		def,
-		"hidden",
-		&save,
-		room.ID,
-		[]string{"conn-1"},
-	)
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "proceed"})
+	resp, err := handler(context.Background(), makeWSChatReq("conn-1", string(body)))
 	if err != nil {
 		t.Fatalf("handler err: %v", err)
 	}
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode)
 	}
-	if len(wsFake.errors) != 1 || wsFake.errors[0] != "dialogue_choice_required" {
-		t.Fatalf("expected dialogue_choice_required error, got %#v", wsFake.errors)
+	if aiFake.narratorCalls != 1 || aiFake.engineerCalls != 1 || aiFake.resolverCalls != 1 {
+		t.Fatalf("expected authored runtime path to use narrator, engineer, and resolver once; got narrator=%d engineer=%d resolver=%d", aiFake.narratorCalls, aiFake.engineerCalls, aiFake.resolverCalls)
 	}
-	if len(wsFake.broadcasts) != 0 {
-		t.Fatalf("expected no narrative broadcasts while awaiting choice, got %#v", wsFake.broadcasts)
+	if dbFake.putGameState.Campaign == nil || dbFake.putGameState.Campaign.ActiveNodeID != "route_choice" {
+		t.Fatalf("expected transition to route_choice, got %#v", dbFake.putGameState.Campaign)
+	}
+	if dbFake.putGameState.Campaign.ActiveDialogue == nil || !dbFake.putGameState.Campaign.ActiveDialogue.AwaitingChoice {
+		t.Fatalf("expected route choice dialogue awaiting choice, got %#v", dbFake.putGameState.Campaign.ActiveDialogue)
+	}
+	if len(dbFake.putGameState.Campaign.ActiveDialogue.PendingChoices) != 3 {
+		t.Fatalf("expected three pending route choices, got %#v", dbFake.putGameState.Campaign.ActiveDialogue.PendingChoices)
+	}
+	if got := dbFake.putGameState.ChatHistory[len(dbFake.putGameState.ChatHistory)-1].Content; got != "Route prompt: choose Hidden Route, Target Route, or Novice Route." {
+		t.Fatalf("expected authored route prompt appended to history, got %q", got)
+	}
+	if len(wsFake.broadcasts) != 4 {
+		t.Fatalf("expected streamed narrative plus authored dialogue broadcasts, got %#v", wsFake.broadcasts)
+	}
+	if wsFake.deltas[0].Campaign == nil || !wsFake.deltas[0].Campaign.BoolFlags["intro_complete"] {
+		t.Fatalf("expected updated campaign flags in state delta, got %#v", wsFake.deltas)
 	}
 }
 
-func TestHandleDeterministicTestCampaignChat_DeltaIncludesUpdatedCampaignFlags(t *testing.T) {
-	reg, err := campaigns.LoadEmbeddedRegistry()
-	if err != nil {
-		t.Fatalf("load campaign registry: %v", err)
-	}
-	def, ok := reg.Get("test")
-	if !ok {
-		t.Fatal("expected test campaign")
-	}
-
-	g := game.NewGame("game-choice-2", "user-1")
-	g.SetPlayerCharacter("user-1", game.NewCharacter("Hero", ""))
-	room := game.NewArea("Camp", "Camp room")
-	if err := g.AddRoom(room); err != nil {
-		t.Fatalf("add room: %v", err)
-	}
-	if err := g.PlacePlayer(room.ID); err != nil {
-		t.Fatalf("place player: %v", err)
-	}
-	g.Campaign = &game.CampaignRuntimeState{
-		CampaignID:      "test",
-		CampaignVersion: "1",
-		ActiveNodeID:    "intro",
-		BoolFlags:       map[string]bool{},
-		Labels:          map[string]string{},
-		Counters:        map[string]int{},
-	}
-
+func TestHandlerChat_AuthoredCampaignPathAppendsDialogueAndObjectiveEvent(t *testing.T) {
+	t.Setenv("MUTATIONS_TABLE", "mutations-test")
+	save := makeBootstrappedCampaignSaveState(t, "lichs-labyrinth")
 	dbFake := &fakeDBClient{
-		connection:      db.Connection{ConnectionID: "conn-1", GameID: "game-choice-2", UserID: db.BinaryID("user-1")},
-		connectionsByID: []db.Connection{{ConnectionID: "conn-1", GameID: "game-choice-2", UserID: db.BinaryID("user-1")}},
+		connection:      db.Connection{ConnectionID: "conn-2", GameID: save.SessionID, UserID: db.BinaryID("user-1")},
+		connectionsByID: []db.Connection{{ConnectionID: "conn-2", GameID: save.SessionID, UserID: db.BinaryID("user-1")}},
+		user:            &db.UserRecord{UserID: db.BinaryID("user-1"), AIEnabled: true},
+		save:            save,
 	}
 	wsFake := &fakeWSSender{}
-	save := g.ToSaveState(nil, nil)
+	aiFake := &fakeAIClient{
+		narrator: ai.NarratorResult{
+			Narrative: "The briefing settles into a plan.",
+			NewMessages: []game.NarrativeMessage{
+				{Role: "user", Content: []game.NarrativeBlock{{Type: "text", Text: "we are ready"}}},
+				{Role: "assistant", Content: []game.NarrativeBlock{{Type: "text", Text: "The briefing settles into a plan."}}},
+			},
+		},
+		resolver: ai.CampaignConditionResolutionResult{
+			Resolution: campaigns.ConditionResolution{BoolFlags: map[string]bool{"briefing_complete": true}},
+		},
+	}
 
-	resp, err := handleDeterministicTestCampaignChat(
-		context.Background(),
-		dbFake,
-		wsFake,
-		dbFake.connection,
-		g,
-		def,
-		"proceed",
-		&save,
-		room.ID,
-		[]string{"conn-1"},
-	)
+	origNewDBClient, origNewWSSender, origNewAIClient := newDBClient, newWSSender, newAIClient
+	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
+	newWSSender = func(context.Context) (wsSender, error) { return wsFake, nil }
+	newAIClient = func(context.Context) (aiClient, error) { return aiFake, nil }
+	t.Cleanup(func() {
+		newDBClient = origNewDBClient
+		newWSSender = origNewWSSender
+		newAIClient = origNewAIClient
+	})
+
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "we are ready"})
+	resp, err := handler(context.Background(), makeWSChatReq("conn-2", string(body)))
 	if err != nil {
 		t.Fatalf("handler err: %v", err)
 	}
 	if resp.StatusCode != 200 {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode)
 	}
-	if len(wsFake.deltas) == 0 || wsFake.deltas[0].Campaign == nil {
-		t.Fatalf("expected campaign state in delta, got %#v", wsFake.deltas)
+	if dbFake.putGameState.Campaign == nil || dbFake.putGameState.Campaign.ActiveNodeID != "choose_entry_plan" {
+		t.Fatalf("expected transition to choose_entry_plan, got %#v", dbFake.putGameState.Campaign)
 	}
-	if !wsFake.deltas[0].Campaign.BoolFlags["intro_complete"] {
-		t.Fatalf("expected intro_complete flag in delta, got %#v", wsFake.deltas[0].Campaign.BoolFlags)
+	if got := dbFake.putGameState.ChatHistory[len(dbFake.putGameState.ChatHistory)-1].Content; got != "Choose your route into the labyrinth." {
+		t.Fatalf("expected entered dialogue appended to history, got %q", got)
+	}
+	if len(wsFake.deltas) != 1 || len(wsFake.deltas[0].Events) != 1 {
+		t.Fatalf("expected one campaign progress event in state delta, got %#v", wsFake.deltas)
+	}
+	if got := wsFake.deltas[0].Events[0].Message; got != "Objective updated: Choose how your band will enter the labyrinth and when it will move." {
+		t.Fatalf("unexpected campaign progress event %q", got)
 	}
 }
 

@@ -40,7 +40,7 @@ type handler struct {
 	lineText       map[string]string
 	lines          []string
 	commands       []string
-	selectChoice   *int  // when set, use this ID at the next Options call and continue
+	selectChoice   *int // when set, use this ID at the next Options call and continue
 	pendingChoices []Choice
 }
 
@@ -74,8 +74,9 @@ func (h *handler) Options(options []yarnvm.Option) (int, error) {
 		for _, opt := range options {
 			if opt.ID == idx && opt.IsAvailable {
 				// Discard lines seen before this choice so the caller only
-				// receives narrative that follows the selected option.
+				// receives narrative and commands that follow the selected option.
 				h.lines = nil
+				h.commands = nil
 				return idx, nil
 			}
 		}
