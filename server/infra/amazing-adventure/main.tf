@@ -36,9 +36,10 @@ module "dynamodb" {
 }
 
 module "cognito" {
-  source      = "./modules/cognito"
-  prefix      = local.prefix
-  common_tags = local.common_tags
+  source                  = "./modules/cognito"
+  prefix                  = local.prefix
+  common_tags             = local.common_tags
+  post_confirm_lambda_arn = module.lambdas.cognito_post_confirm_function_arn
 }
 
 module "s3" {
@@ -76,20 +77,21 @@ module "lambdas" {
   connections_table_name      = module.dynamodb.connections_table_name
   mutations_table_name        = module.dynamodb.mutations_table_name
   users_table_name            = module.dynamodb.users_table_name
-  memberships_table_name      = module.dynamodb.memberships_table_name
   invites_table_name          = module.dynamodb.invites_table_name
+  memberships_table_name      = module.dynamodb.memberships_table_name
   sessions_table_arn          = module.dynamodb.sessions_table_arn
   connections_table_arn       = module.dynamodb.connections_table_arn
   connections_table_index_arn = module.dynamodb.connections_table_index_arn
   mutations_table_arn         = module.dynamodb.mutations_table_arn
   users_table_arn             = module.dynamodb.users_table_arn
-  memberships_table_arn       = module.dynamodb.memberships_table_arn
-  memberships_table_index_arn = module.dynamodb.memberships_table_index_arn
   invites_table_arn           = module.dynamodb.invites_table_arn
+  memberships_table_arn       = module.dynamodb.memberships_table_arn
   user_pool_id                = module.cognito.user_pool_id
   user_pool_arn               = module.cognito.user_pool_arn
+  user_pool_client_id         = module.cognito.user_pool_client_id
   websocket_api_execution_arn = module.api_gateway.websocket_api_execution_arn
   websocket_api_endpoint      = module.api_gateway.websocket_api_endpoint
+  websocket_stage_name        = var.environment
 }
 
 module "api_gateway" {
@@ -129,4 +131,13 @@ module "cloudfront" {
     aws           = aws
     aws.us_east_1 = aws.us_east_1
   }
+}
+
+# Allow Cognito to invoke the post-confirmation Lambda
+resource "aws_lambda_permission" "cognito_post_confirm" {
+  statement_id  = "AllowCognitoInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = module.lambdas.cognito_post_confirm_function_name
+  principal     = "cognito-idp.amazonaws.com"
+  source_arn    = module.cognito.user_pool_arn
 }

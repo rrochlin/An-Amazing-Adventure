@@ -120,14 +120,14 @@ resource "aws_apigatewayv2_route" "delete_game" {
   authorizer_id      = local.jwt_auth.authorizer_id
   authorization_type = local.jwt_auth.authorization_type
 }
-resource "aws_apigatewayv2_route" "post_join_character" {
+resource "aws_apigatewayv2_route" "post_game_join_character" {
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = "POST /api/games/{uuid}/join-character"
   target             = local.games_target
   authorizer_id      = local.jwt_auth.authorizer_id
   authorization_type = local.jwt_auth.authorization_type
 }
-resource "aws_apigatewayv2_route" "post_retry_world_gen" {
+resource "aws_apigatewayv2_route" "post_game_retry_world_gen" {
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = "POST /api/games/{uuid}/retry-world-gen"
   target             = local.games_target
@@ -148,7 +148,7 @@ resource "aws_apigatewayv2_route" "put_users" {
   authorization_type = local.jwt_auth.authorization_type
 }
 
-# ── Admin routes ─────────────────────────────────────────────────────────────
+# ── Admin routes (JWT auth + Lambda-level admin group check) ─────────────────
 resource "aws_apigatewayv2_route" "get_admin_users" {
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = "GET /api/admin/users"
@@ -180,11 +180,11 @@ resource "aws_apigatewayv2_route" "post_invites" {
   authorization_type = local.jwt_auth.authorization_type
 }
 resource "aws_apigatewayv2_route" "get_invite" {
+  # No auth — anyone (including unauthenticated users) can preview an invite
   api_id             = aws_apigatewayv2_api.http.id
   route_key          = "GET /api/invites/{code}"
   target             = local.invites_target
-  authorizer_id      = local.jwt_auth.authorizer_id
-  authorization_type = local.jwt_auth.authorization_type
+  authorization_type = "NONE"
 }
 resource "aws_apigatewayv2_route" "post_invite_join" {
   api_id             = aws_apigatewayv2_api.http.id

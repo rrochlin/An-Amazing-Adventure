@@ -59,6 +59,12 @@ resource "aws_lambda_function" "http_invites" {
       MEMBERSHIPS_TABLE = var.memberships_table_name
     }
   }
+  lifecycle {
+    # Code is deployed out-of-band by deploy-server.yml (An-Amazing-Adventure repo)
+    # via `aws lambda update-function-code`. Terraform must never revert it back
+    # to the placeholder stub on a later apply.
+    ignore_changes = [filename, source_code_hash]
+  }
   depends_on = [aws_cloudwatch_log_group.http_invites]
   tags       = var.common_tags
 }

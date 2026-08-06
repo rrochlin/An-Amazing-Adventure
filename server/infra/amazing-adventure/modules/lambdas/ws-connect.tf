@@ -50,6 +50,12 @@ resource "aws_lambda_function" "ws_connect" {
       USER_POOL_ID      = var.user_pool_id
     }
   }
+  lifecycle {
+    # Code is deployed out-of-band by deploy-server.yml (An-Amazing-Adventure repo)
+    # via `aws lambda update-function-code`. Terraform must never revert it back
+    # to the placeholder stub on a later apply.
+    ignore_changes = [filename, source_code_hash]
+  }
   depends_on = [aws_cloudwatch_log_group.ws_connect]
   tags       = var.common_tags
 }

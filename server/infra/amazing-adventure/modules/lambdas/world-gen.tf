@@ -69,6 +69,12 @@ resource "aws_lambda_function" "world_gen" {
       BEDROCK_REGION         = "us-west-2"
     }
   }
+  lifecycle {
+    # Code is deployed out-of-band by deploy-server.yml (An-Amazing-Adventure repo)
+    # via `aws lambda update-function-code`. Terraform must never revert it back
+    # to the placeholder stub on a later apply.
+    ignore_changes = [filename, source_code_hash]
+  }
   depends_on = [aws_cloudwatch_log_group.world_gen]
   tags       = var.common_tags
 }
