@@ -15,8 +15,14 @@ resource "aws_iam_role_policy" "http_games" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:Query"]
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:BatchGetItem", # required by BatchGetSessions (party session list)
+        ]
         Resource = [var.sessions_table_arn, "${var.sessions_table_arn}/index/*"]
       },
       {
@@ -61,6 +67,12 @@ resource "aws_lambda_function" "http_games" {
       MEMBERSHIPS_TABLE = var.memberships_table_name
       WORLD_GEN_ARN     = aws_lambda_function.world_gen.arn
     }
+  }
+  lifecycle {
+    # Code is deployed out-of-band by deploy-server.yml (An-Amazing-Adventure repo)
+    # via `aws lambda update-function-code`. Terraform must never revert it back
+    # to the placeholder stub on a later apply.
+    ignore_changes = [filename, source_code_hash]
   }
   depends_on = [aws_cloudwatch_log_group.http_games]
   tags       = var.common_tags
