@@ -28,7 +28,7 @@ An AI-powered text adventure game. Claude (via AWS Bedrock) acts as the Dungeon 
 ### Infrastructure
 - **Secrets:** Doppler CLI (local dev only)
 - **Deployment:** GitHub Actions → S3/CloudFront (client) + Lambda ZIP (server)
-- **IaC:** Terraform in `server/infra/` (git subtree → `rrochlin/terraform-infrastructure`)
+- **IaC:** Terraform lives in a separate repo, `rrochlin/terraform-infrastructure` (not in this repo)
 - **Region:** `us-west-2`, Account: `292826404083`
 - **CloudFront:** `d1ctll9l3g8cf4.cloudfront.net`
 
@@ -59,9 +59,6 @@ An-Amazing-Adventure/
 │       ├── db/              # DynamoDB client (BinaryID type for B-typed keys)
 │       ├── game/            # Game engine (Area, Character, Item, Game, SaveState)
 │       └── wsutil/          # WebSocket frame push helpers
-└── server/infra/            # Terraform (git subtree → rrochlin/terraform-infrastructure)
-    └── amazing-adventure/
-        └── modules/         # dynamodb, cognito, s3, lambdas, api-gateway, cloudfront
 ```
 
 ## Common Commands
@@ -83,17 +80,8 @@ go test ./...
 ```
 
 ### Terraform
-```bash
-cd server/infra/amazing-adventure
-doppler run --project terraform-personal-infra --config dev_personal -- terraform plan
-doppler run --project terraform-personal-infra --config dev_personal -- terraform apply
-```
-
-### Push Terraform changes to infra repo
-```bash
-git subtree push --prefix server/infra git@github.com:rrochlin/terraform-infrastructure.git <branch-name>
-# Then open PR on rrochlin/terraform-infrastructure
-```
+Terraform is not in this repo. It lives in `rrochlin/terraform-infrastructure`,
+under `amazing-adventure/`. Clone that repo to make infrastructure changes.
 
 ## Architecture
 
@@ -191,44 +179,30 @@ Always create a feature branch (`git checkout -b feat/...`) before starting any 
 
 ### Deploy / PR workflow
 - **This monorepo** (client + server): open a PR to `main` via `gh pr create`. GitHub Actions runs tests on every PR and deploys on merge to `main`.
-- **Infrastructure changes** (new AWS resources, API Gateway routes, Lambda env vars, DynamoDB tables, etc.): these live in a **separate repo** `rrochlin/terraform-infrastructure`, linked here as a git subtree at `server/infra/`. Push changes with:
-  ```bash
-  git subtree push --prefix server/infra git@github.com:rrochlin/terraform-infrastructure.git <branch-name>
-  gh pr create --repo rrochlin/terraform-infrastructure ...
-  ```
+- **Infrastructure changes** (new AWS resources, API Gateway routes, Lambda env vars, DynamoDB tables, etc.): these do **not** live in this repo. They live in `rrochlin/terraform-infrastructure`, under `amazing-adventure/`. Clone that repo and open a PR there. Do not look for Terraform here — there is none.
+  - Merging an infra PR **applies nothing**. Apply is an explicit dispatch:
+    ```bash
+    gh workflow run terraform.yml -f app=amazing-adventure
+    ```
+  - The CI plan only covers app directories that changed; edits to shared `modules/` or the workflow widen it back to every app.
 - **Never commit compiled Lambda binaries** (`server/http-games`, `server/world-gen`, etc.) — they are in `.gitignore`. CI builds them from source on every deploy.
 
 ### Infrastructure discipline — MANDATORY
-**All infrastructure changes must go through Terraform.** Never use the AWS CLI or Console to create or modify resources (IAM policies, Lambda env vars, DynamoDB tables, API Gateway routes, Cognito config, etc.). Direct AWS changes create drift that is invisible to Terraform and breaks future applies.
+**All infrastructure changes must go through Terraform, in `rrochlin/terraform-infrastructure`.** Never use the AWS CLI or Console to create or modify resources (IAM policies, Lambda env vars, DynamoDB tables, API Gateway routes, Cognito config, etc.). Direct AWS changes create drift that is invisible to Terraform and breaks future applies.
 
 **AWS CLI is permitted only for:**
 - Reading logs (`aws logs filter-log-events ...`)
 - Inspecting current state for debugging (`aws lambda get-function-configuration`, `aws dynamodb describe-table`, etc.)
 - One-time data operations (`aws dynamodb put-item` to seed a record, etc.)
 
-**When adding a new Lambda or table, the checklist is:**
+**When adding a new Lambda or table**, the Terraform half of the work happens in `rrochlin/terraform-infrastructure` (paths below are relative to `amazing-adventure/`):
 1. Add the `aws_dynamodb_table` resource + outputs to `modules/dynamodb/main.tf`
-2. Add new variables + `aws_iam_role` + `aws_iam_role_policy` + `aws_lambda_function` to `modules/lambdas/main.tf`
+2. Add the `aws_iam_role` + `aws_iam_role_policy` + `aws_lambda_function` in `modules/lambdas/<lambda-name>.tf` (one file per Lambda), with shared variables declared in `modules/lambdas/main.tf`
 3. Add integrations, routes, permissions to `modules/api-gateway/main.tf` if HTTP-facing
 4. Wire new outputs through `main.tf`
-5. Add `handler_test.go` with `TestAllRequiredEnvVarsPanic` covering every env var the Lambda reads
-6. Push subtree and open PR on `rrochlin/terraform-infrastructure`
+5. Open a PR on `rrochlin/terraform-infrastructure`, then dispatch the apply — merging does not apply
 
-### Infrastructure discipline — MANDATORY
-**All infrastructure changes must go through Terraform.** Never use the AWS CLI or Console to create or modify resources (IAM policies, Lambda env vars, DynamoDB tables, API Gateway routes, Cognito config, etc.). Direct AWS changes create drift that is invisible to Terraform and breaks future applies.
-
-**AWS CLI is permitted only for:**
-- Reading logs (`aws logs filter-log-events ...`)
-- Inspecting current state for debugging (`aws lambda get-function-configuration`, `aws dynamodb describe-table`, etc.)
-- One-time data operations (`aws dynamodb put-item` to seed a record, etc.)
-
-**When adding a new Lambda or table, the checklist is:**
-1. Add the `aws_dynamodb_table` resource + outputs to `modules/dynamodb/main.tf`
-2. Add new variables + `aws_iam_role` + `aws_iam_role_policy` + `aws_lambda_function` to `modules/lambdas/main.tf`
-3. Add integrations, routes, permissions to `modules/api-gateway/main.tf` if HTTP-facing
-4. Wire new outputs through `main.tf`
-5. Add `handler_test.go` with `TestAllRequiredEnvVarsPanic` covering every env var the Lambda reads
-6. Push subtree and open PR on `rrochlin/terraform-infrastructure`
+**In this repo**, add `handler_test.go` with `TestAllRequiredEnvVarsPanic` covering every env var the new Lambda reads. This is the primary guard against drift between the code and the Terraform that is no longer co-located with it.
 
 ## CI/CD
 
