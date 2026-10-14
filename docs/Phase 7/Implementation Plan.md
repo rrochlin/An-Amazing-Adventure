@@ -46,7 +46,7 @@ Related notes:
 > - narrator contract / scene package enforcement is still partial
 > - first true campaign vertical slice not yet built — now an adaptation of the *Fable* opening (decision 12); `Lich's Labyrinth` deferred
 > - unified post-turn resolver (EngineerScan + condition resolution are still two passes)
-> - run-end / permadeath state and deterministic ending selection not yet modeled
+> - run-end state (read-only finished runs) and ordered `endings[]` selection not yet implemented (decision 15)
 
 ## Phase 7 Workstreams
 

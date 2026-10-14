@@ -195,6 +195,19 @@ Related notes:
   ~1% win odds, and authored story events/decisions shift those odds. Failure still routes to an
   authored aftermath (decision 7).
 
+### 15. Run end and ending selection (decided 2026-10-13)
+
+- **Endings are a top-level, ordered `endings[]` list in `campaign.json`**:
+  `{id, title, conditions[], dialogue_asset_id}`, evaluated in order against campaign flags, first
+  match wins, with a **catch-all** last entry. Reuses the existing condition matcher.
+- **A party wipe has no special path.** It ends the run and plays whichever configured ending
+  matches the current flags, or the catch-all if none does.
+- **Finished runs are read-only.** Save state records that the run ended (e.g.
+  `run_status: ended` + `ending_id` + `ended_at` on `CampaignRuntimeState`). The server
+  rejects chat and actions on an ended run, and the client still lets the player read it.
+- Concrete ending triggers are **not defined yet**. They are authored per campaign, starting
+  with the Fable-opening campaign (decision 12).
+
 ## Implications For The Runtime Contract
 
 These decisions tighten, rather than relax, the existing Phase 7 principles:
@@ -214,5 +227,4 @@ These decisions tighten, rather than relax, the existing Phase 7 principles:
 > (opened 2026-10-13). Each resolved item is appended above as a numbered decision (12, 13, …) and
 > removed from this list.
 
-- How permadeath end-of-run is represented in save state and surfaced in the client (from decision 7).
-- Where deterministic ending-selection rules live in `campaign.json` (from decision 8).
+- None right now. Decisions 12–15 closed the previous list.
