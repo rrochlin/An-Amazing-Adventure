@@ -44,7 +44,7 @@ Related notes:
 > [!todo]
 > Current major gaps (as of 2026-10-13; open calls tracked in `[[Vision and Design Decisions]]`):
 > - narrator contract / scene package enforcement is still partial
-> - `Lich's Labyrinth` remains scaffolded rather than fully realized as the first true campaign vertical slice
+> - first true campaign vertical slice not yet built — now an adaptation of the *Fable* opening (decision 12); `Lich's Labyrinth` deferred
 > - unified post-turn resolver (EngineerScan + condition resolution are still two passes)
 > - run-end / permadeath state and deterministic ending selection not yet modeled
 

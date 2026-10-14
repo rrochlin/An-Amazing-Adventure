@@ -47,8 +47,9 @@ Related notes:
 - There is currently **one author** (the project owner).
 - Hand-editing **segmented Yarn + JSON** is an **accepted, deliberately substandard** dev experience
   for now. The bottleneck to solve first is **"is the gameplay fun?"**, not "is authoring pleasant?".
-- `[[Lich's Labyrinth]]` is the **learning vehicle**. Building it by hand is how we discover what
-  campaign authoring actually requires. Those lessons later inform the AI/procedural
+- ~~`[[Lich's Labyrinth]]` is the **learning vehicle**.~~ Superseded by decision 12: the first
+  campaign is an adaptation of the *Fable* opening; Lich's Labyrinth is deferred. Building it by hand
+  is how we discover what campaign authoring actually requires. Those lessons later inform the AI/procedural
   skeleton-generator and any authoring UI.
 - Rationale: nobody authors a campaign for an unfun game, and we are not yet experienced enough as
   campaign creators to design the authoring tools. So: **defer authoring UX, invest in the runtime +
@@ -161,6 +162,39 @@ Related notes:
 - Replayability comes from **branch/ending variety + AI flavor**, not from length. This validates the
   permadeath model: a wipe costs ~30–60 min, not many hours.
 
+### 12. First campaign: adapt the *Fable* opening (decided 2026-10-13)
+
+- **Pivot away from `[[Lich's Labyrinth]]` as the first vertical slice.** Instead, model a limited,
+  clearly scoped campaign on the opening of *Fable*: village life up to the bandit raid, the player
+  hiding, and being rescued by the guild master.
+- Rationale: copying a known-good story gives concrete beats to build against, so we validate the
+  **software design and architecture separately from the campaign writing itself**.
+- Lich's Labyrinth (original campaign) is deferred, not abandoned; revisit once the runtime is proven.
+- Its open content questions (the artifact, the Lich, Ice Pits, etc.) are parked with it.
+- Note: this is an internal validation campaign. Rename characters/places before any public release.
+
+### 13. Unified post-turn resolver: single structured-output call (decided 2026-10-13)
+
+- **One call, one JSON schema, no tool loop**: the resolver returns
+  `{world_events[], story_conditions[]}` in a single pass, replacing `EngineerScan` +
+  `ResolveCampaignConditions`.
+- Context the tool loop used to fetch (e.g. `get_room_info`) is supplied in the prompt instead.
+- **Authored nodes restrict the allowed world-event types**, alongside their existing
+  `allowed_conditions` (e.g. no `create_room` during a scripted scene). Code drops anything outside
+  the node's allowlist.
+- **`damage_character` / `heal_character` stay in the vocabulary** even after deterministic combat:
+  damage and healing can happen outside combat from events/checkpoints (traps, story beats, rests).
+
+### 14. Combat: full deterministic 5e tactical (decided 2026-10-13)
+
+- Build out **full turn-by-turn 5e combat** as the foundation (extends `server/internal/combat/`):
+  spells/abilities, stat blocks for campaign foes, encounter hooks from story nodes.
+- **Companions do not act autonomously.** They contribute bonuses and/or are player-controlled on
+  their turns — no companion AI.
+- **"Unwinnable" fights are long odds, not hard-coded failures.** An overwhelming foe starts at
+  ~1% win odds, and authored story events/decisions shift those odds. Failure still routes to an
+  authored aftermath (decision 7).
+
 ## Implications For The Runtime Contract
 
 These decisions tighten, rather than relax, the existing Phase 7 principles:
@@ -180,8 +214,5 @@ These decisions tighten, rather than relax, the existing Phase 7 principles:
 > (opened 2026-10-13). Each resolved item is appended above as a numbered decision (12, 13, …) and
 > removed from this list.
 
-- Exact combat engine depth for the flagship vs. abstracted resolution (from decision 4).
-- Concrete shape of the **unified** post-turn resolver (merging condition resolution + EngineerScan)
-  and its allowed-mutation vocabulary (from decision 10).
 - How permadeath end-of-run is represented in save state and surfaced in the client (from decision 7).
 - Where deterministic ending-selection rules live in `campaign.json` (from decision 8).
