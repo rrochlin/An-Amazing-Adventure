@@ -87,7 +87,9 @@ Related notes:
 - Target: **deterministic combat resolution** (a dice/stats engine, D&D-style, aligned with existing
   `CharacterCreationData` stats and rpg-toolkit) computes outcomes.
 - The **narrator only describes** the already-resolved result. State is decided before narration.
-- Current state to migrate away from: combat is inferred by AI tools
+- Current state (as of 2026-10-13): `server/internal/combat/` already resolves player weapon attacks,
+  monster reply turns, and initiative via rpg-toolkit (`game_action/attack`; 5 monster types).
+  Still to migrate away from: freeform chat can also inflict damage through AI tools
   (`damage_character` / `heal_character` / `set_character_alive`) via `EngineerScan` reading prose.
 - Open follow-up: how much full combat engine to build for the flagship vs. abstracted encounter
   resolution.
@@ -171,6 +173,12 @@ These decisions tighten, rather than relax, the existing Phase 7 principles:
 - The **physical room layer stays first-class** (3) underneath the story-node layer.
 
 ## Still Open After This Pass
+
+> [!note]
+> These are being decided in the shared doc
+> [Phase 7 — Open Design Decisions](https://claude.ai/code/artifact/279d769d-3ca6-4ae7-8d7e-dc0fc059e954)
+> (opened 2026-10-13). Each resolved item is appended above as a numbered decision (12, 13, …) and
+> removed from this list.
 
 - Exact combat engine depth for the flagship vs. abstracted resolution (from decision 4).
 - Concrete shape of the **unified** post-turn resolver (merging condition resolution + EngineerScan)

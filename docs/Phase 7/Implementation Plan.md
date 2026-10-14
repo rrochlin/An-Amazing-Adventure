@@ -37,14 +37,16 @@ Related notes:
 > - campaign state surfaced to the client and updated through websocket `state_delta`
 > - real Yarn VM-backed execution of compiled `.yarnc` assets for authored opening dialogue
 > - expanded deterministic `test` campaign probe with branching, counters, actor gates, objective-status gates, and failure branches
+> - interactive Yarn choices in the UI, enforced via `game_action/dialogue_choice` (#56, #63)
+> - Yarn commands bridged into campaign-state mutations (e201cd8)
+> - authored turn orchestration extracted from `ws-chat` into `internal/campaigns` (#65, #66)
 
 > [!todo]
-> Current major gaps:
-> - Yarn choices are not yet surfaced to the player as an interactive UI/runtime path
-> - Yarn commands are not yet bridged into campaign-state mutations
-> - authored scene orchestration is still centered in `ws-chat`, not a cleaner standalone orchestrator layer
+> Current major gaps (as of 2026-10-13; open calls tracked in `[[Vision and Design Decisions]]`):
 > - narrator contract / scene package enforcement is still partial
 > - `Lich's Labyrinth` remains scaffolded rather than fully realized as the first true campaign vertical slice
+> - unified post-turn resolver (EngineerScan + condition resolution are still two passes)
+> - run-end / permadeath state and deterministic ending selection not yet modeled
 
 ## Phase 7 Workstreams
 
