@@ -17,7 +17,7 @@ Phase 7 authored-runtime foundation is now complete through the implementation m
 - the current in-scope work is tightening docs so they match the shipped behavior from PRs #62-#67
 - the planned `Lich's Labyrinth` vertical slice remains future content work rather than part of this docs wrap-up
 
-The main backlog remains in `docs/TODO.md`, but the sequence below is dependency-ordered rather than document-ordered.
+The main backlog remains in `docs/Phase 5/TODO.md`, but the sequence below is dependency-ordered rather than document-ordered.
 
 ## Priority Order
 
@@ -25,7 +25,7 @@ The current active wrap-up order is:
 
 1. Reconcile the top-level client/runtime docs with the shipped Phase 7 implementation
 2. Capture one concise current-status authored-runtime document under `docs/`
-3. Leave broader future runtime/content follow-ups in `docs/TODO.md` rather than expanding this milestone
+3. Leave broader future runtime/content follow-ups in `docs/Phase 5/TODO.md` rather than expanding this milestone
 
 The authored-runtime implementation blockers are largely resolved; this plan is now mainly recording the finished runtime path plus the remaining documentation wrap-up and future content milestone.
 

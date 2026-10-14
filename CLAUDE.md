@@ -36,6 +36,7 @@ An AI-powered text adventure game. Claude (via AWS Bedrock) acts as the Dungeon 
 
 ```
 An-Amazing-Adventure/
+├── docs/                    # Design notes, one folder per phase (Phase 2 … Phase 7) — source of truth
 ├── client/                  # React frontend
 │   ├── src/
 │   │   ├── routes/          # TanStack file-based routes
@@ -60,6 +61,13 @@ An-Amazing-Adventure/
 │       ├── game/            # Game engine (Area, Character, Item, Game, SaveState)
 │       └── wsutil/          # WebSocket frame push helpers
 ```
+
+## Design Notes
+
+`docs/Phase N/` holds the per-phase design notes (Obsidian-style `[[wikilinks]]`). Git is the source of
+truth; the Obsidian vault folder `~/Documents/notes/Amazing Adventure` is a symlink to this `docs/` dir.
+Phase 7 decisions are recorded in `docs/Phase 7/Vision and Design Decisions.md`; `docs/PHASE_7_STATUS.md`
+is the short status page.
 
 ## Common Commands
 
