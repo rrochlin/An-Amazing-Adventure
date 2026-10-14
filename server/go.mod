@@ -5,6 +5,7 @@ module github.com/rrochlin/an-amazing-adventure
 go 1.24.1
 
 require (
+	drjosh.dev/yarn v0.6.1
 	github.com/KirkDiggler/rpg-toolkit/dice v0.3.2
 	github.com/KirkDiggler/rpg-toolkit/events v0.6.2
 	github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e v0.51.0
@@ -20,10 +21,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.56.1
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.2
 	github.com/google/uuid v1.6.0
+	google.golang.org/protobuf v1.35.1
 )
 
 require (
-	drjosh.dev/yarn v0.6.1 // indirect
 	github.com/KirkDiggler/rpg-toolkit/core v0.10.0 // indirect
 	github.com/KirkDiggler/rpg-toolkit/game v0.1.0 // indirect
 	github.com/KirkDiggler/rpg-toolkit/mechanics/resources v0.3.1 // indirect
@@ -51,6 +52,5 @@ require (
 	github.com/razor-1/localizer-cldr v0.2.0 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	golang.org/x/text v0.19.0 // indirect
-	google.golang.org/protobuf v1.35.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
