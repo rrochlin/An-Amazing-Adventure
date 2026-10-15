@@ -34,8 +34,8 @@ Dunstan (bully), Red Corwin (bandit leader), Master Holloway (guild master).
 
 ## Deliberately not in this slice
 
-- **Endings:** the runtime has no `endings[]` support yet (decision 15), so `road_to_guild` is a
-  plain terminal node.
+- **Endings:** `road_to_guild` ends the run (`ends_run`) with a single catch-all ending. Specific
+  ending triggers are deferred (decision 15).
 - **Combat:** the raid is narrated. A deterministic fight (decision 14, ~1% odds) comes later.
 - **Morality tracking:** good and bad deeds are recorded as labels only; there is no running tally.
 
@@ -54,8 +54,12 @@ square's "notice post", which the narrator had turned into a quest board.
 - Use `appears_in` for characters who should not exist yet from the narrator's point of view.
 - Keep room descriptions free of props that invite new plot (notice boards, rumour mills).
 
-- `.yarnc` files are Yarn bytecode in protobuf text format, written by hand (there is no compiler in
-  the toolchain). Option labels point at 0-based instruction indices.
-- String tables are two-column `id,text` CSV; quoted text uses standard CSV `""` escaping.
+- Dialogue is written as `.yarn` source in `server/campaigns/briarwell/dialogue/` and compiled with
+  `go run ./tools/yarnc` (from `server/`), which writes the `.yarnc` and `.csv` beside it. Commit all
+  three; a test fails if the compiled files are stale.
+- The compiler supports a subset of Yarn Spinner 2: lines (tag them `#line:<id>` for stable IDs),
+  nested `->` options, `<<jump>>`, `<<stop>>`, and game commands such as `<<set_label key value>>`.
+  Variables, `<<if>>`, and `{interpolation}` are rejected. See `server/internal/yarnc`.
+- Several choices in one node work: the runtime saves the choices made so far and replays them.
 - `internal/campaigns/briarwell_test.go` plays the whole campaign through the runtime. Update it when
   the story graph changes.

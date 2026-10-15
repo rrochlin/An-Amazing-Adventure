@@ -1,0 +1,12 @@
+title: Birthday
+---
+The cottage glows with candlelight. Mother has baked a honey cake, and Ros is bouncing on her toes. #line:bday_001
+"Did you get me something? Did you, did you?" #line:bday_002
+-> Give Ros her gift. #line:bday_opt_give
+    <<set_flag gift_given>>
+    Ros squeals and throws her arms around you. "It's perfect! You're the best!" #line:bday_ack_give
+-> Keep the gift for yourself. #line:bday_opt_keep
+    <<set_flag gift_kept>>
+    Ros's face falls. She says nothing, but she doesn't look at you for the rest of supper. #line:bday_ack_keep
+Later, as the candles gutter, Father goes to the window and goes very still. There is smoke rising from the woods. #line:bday_smoke
+===

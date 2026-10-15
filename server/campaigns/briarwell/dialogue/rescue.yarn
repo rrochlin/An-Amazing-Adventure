@@ -1,0 +1,11 @@
+title: Rescue
+---
+A tall figure in a travel-stained cloak kneels beside you in the ashes. "Easy, little one. The bandits are gone." #line:rescue_001
+"My name is Holloway. I keep the Heroes' Guild. There is nothing left for you here, but there could be something for you there." #line:rescue_002
+-> Take his hand. #line:rescue_opt_go
+    <<set_label guild_answer went_willingly>>
+    His grip is warm and steady. He lifts you onto his horse without another word. #line:rescue_ack_go
+-> "No! I have to find my family!" #line:rescue_opt_refuse
+    <<set_label guild_answer refused>>
+    "If they live, you'll need to be strong enough to find them," he says gently, and lifts you up anyway. #line:rescue_ack_refuse
+===
