@@ -222,6 +222,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		allConnIDs = []string{connID}
 	}
 
+	if g.Campaign.RunEnded() {
+		_ = ws.SendError(ctx, connID, "run_ended")
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
 	if g.Campaign != nil && g.Campaign.ActiveDialogue != nil && g.Campaign.ActiveDialogue.AwaitingChoice {
 		_ = ws.SendError(ctx, connID, "dialogue_choice_required")
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
