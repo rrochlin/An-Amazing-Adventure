@@ -275,15 +275,20 @@ function GamePage() {
       setCommand('');
    };
 
+   const pendingChoices =
+      campaignState?.active_dialogue?.pending_choices ?? undefined;
+
    const handleChoiceSelected = (choiceId: number) => {
       if (choiceSubmitLockRef.current) return;
       choiceSubmitLockRef.current = true;
       setIsSubmittingChoice(true);
+      // Echo the chosen option in the log, as a typed command would be.
+      const chosen = pendingChoices?.find((c) => c.id === choiceId);
+      if (chosen?.text) {
+         addChatMessage({ type: 'player', content: chosen.text });
+      }
       sendAction('dialogue_choice', String(choiceId));
    };
-
-   const pendingChoices =
-      campaignState?.active_dialogue?.pending_choices ?? undefined;
 
    useEffect(() => {
       if (!isSubmittingChoice) return;

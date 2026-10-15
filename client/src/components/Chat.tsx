@@ -244,6 +244,53 @@ const StreamingChatMessage = ({ content }: { content: string }) => {
    );
 };
 
+// Story events (objective changes, the run ending) are what the player most
+// needs to notice, so they are shown inline rather than inside the accordion.
+const STORY_EVENT_TYPES = new Set(['campaign_progress', 'campaign_ended']);
+
+const isStoryEvent = (e: WorldEvent) => STORY_EVENT_TYPES.has(e.type);
+
+const StoryEventCallout = ({ event }: { event: WorldEvent }) => {
+   const label = event.type === 'campaign_ended' ? 'Ending' : 'New objective';
+   const text = event.message.replace(/^Objective updated:\s*/, '');
+   return (
+      <Box
+         role="note"
+         sx={{
+            mt: 1,
+            px: 1.5,
+            py: 1,
+            borderLeft: 3,
+            borderColor: 'primary.main',
+            borderRadius: 1,
+            backgroundColor: 'rgba(201, 169, 98, 0.12)',
+            maxWidth: '85%',
+         }}
+      >
+         <Typography
+            variant="overline"
+            sx={{
+               display: 'block',
+               lineHeight: 1.4,
+               letterSpacing: 1.5,
+               color: 'primary.main',
+               fontFamily: 'Cinzel, Georgia, serif',
+            }}
+         >
+            {label}
+         </Typography>
+         <Typography
+            sx={{
+               fontFamily: 'Crimson Text, Georgia, serif',
+               color: 'text.primary',
+            }}
+         >
+            {text}
+         </Typography>
+      </Box>
+   );
+};
+
 // WorldEventsAccordion renders a collapsible list of world events under a narrative bubble.
 // Collapsed by default so it doesn't clutter the chat log.
 const WorldEventsAccordion = ({ events }: { events: WorldEvent[] }) => {
@@ -427,7 +474,16 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
             <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
          </Paper>
          {!isPlayer && message.events && message.events.length > 0 && (
-            <WorldEventsAccordion events={message.events} />
+            <>
+               {message.events
+                  .filter((e) => isStoryEvent(e))
+                  .map((e, i) => (
+                     <StoryEventCallout key={i} event={e} />
+                  ))}
+               <WorldEventsAccordion
+                  events={message.events.filter((e) => !isStoryEvent(e))}
+               />
+            </>
          )}
          {/* UI-FUT-7: timestamp shown on hover */}
          {message.timestamp && (

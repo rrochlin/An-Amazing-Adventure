@@ -243,4 +243,40 @@ describe('Chat component', () => {
       expect(onChoiceSelected).toHaveBeenCalledTimes(1);
       expect(button).toBeDisabled();
    });
+   it('shows objective updates as a visible callout, not in the accordion', () => {
+      const history: ChatMessage[] = [
+         {
+            type: 'narrative',
+            content: 'Father ruffles your hair.',
+            events: [
+               {
+                  type: 'campaign_progress',
+                  message: 'Objective updated: Earn two coins around Briarwell.',
+               },
+               { type: 'item_gained', message: 'You gained a copper coin.' },
+            ],
+         },
+      ];
+      renderChat({ chatHistory: history });
+      expect(screen.getByRole('note')).toHaveTextContent('New objective');
+      expect(screen.getByRole('note')).toHaveTextContent(
+         'Earn two coins around Briarwell.',
+      );
+      expect(screen.getByRole('note')).not.toHaveTextContent('Objective updated:');
+      // Only the remaining world event is counted in the accordion.
+      expect(screen.getByText('World Events (1)')).toBeInTheDocument();
+   });
+
+   it('hides the accordion when every event is a story event', () => {
+      renderChat({
+         chatHistory: [
+            {
+               type: 'narrative',
+               content: 'The road ahead.',
+               events: [{ type: 'campaign_progress', message: 'Objective updated: Go.' }],
+            },
+         ],
+      });
+      expect(screen.queryByText(/World Events/)).not.toBeInTheDocument();
+   });
 });
