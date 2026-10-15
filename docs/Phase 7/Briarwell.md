@@ -41,8 +41,12 @@ Dunstan (bully), Red Corwin (bandit leader), Master Holloway (guild master).
 
 ## Authoring notes
 
-- `.yarnc` files are Yarn bytecode in protobuf text format, written by hand (there is no compiler in
-  the toolchain). Option labels point at 0-based instruction indices.
-- String tables are two-column `id,text` CSV; quoted text uses standard CSV `""` escaping.
+- Dialogue is written as `.yarn` source in `server/campaigns/briarwell/dialogue/` and compiled with
+  `go run ./tools/yarnc` (from `server/`), which writes the `.yarnc` and `.csv` beside it. Commit all
+  three; a test fails if the compiled files are stale.
+- The compiler supports a subset of Yarn Spinner 2: lines (tag them `#line:<id>` for stable IDs),
+  nested `->` options, `<<jump>>`, `<<stop>>`, and game commands such as `<<set_label key value>>`.
+  Variables, `<<if>>`, and `{interpolation}` are rejected. See `server/internal/yarnc`.
+- Several choices in one node work: the runtime saves the choices made so far and replays them.
 - `internal/campaigns/briarwell_test.go` plays the whole campaign through the runtime. Update it when
   the story graph changes.

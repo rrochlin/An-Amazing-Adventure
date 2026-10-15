@@ -287,9 +287,11 @@ func currentDialogueOpening(def *CampaignDefinition, g *game.Game) string {
 		}
 		state.ActiveDialogue.AwaitingChoice = true
 		state.ActiveDialogue.PendingChoices = choices
+		state.ActiveDialogue.ChoiceHistory = result.ChoiceHistory
 	} else {
 		state.ActiveDialogue.AwaitingChoice = false
 		state.ActiveDialogue.PendingChoices = nil
+		state.ActiveDialogue.ChoiceHistory = nil
 	}
 	if len(result.Lines) == 0 {
 		return ""
@@ -322,7 +324,7 @@ func ResumeDialogueWithChoice(def *CampaignDefinition, g *game.Game, choiceID in
 		asset.Strings,
 		state.ActiveDialogue.CurrentNode,
 		state.ActiveDialogue.Variables,
-		&choiceID,
+		append(append([]int(nil), state.ActiveDialogue.ChoiceHistory...), choiceID),
 	)
 	if err != nil {
 		return "", fmt.Errorf("resume dialogue with choice %d: %w", choiceID, err)
@@ -344,9 +346,11 @@ func ResumeDialogueWithChoice(def *CampaignDefinition, g *game.Game, choiceID in
 		}
 		state.ActiveDialogue.AwaitingChoice = true
 		state.ActiveDialogue.PendingChoices = choices
+		state.ActiveDialogue.ChoiceHistory = result.ChoiceHistory
 	} else {
 		state.ActiveDialogue.AwaitingChoice = false
 		state.ActiveDialogue.PendingChoices = nil
+		state.ActiveDialogue.ChoiceHistory = nil
 	}
 
 	text := strings.Join(result.Lines, "\n")

@@ -89,6 +89,9 @@ type DialogueRuntimeState struct {
 	Variables      map[string]string `json:"variables,omitempty" dynamodbav:"variables,omitempty"`
 	AwaitingChoice bool              `json:"awaiting_choice,omitempty" dynamodbav:"awaiting_choice,omitempty"`
 	PendingChoices []DialogueChoice  `json:"pending_choices,omitempty" dynamodbav:"pending_choices,omitempty"`
+	// ChoiceHistory is the choices already made in CurrentNode; resuming
+	// replays the node from its start, so it must re-apply them.
+	ChoiceHistory []int `json:"choice_history,omitempty" dynamodbav:"choice_history,omitempty"`
 }
 
 // DialogueChoice is a player-selectable option surfaced from a Yarn Options call.

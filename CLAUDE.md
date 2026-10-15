@@ -85,6 +85,7 @@ pnpm test --run   # Vitest (single run, no watch)
 cd server
 go build ./...
 go test ./...
+go run ./tools/yarnc   # compile campaign dialogue: campaigns/**/*.yarn → .yarnc + .csv
 ```
 
 ### Terraform
