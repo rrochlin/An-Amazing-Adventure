@@ -164,3 +164,16 @@ nodes: {
 		t.Fatalf("expected post-choice line after resume, got %#v", resumed.Lines)
 	}
 }
+
+func TestOpeningLine_PreservesQuotedCSVText(t *testing.T) {
+	fsys := fstest.MapFS{
+		"lines.csv": {Data: []byte("id,text\nl1,\"He says, \"\"Hello there.\"\"\"\n")},
+	}
+	line, err := dialogue.OpeningLine(fsys, "lines.csv")
+	if err != nil {
+		t.Fatalf("opening line: %v", err)
+	}
+	if want := `He says, "Hello there."`; line != want {
+		t.Fatalf("expected %q, got %q", want, line)
+	}
+}

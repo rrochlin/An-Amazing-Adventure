@@ -1,0 +1,8 @@
+id,text
+gift_001,"Old Garrick leans over his stall. ""A birthday, is it? Well, your coin buys any one of these."""
+gift_opt_sweets,A paper twist of honey sweets.
+gift_opt_ribbon,A ribbon the colour of cornflowers.
+gift_opt_bird,"A little wooden bird, carved by hand."
+gift_ack_sweets,"""Sweets for the sweet,"" Garrick chuckles, and wraps them tight."
+gift_ack_ribbon,"""She'll wear that till it's rags,"" Garrick says, folding it neatly."
+gift_ack_bird,"Garrick smiles. ""Took me a week, that one. It'll last her a lifetime."""

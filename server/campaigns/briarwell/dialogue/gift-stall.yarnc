@@ -1,0 +1,68 @@
+name: "briarwell-gift-stall"
+nodes: {
+  key: "GiftStall"
+  value: {
+    name: "GiftStall"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "gift_001" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "gift_opt_sweets" }
+      operands: { string_value: "Sweets" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "gift_opt_ribbon" }
+      operands: { string_value: "Ribbon" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "gift_opt_bird" }
+      operands: { string_value: "Bird" }
+    }
+    instructions: { opcode: SHOW_OPTIONS }
+    instructions: { opcode: JUMP }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label gift sweets" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "gift_ack_sweets" }
+    }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label gift ribbon" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "gift_ack_ribbon" }
+    }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label gift carved_bird" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "gift_ack_bird" }
+    }
+    instructions: { opcode: STOP }
+    labels: {
+      key: "Sweets"
+      value: 7
+    }
+    labels: {
+      key: "Ribbon"
+      value: 10
+    }
+    labels: {
+      key: "Bird"
+      value: 13
+    }
+  }
+}

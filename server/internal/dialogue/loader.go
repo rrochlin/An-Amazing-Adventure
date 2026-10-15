@@ -1,9 +1,9 @@
 package dialogue
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"regexp"
 	"strconv"
@@ -228,29 +228,25 @@ func loadStrings(fsys fs.FS, stringsPath string) (map[string]string, []string, e
 }
 
 func readSimpleCSV(file fs.File, stringsPath string) (map[string]string, []string, error) {
-	data, err := io.ReadAll(file)
+	r := csv.NewReader(file)
+	r.FieldsPerRecord = -1
+	records, err := r.ReadAll()
 	if err != nil {
 		return nil, nil, fmt.Errorf("read dialogue strings %q: %w", stringsPath, err)
 	}
-	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
 	rows := make(map[string]string)
 	ordered := make([]string, 0)
-	for i, line := range lines {
-		if strings.TrimSpace(line) == "" {
+	for i, record := range records {
+		if len(record) < 2 {
 			continue
 		}
-		if i == 0 && strings.EqualFold(strings.TrimSpace(line), "id,text") {
+		id := strings.TrimSpace(record[0])
+		if i == 0 && strings.EqualFold(id, "id") {
 			continue
 		}
-		parts := strings.SplitN(line, ",", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		id := strings.TrimSpace(parts[0])
-		text := strings.Trim(strings.TrimSpace(parts[1]), "\"")
 		if id != "" {
 			ordered = append(ordered, id)
-			rows[id] = text
+			rows[id] = record[1]
 		}
 	}
 	return rows, ordered, nil
