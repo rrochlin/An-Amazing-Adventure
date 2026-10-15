@@ -251,13 +251,18 @@ const StreamingChatMessage = ({ content }: { content: string }) => {
 
 // Story events (objective changes, the run ending) are what the player most
 // needs to notice, so they are shown inline rather than inside the accordion.
-const STORY_EVENT_TYPES = new Set(['campaign_progress', 'campaign_ended']);
+const STORY_EVENT_LABELS: Record<string, { label: string; prefix: RegExp }> = {
+   campaign_progress: { label: 'New objective', prefix: /^Objective updated:\s*/ },
+   objective_completed: { label: 'Objective complete', prefix: /^Objective complete:\s*/ },
+   objective_failed: { label: 'Objective missed', prefix: /^Objective missed:\s*/ },
+   campaign_ended: { label: 'Ending', prefix: /^$/ },
+};
 
-const isStoryEvent = (e: WorldEvent) => STORY_EVENT_TYPES.has(e.type);
+const isStoryEvent = (e: WorldEvent) => e.type in STORY_EVENT_LABELS;
 
 const StoryEventCallout = ({ event }: { event: WorldEvent }) => {
-   const label = event.type === 'campaign_ended' ? 'Ending' : 'New objective';
-   const text = event.message.replace(/^Objective updated:\s*/, '');
+   const { label, prefix } = STORY_EVENT_LABELS[event.type];
+   const text = event.message.replace(prefix, '');
    return (
       <Box
          role="note"

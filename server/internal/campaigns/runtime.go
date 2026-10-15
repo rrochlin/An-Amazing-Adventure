@@ -24,6 +24,9 @@ type TransitionResult struct {
 	DialogueText string
 	// RunEnded is set when this transition ended the run.
 	RunEnded bool
+	// ObjectiveEvents report objectives closed by their success_when or
+	// fail_when conditions, whether or not the node changed.
+	ObjectiveEvents []game.WorldEvent
 }
 
 type TurnOrchestrationResult struct {
@@ -182,6 +185,10 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 	if !ok {
 		return TransitionResult{}, fmt.Errorf("active story node %q not found", g.Campaign.ActiveNodeID)
 	}
+	objectiveEvents, err := EvaluateObjectives(def, g)
+	if err != nil {
+		return TransitionResult{}, err
+	}
 	for _, rules := range [][]TransitionRule{currentNode.FailureRules, currentNode.CompletionRules} {
 		for _, rule := range rules {
 			matched, err := conditionsMatch(def, g, rule.Conditions)
@@ -196,7 +203,11 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 				return TransitionResult{}, err
 			}
 			if rule.NextNodeID == "" {
-				return TransitionResult{Transitioned: true, FromNodeID: fromNodeID}, nil
+				more, err := EvaluateObjectives(def, g)
+				if err != nil {
+					return TransitionResult{}, err
+				}
+				return TransitionResult{Transitioned: true, FromNodeID: fromNodeID, ObjectiveEvents: append(objectiveEvents, more...)}, nil
 			}
 			g.Campaign.PreviousNodeIDs = append(g.Campaign.PreviousNodeIDs, fromNodeID)
 			g.Campaign.ActiveNodeID = rule.NextNodeID
@@ -204,11 +215,16 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 			if err != nil {
 				return TransitionResult{}, err
 			}
+			more, err := EvaluateObjectives(def, g)
+			if err != nil {
+				return TransitionResult{}, err
+			}
 			result := TransitionResult{
-				Transitioned: true,
-				FromNodeID:   fromNodeID,
-				ToNodeID:     rule.NextNodeID,
-				DialogueText: dialogueText,
+				Transitioned:    true,
+				FromNodeID:      fromNodeID,
+				ToNodeID:        rule.NextNodeID,
+				DialogueText:    dialogueText,
+				ObjectiveEvents: append(objectiveEvents, more...),
 			}
 			if def.StoryNodes[rule.NextNodeID].EndsRun {
 				endingText, err := EndRun(def, g)
@@ -221,7 +237,47 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 			return result, nil
 		}
 	}
-	return TransitionResult{}, nil
+	return TransitionResult{ObjectiveEvents: objectiveEvents}, nil
+}
+
+// EvaluateObjectives closes active objectives whose authored success_when
+// (checked first) or fail_when conditions now hold, and returns an event for
+// each one so the player sees the change.
+func EvaluateObjectives(def *CampaignDefinition, g *game.Game) ([]game.WorldEvent, error) {
+	var events []game.WorldEvent
+	for i := range g.Campaign.ActiveObjectives {
+		o := &g.Campaign.ActiveObjectives[i]
+		tmpl, ok := def.Objectives[o.ID]
+		if o.Status != "active" || !ok {
+			continue
+		}
+		title := tmpl.Title
+		if title == "" {
+			title = o.ID
+		}
+		if len(tmpl.SuccessWhen) > 0 {
+			matched, err := conditionsMatch(def, g, tmpl.SuccessWhen)
+			if err != nil {
+				return nil, fmt.Errorf("objective %q success_when: %w", o.ID, err)
+			}
+			if matched {
+				o.Status = "completed"
+				events = append(events, game.WorldEvent{Type: "objective_completed", Message: "Objective complete: " + title})
+				continue
+			}
+		}
+		if len(tmpl.FailWhen) > 0 {
+			matched, err := conditionsMatch(def, g, tmpl.FailWhen)
+			if err != nil {
+				return nil, fmt.Errorf("objective %q fail_when: %w", o.ID, err)
+			}
+			if matched {
+				o.Status = "failed"
+				events = append(events, game.WorldEvent{Type: "objective_failed", Message: "Objective missed: " + title})
+			}
+		}
+	}
+	return events, nil
 }
 
 func OrchestrateTurn(def *CampaignDefinition, g *game.Game, resolution ConditionResolution) (TurnOrchestrationResult, error) {
@@ -247,6 +303,7 @@ func OrchestrateTurn(def *CampaignDefinition, g *game.Game, resolution Condition
 	}
 
 	result := TurnOrchestrationResult{Transition: transition}
+	result.Events = append(result.Events, transition.ObjectiveEvents...)
 	if transition.RunEnded {
 		result.Events = append(result.Events, runEndedEvent(g))
 		return result, nil
