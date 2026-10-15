@@ -33,6 +33,27 @@ export interface CampaignManifest {
    premise: string;
    description?: string;
    tone?: string;
+   character_creation?: CampaignCharacterCreation;
+}
+
+/** How a campaign lets players create their character. */
+export interface CampaignCharacterCreation {
+   /** "preset": the player only picks a name. "standard": the full wizard. */
+   mode: 'standard' | 'preset';
+   allowed_races?: string[];
+   allowed_subraces?: string[];
+   allowed_classes?: string[];
+   locked_background?: string;
+   preset?: PresetCharacter;
+}
+
+export interface PresetCharacter {
+   default_name?: string;
+   race_id: string;
+   subrace_id?: string;
+   class_id: string;
+   ability_scores: Record<string, number>;
+   selected_skills: string[];
 }
 
 export interface CampaignStateView {

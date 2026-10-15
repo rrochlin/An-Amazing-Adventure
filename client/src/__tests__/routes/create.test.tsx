@@ -540,3 +540,88 @@ describe('CreateRoute wizard — Review step', () => {
       expect(await screen.findByText('Server down')).toBeInTheDocument();
    });
 });
+
+describe('CreateRoute wizard — campaign character rules', () => {
+   const briarwell = {
+      id: 'briarwell',
+      version: '1',
+      title: 'The Burning of Briarwell',
+      premise: 'A village child.',
+      character_creation: {
+         mode: 'preset',
+         allowed_races: ['human'],
+         allowed_classes: ['fighter'],
+         locked_background: 'You are a child of about ten.',
+         preset: {
+            default_name: 'Wren',
+            race_id: 'human',
+            class_id: 'fighter',
+            ability_scores: { str: 13, dex: 15, con: 14, int: 10, wis: 12, cha: 8 },
+            selected_skills: ['athletics', 'perception'],
+         },
+      },
+   };
+   const restricted = {
+      id: 'restricted',
+      version: '1',
+      title: 'Restricted',
+      premise: 'Dwarves only.',
+      character_creation: {
+         mode: 'standard',
+         allowed_races: ['dwarf'],
+         allowed_classes: ['monk'],
+         locked_background: 'A disgraced dwarven monk.',
+      },
+   };
+
+   beforeEach(() => {
+      mockListCampaigns.mockResolvedValue({ campaigns: [briarwell, restricted] });
+   });
+
+   it('a preset campaign skips the wizard: name only, then Begin', async () => {
+      await renderWizard();
+      const user = await selectCampaign('The Burning of Briarwell');
+
+      expect(screen.getByText('Human Fighter')).toBeInTheDocument();
+      expect(screen.getByText('You are a child of about ten.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('Race')).not.toBeInTheDocument(); // stepper trimmed
+
+      await user.type(screen.getByLabelText(/Character Name/i), 'Pip');
+      await user.click(screen.getByRole('button', { name: /begin/i }));
+
+      expect(mockCreateGame).toHaveBeenCalledWith(
+         expect.objectContaining({
+            name: 'Pip',
+            campaign_id: 'briarwell',
+            race_id: 'human',
+            class_id: 'fighter',
+         }),
+      );
+      expect(mockNavigate).toHaveBeenCalled();
+   });
+
+   it('a preset campaign uses the default name when left blank', async () => {
+      await renderWizard();
+      const user = await selectCampaign('The Burning of Briarwell');
+      await user.click(screen.getByRole('button', { name: /begin/i }));
+      expect(mockCreateGame).toHaveBeenCalledWith(
+         expect.objectContaining({ name: 'Wren', campaign_id: 'briarwell' }),
+      );
+   });
+
+   it('a restricted campaign locks the backstory and filters races', async () => {
+      await renderWizard();
+      const user = await selectCampaign('Restricted');
+      await clickNext(user);
+
+      expect(screen.queryByLabelText(/Backstory/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/A disgraced dwarven monk\./)).toBeInTheDocument();
+
+      await fillName('Brakka');
+      await clickNext(user);
+      expect(screen.getByText('Dwarf')).toBeInTheDocument();
+      expect(screen.queryByText('Elf')).not.toBeInTheDocument();
+      expect(screen.queryByText('Human')).not.toBeInTheDocument();
+   });
+});

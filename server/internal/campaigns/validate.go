@@ -162,6 +162,10 @@ func (d *CampaignDefinition) Validate() error {
 		}
 	}
 
+	if err := d.CharacterCreation.validate(); err != nil {
+		return fmt.Errorf("character_creation: %w", err)
+	}
+
 	if err := d.validateEndings(); err != nil {
 		return err
 	}

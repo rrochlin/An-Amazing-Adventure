@@ -222,6 +222,11 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	if !ok {
 		return jsonResponse(400, map[string]string{"error": fmt.Sprintf("unknown campaign_id %q", body.CampaignID)}), nil
 	}
+	// The campaign's creation rules win over whatever the client sent.
+	creation, err := selectedCampaign.CharacterCreation.Apply(body.CharacterCreationData)
+	if err != nil {
+		return jsonResponse(400, map[string]string{"error": err.Error()}), nil
+	}
 
 	dbClient, err := db.New(ctx)
 	if err != nil {
@@ -268,19 +273,19 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 
 	sessionID := game.NewSessionID()
 
-	playerName := body.Name
+	playerName := creation.Name
 	if playerName == "" {
 		playerName = "Adventurer"
 	}
 
-	player := game.NewCharacter(playerName, body.Backstory)
+	player := game.NewCharacter(playerName, creation.Backstory)
 	g := game.NewGame(sessionID, userID)
 	g.SetPlayerCharacter(userID, player)
-	g.CreationParams = body.CharacterCreationData
+	g.CreationParams = creation
 
 	// Build the full D&D character if we have enough data
-	if body.ClassID != "" && body.RaceID != "" && len(body.AbilityScores) == 6 {
-		dndChar, err := game.BuildDnDCharacter(ctx, body.CharacterCreationData)
+	if creation.ClassID != "" && creation.RaceID != "" && len(creation.AbilityScores) == 6 {
+		dndChar, err := game.BuildDnDCharacter(ctx, creation)
 		if err != nil {
 			log.Printf("http-games POST: BuildDnDCharacter error: %v", err)
 			return jsonResponse(400, map[string]string{"error": fmt.Sprintf("character creation failed: %v", err)}), nil
@@ -288,7 +293,7 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 		g.SetDnDCharacter(userID, dndChar)
 	}
 
-	bootstrapped, openingHistory, bootErr := campaigns.BootstrapGame(selectedCampaign, sessionID, userID, player, body.CharacterCreationData)
+	bootstrapped, openingHistory, bootErr := campaigns.BootstrapGame(selectedCampaign, sessionID, userID, player, creation)
 	if bootErr != nil {
 		log.Printf("http-games POST: BootstrapGame error: %v", bootErr)
 		return serverError(), nil
@@ -562,6 +567,22 @@ func handleJoinCharacter(ctx context.Context, req events.APIGatewayV2HTTPRequest
 			log.Printf("handleJoinCharacter LoadDnDCharacters (non-fatal): %v", loadErr)
 		} else {
 			_ = bus // bus scoped to this invocation
+		}
+	}
+
+	// Joining a campaign session follows that campaign's creation rules.
+	if g.Campaign != nil && g.Campaign.CampaignID != "" {
+		reg, regErr := getCampaignRegistry()
+		if regErr != nil {
+			log.Printf("handleJoinCharacter: load campaigns: %v", regErr)
+			return serverError(), nil
+		}
+		if def, ok := reg.Get(g.Campaign.CampaignID); ok {
+			applied, applyErr := def.CharacterCreation.Apply(body)
+			if applyErr != nil {
+				return jsonResponse(400, map[string]string{"error": applyErr.Error()}), nil
+			}
+			body = applied
 		}
 	}
 
