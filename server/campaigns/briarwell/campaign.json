@@ -34,7 +34,7 @@
       "village_square": {
         "name": "Village Square",
         "type": "hub",
-        "description": "A well, a notice post, and gossiping neighbours.",
+        "description": "A stone well, a few market-day benches, and gossiping neighbours.",
         "connections": {
           "west": "family_cottage",
           "north": "market_lane",
@@ -120,6 +120,7 @@
       "kind": "antagonist",
       "goal": "Raid Briarwell and carry off anything, or anyone, worth selling.",
       "importance": "primary",
+      "appears_in": ["bandit_raid"],
       "rail": {
         "steps": [
           { "id": "lurking", "location_id": "woods_edge" },
@@ -132,6 +133,7 @@
       "kind": "npc",
       "goal": "Find a child with the spark of a hero, and get them out alive.",
       "importance": "primary",
+      "appears_in": ["rescue", "road_to_guild"],
       "rail": {
         "steps": [
           { "id": "travelling" },
@@ -206,7 +208,10 @@
       "dialogue_start_node": "Errand",
       "title": "A Birthday Errand",
       "summary": "Father asks the child to earn a few coins by honest work and buy Ros a birthday gift.",
-      "objective_text": "Answer Father.",
+      "intro_text": "Two coins clink in your pocket as you hurry up Market Lane to Old Garrick's stall.",
+      "intro_text": "The sun is low and gold by the time you get home, the gift hidden behind your back.",
+      "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over the Woods' Edge like snow.",
+      "objective_text": "Give Ros her birthday gift.",
       "on_enter": [
         { "type": "activate_objective", "objective_id": "hear_father" },
         { "type": "start_dialogue", "asset_id": "errand", "start_node": "Errand" }
@@ -240,7 +245,8 @@
       "mode": "ai_scene",
       "title": "Good Turns and Bad",
       "summary": "The child roams Briarwell. Three villagers need something; each can be helped or exploited for a coin.",
-      "objective_text": "Earn coin around the village. Help (or don't) Bess, the miller's wife, or the children in the meadow.",
+      "intro_text": "Outside the cottage door, Briarwell is waking up, and your pockets are empty. Little Bess is crying by the well in the Village Square: her rag doll is gone. East at the Old Mill, Hob the Miller keeps glancing over his shoulder before slipping behind the barn. And from the Meadow to the south comes Dunstan's jeering, and a smaller child's sobbing. Kind or cruel, any two good turns should earn enough coin for Ros's gift.",
+      "objective_text": "Earn two coins: find Little Bess's doll (Village Square), deal with the miller's secret (Old Mill), or handle Dunstan the bully (Meadow). Kind or cruel, each deed pays a coin.",
       "allowed_conditions": [
         { "type": "label_equals", "key": "deed_doll", "allowed_values": ["returned", "kept"] },
         { "type": "label_equals", "key": "deed_miller", "allowed_values": ["told_wife", "took_bribe"] },
@@ -356,7 +362,8 @@
       "mode": "ai_scene",
       "title": "Briarwell Burns",
       "summary": "Night. Red Corwin's bandits torch the village. Father falls defending the door; Mother and Ros vanish in the chaos. The child must decide what to do.",
-      "objective_text": "Survive. Hide, fight, or search for your family.",
+      "intro_text": "You wake to screaming. Orange light flickers through the shutters and the air is thick with smoke. Father is at the door with his woodaxe, shouting for Mother to take Ros out the back. Then the door splinters: Red Corwin's bandits are in Briarwell. You can hide, fight, or go looking for Mother and Ros.",
+      "objective_text": "Survive the night: hide, fight, or search for Mother and Ros.",
       "allowed_conditions": [
         { "type": "label_equals", "key": "raid_response", "allowed_values": ["hid", "fought", "searched_family"] }
       ],
@@ -427,6 +434,7 @@
       "mode": "ai_scene",
       "title": "The Road to the Guild",
       "summary": "Briarwell burns behind them as Master Holloway carries the child toward the Guild. The opening ends here.",
+      "intro_text": "Dawn finds you on the back of Master Holloway's horse, wrapped in his cloak. Behind you, a thin thread of smoke is all that is left of Briarwell.",
       "objective_text": "Your story begins."
     }
   },
