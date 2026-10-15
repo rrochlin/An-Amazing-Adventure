@@ -161,17 +161,23 @@
     "return_doll": {
       "title": "Bess's Lost Doll",
       "description": "Little Bess has lost her rag doll somewhere in the village.",
-      "optional": true
+      "optional": true,
+      "success_when": [{ "type": "label_in", "key": "deed_doll", "values": ["returned", "kept"] }],
+      "fail_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
     },
     "miller_secret": {
       "title": "The Miller's Secret",
       "description": "Hob the Miller is up to something behind the barn.",
-      "optional": true
+      "optional": true,
+      "success_when": [{ "type": "label_in", "key": "deed_miller", "values": ["told_wife", "took_bribe"] }],
+      "fail_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
     },
     "meadow_bully": {
       "title": "Trouble in the Meadow",
       "description": "Dunstan is picking on the smaller children again.",
-      "optional": true
+      "optional": true,
+      "success_when": [{ "type": "label_in", "key": "deed_bully", "values": ["stopped", "joined"] }],
+      "fail_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
     },
     "buy_gift": {
       "title": "Buy Ros a Gift",
@@ -215,10 +221,7 @@
       "dialogue_start_node": "Errand",
       "title": "A Birthday Errand",
       "summary": "Father asks the child to earn a few coins by honest work and buy Ros a birthday gift.",
-      "intro_text": "Two coins clink in your pocket as you hurry up Market Lane to Old Garrick's stall.",
-      "intro_text": "The sun is low and gold by the time you get home, the gift hidden behind your back.",
-      "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over the Woods' Edge like snow.",
-      "objective_text": "Give Ros her birthday gift.",
+      "objective_text": "Answer Father.",
       "on_enter": [
         { "type": "activate_objective", "objective_id": "hear_father" },
         { "type": "start_dialogue", "asset_id": "errand", "start_node": "Errand" }
@@ -298,7 +301,8 @@
       "dialogue_start_node": "GiftStall",
       "title": "Old Garrick's Stall",
       "summary": "The child spends their coin on a birthday gift.",
-      "objective_text": "Choose a gift for Ros.",
+      "intro_text": "Two coins clink in your pocket as you hurry up Market Lane to Old Garrick's stall.",
+      "objective_text": "Choose a gift for Ros at Old Garrick's stall.",
       "on_enter": [
         { "type": "activate_objective", "objective_id": "buy_gift" },
         { "type": "start_dialogue", "asset_id": "gift_stall", "start_node": "GiftStall" }
@@ -330,7 +334,8 @@
       "dialogue_start_node": "Birthday",
       "title": "Ros's Birthday",
       "summary": "Back home at dusk. The child can give Ros the gift, or keep it. As the evening ends, smoke rises from the woods.",
-      "objective_text": "Bring the gift home to Ros.",
+      "intro_text": "The sun is low and gold by the time you get home, the gift hidden behind your back.",
+      "objective_text": "Give Ros her birthday gift.",
       "on_enter": [
         { "type": "start_dialogue", "asset_id": "birthday", "start_node": "Birthday" }
       ],
@@ -416,6 +421,7 @@
       "dialogue_start_node": "Rescue",
       "title": "The Stranger in the Ashes",
       "summary": "Master Holloway of the Heroes' Guild finds the child at the woods' edge and offers to take them away.",
+      "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over the Woods' Edge like snow.",
       "objective_text": "Answer the stranger.",
       "on_enter": [
         { "type": "start_dialogue", "asset_id": "rescue", "start_node": "Rescue" }
