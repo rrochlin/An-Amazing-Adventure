@@ -45,6 +45,21 @@ type CampaignRuntimeState struct {
 	CompanionStates  map[string]CompanionState    `json:"companion_states,omitempty" dynamodbav:"companion_states,omitempty"`
 	CampaignClock    int                          `json:"campaign_clock,omitempty" dynamodbav:"campaign_clock,omitempty"`
 	ActiveDialogue   *DialogueRuntimeState        `json:"active_dialogue,omitempty" dynamodbav:"active_dialogue,omitempty"`
+
+	// Run end (Phase 7 decision 15). A run ends on reaching a node marked
+	// ends_run or on a party wipe. An ended run is read-only.
+	RunStatus     string `json:"run_status,omitempty" dynamodbav:"run_status,omitempty"` // "" (active) | "ended"
+	EndingID      string `json:"ending_id,omitempty" dynamodbav:"ending_id,omitempty"`
+	EndingTitle   string `json:"ending_title,omitempty" dynamodbav:"ending_title,omitempty"`
+	EndingSummary string `json:"ending_summary,omitempty" dynamodbav:"ending_summary,omitempty"`
+	EndedAt       int64  `json:"ended_at,omitempty" dynamodbav:"ended_at,omitempty"` // unix milliseconds
+}
+
+const RunStatusEnded = "ended"
+
+// RunEnded reports whether the campaign run is over and the session is read-only.
+func (s *CampaignRuntimeState) RunEnded() bool {
+	return s != nil && s.RunStatus == RunStatusEnded
 }
 
 type ObjectiveState struct {
@@ -102,6 +117,16 @@ type CampaignStateView struct {
 	Counters         map[string]int     `json:"counters,omitempty"`
 	ActiveObjectives []ObjectiveState   `json:"active_objectives,omitempty"`
 	ActiveDialogue   *DialogueStateView `json:"active_dialogue,omitempty"`
+	RunStatus        string             `json:"run_status,omitempty"`
+	Ending           *EndingView        `json:"ending,omitempty"`
+}
+
+// EndingView describes how a finished run ended.
+type EndingView struct {
+	ID      string `json:"id,omitempty"`
+	Title   string `json:"title,omitempty"`
+	Summary string `json:"summary,omitempty"`
+	EndedAt int64  `json:"ended_at,omitempty"`
 }
 
 // Game is the in-memory representation of a live game session.
@@ -925,7 +950,41 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 		Counters:         copyIntMap(g.Campaign.Counters),
 		ActiveObjectives: activeObjectives,
 		ActiveDialogue:   buildDialogueStateView(g.Campaign.ActiveDialogue),
+		RunStatus:        g.Campaign.RunStatus,
+		Ending:           buildEndingView(g.Campaign),
 	}
+}
+
+func buildEndingView(state *CampaignRuntimeState) *EndingView {
+	if !state.RunEnded() {
+		return nil
+	}
+	return &EndingView{
+		ID:      state.EndingID,
+		Title:   state.EndingTitle,
+		Summary: state.EndingSummary,
+		EndedAt: state.EndedAt,
+	}
+}
+
+// PartyWiped reports whether every player character is dead. A game with no
+// players is not considered wiped.
+func (g *Game) PartyWiped() bool {
+	if g == nil || len(g.Players) == 0 {
+		return false
+	}
+	for userID, c := range g.Players {
+		if dnd := g.DnDPlayers[userID]; dnd != nil {
+			if dnd.GetHitPoints() > 0 {
+				return false
+			}
+			continue
+		}
+		if c.Alive {
+			return false
+		}
+	}
+	return true
 }
 
 func buildDialogueStateView(state *DialogueRuntimeState) *DialogueStateView {

@@ -34,8 +34,8 @@ Dunstan (bully), Red Corwin (bandit leader), Master Holloway (guild master).
 
 ## Deliberately not in this slice
 
-- **Endings:** the runtime has no `endings[]` support yet (decision 15), so `road_to_guild` is a
-  plain terminal node.
+- **Endings:** `road_to_guild` ends the run (`ends_run`) with a single catch-all ending. Specific
+  ending triggers are deferred (decision 15).
 - **Combat:** the raid is narrated. A deterministic fight (decision 14, ~1% odds) comes later.
 - **Morality tracking:** good and bad deeds are recorded as labels only; there is no running tally.
 

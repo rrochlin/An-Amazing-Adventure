@@ -625,3 +625,42 @@ func TestChatHistory_EventsAttachedToNarrativeMessage(t *testing.T) {
 		t.Error("expected narrative message with 1 event")
 	}
 }
+
+func TestHandlerChat_EndedRunIsReadOnly(t *testing.T) {
+	t.Setenv("MUTATIONS_TABLE", "mutations-test")
+	save := makeBootstrappedCampaignSaveState(t, "briarwell")
+	save.Campaign.RunStatus = game.RunStatusEnded
+	save.Campaign.EndingID = "road_to_guild"
+	dbFake := &fakeDBClient{
+		connection: db.Connection{ConnectionID: "conn-1", GameID: "game-briarwell", UserID: db.BinaryID("user-1")},
+		user:       &db.UserRecord{UserID: db.BinaryID("user-1"), AIEnabled: true},
+		save:       save,
+	}
+	wsFake := &fakeWSSender{}
+	aiFake := &fakeAIClient{}
+
+	origNewDBClient, origNewWSSender, origNewAIClient := newDBClient, newWSSender, newAIClient
+	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
+	newWSSender = func(context.Context) (wsSender, error) { return wsFake, nil }
+	newAIClient = func(context.Context) (aiClient, error) { return aiFake, nil }
+	t.Cleanup(func() {
+		newDBClient = origNewDBClient
+		newWSSender = origNewWSSender
+		newAIClient = origNewAIClient
+	})
+
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "I keep going"})
+	resp, err := handler(context.Background(), makeWSChatReq("conn-1", string(body)))
+	if err != nil {
+		t.Fatalf("handler err: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("expected status 200, got %d", resp.StatusCode)
+	}
+	if len(wsFake.errors) != 1 || wsFake.errors[0] != "run_ended" {
+		t.Fatalf("expected run_ended error, got %#v", wsFake.errors)
+	}
+	if aiFake.narratorCalls != 0 || aiFake.engineerCalls != 0 || aiFake.resolverCalls != 0 {
+		t.Fatalf("expected no AI calls on an ended run, got narrator=%d engineer=%d resolver=%d", aiFake.narratorCalls, aiFake.engineerCalls, aiFake.resolverCalls)
+	}
+}

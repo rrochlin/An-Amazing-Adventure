@@ -666,6 +666,12 @@ function GamePage() {
                   pendingChoices={pendingChoices}
                   onChoiceSelected={handleChoiceSelected}
                   isSubmittingChoice={isSubmittingChoice}
+                  ending={
+                     campaignState?.run_status === 'ended'
+                        ? (campaignState.ending ?? {})
+                        : undefined
+                  }
+                  onStartNewRun={() => navigate({ to: '/create' })}
                />
             </Paper>
             {wsError === 'ai_access_not_enabled' && (
@@ -682,7 +688,8 @@ function GamePage() {
             )}
             {wsError &&
                wsError !== 'ai_access_not_enabled' &&
-               wsError !== 'quota_exceeded' && (
+               wsError !== 'quota_exceeded' &&
+               wsError !== 'run_ended' && (
                   <Alert severity="warning" sx={{ mt: 1 }}>
                      {wsError ?? 'Connection lost — retrying...'}
                   </Alert>
