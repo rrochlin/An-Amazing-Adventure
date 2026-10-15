@@ -309,4 +309,24 @@ describe('Chat component', () => {
       );
       expect(onStartNewRun).toHaveBeenCalledTimes(1);
    });
+
+   it('labels completed and missed objectives', () => {
+      renderChat({
+         chatHistory: [
+            {
+               type: 'narrative',
+               content: 'Dunstan runs off.',
+               events: [
+                  { type: 'objective_completed', message: 'Objective complete: Trouble in the Meadow' },
+                  { type: 'objective_failed', message: "Objective missed: Bess's Lost Doll" },
+               ],
+            },
+         ],
+      });
+      const notes = screen.getAllByRole('note');
+      expect(notes[0]).toHaveTextContent('Objective complete');
+      expect(notes[0]).toHaveTextContent('Trouble in the Meadow');
+      expect(notes[1]).toHaveTextContent('Objective missed');
+      expect(notes[1]).toHaveTextContent("Bess's Lost Doll");
+   });
 });
