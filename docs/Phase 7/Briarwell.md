@@ -55,9 +55,21 @@ narrator prompt, `intro_text` on scenes, chosen options echoed in chat, objectiv
 inline, `appears_in` to keep the bandits and the guild master out of early scenes, and removing the
 square's "notice post", which the narrator had turned into a quest board.
 
+## Playtest 2 (2026-10-15)
+
+Session `1d066cbc-8917-4bf2-ae70-e21001989072`. The narrator stayed in Briarwell and kept the player a
+child. Problems found: the run opened on the rescue scene's intro (intros attached to the wrong nodes);
+the bully deed never ticked off (objective `success_when` was never evaluated); authored text arrived
+all at once, chat-style; and the raid began the moment the gift was given. Fixes: intros repaired,
+objectives evaluated each turn (#79); a dialogue stage that types one beat at a time with title cards
+and quest toasts; scenes end on the player's last choice, with a "Go to bed" choice before the raid.
+
 ## Authoring notes
 - Give every `ai_scene` node an `intro_text`; it is the only thing that orients the player when the
   scene starts.
+- Write spoken lines as `Speaker: line` so the stage shows a name plate; keep narration separate.
+- End a scene on a player choice ("Go to bed") rather than on a state change, so the player decides
+  when the beat is over.
 - Use `appears_in` for characters who should not exist yet from the narrator's point of view.
 - Keep room descriptions free of props that invite new plot (notice boards, rumour mills).
 
