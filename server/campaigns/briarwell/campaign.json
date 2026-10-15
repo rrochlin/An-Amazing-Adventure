@@ -427,9 +427,17 @@
       "mode": "ai_scene",
       "title": "The Road to the Guild",
       "summary": "Briarwell burns behind them as Master Holloway carries the child toward the Guild. The opening ends here.",
-      "objective_text": "Your story begins."
+      "objective_text": "Your story begins.",
+      "ends_run": true
     }
   },
+  "endings": [
+    {
+      "id": "road_to_guild",
+      "title": "The Road to the Guild",
+      "summary": "Briarwell is ash behind you. Ahead lies the Heroes' Guild, and whatever kind of hero the child of Briarwell will become."
+    }
+  ],
   "start_node_id": "morning_errand",
   "intro_sequence": {
     "mode": "streamed_briefing",
