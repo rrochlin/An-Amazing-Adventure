@@ -5,64 +5,95 @@ nodes: {
     name: "GiftStall"
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "gift_001" }
+      operands: { string_value: "line:gift_001" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "gift_opt_sweets" }
-      operands: { string_value: "Sweets" }
+      operands: { string_value: "line:gift_opt_sweets" }
+      operands: { string_value: "L2shortcutoption_GiftStall_1" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "gift_opt_ribbon" }
-      operands: { string_value: "Ribbon" }
+      operands: { string_value: "line:gift_opt_ribbon" }
+      operands: { string_value: "L3shortcutoption_GiftStall_2" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "gift_opt_bird" }
-      operands: { string_value: "Bird" }
+      operands: { string_value: "line:gift_opt_bird" }
+      operands: { string_value: "L4shortcutoption_GiftStall_3" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: { opcode: SHOW_OPTIONS }
     instructions: { opcode: JUMP }
-    instructions: { opcode: STOP }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label gift sweets" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "gift_ack_sweets" }
+      operands: { string_value: "line:gift_ack_sweets" }
+      operands: { float_value: 0 }
     }
-    instructions: { opcode: STOP }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
+    }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label gift ribbon" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "gift_ack_ribbon" }
+      operands: { string_value: "line:gift_ack_ribbon" }
+      operands: { float_value: 0 }
     }
-    instructions: { opcode: STOP }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
+    }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label gift carved_bird" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "gift_ack_bird" }
+      operands: { string_value: "line:gift_ack_bird" }
+      operands: { float_value: 0 }
     }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
+    }
+    instructions: { opcode: POP }
     instructions: { opcode: STOP }
     labels: {
-      key: "Sweets"
-      value: 7
+      key: "L1group_end"
+      value: 15
     }
     labels: {
-      key: "Ribbon"
-      value: 10
+      key: "L2shortcutoption_GiftStall_1"
+      value: 6
     }
     labels: {
-      key: "Bird"
-      value: 13
+      key: "L3shortcutoption_GiftStall_2"
+      value: 9
+    }
+    labels: {
+      key: "L4shortcutoption_GiftStall_3"
+      value: 12
+    }
+    headers: {
+      key: "title"
+      value: "GiftStall"
     }
   }
 }

@@ -33,6 +33,9 @@ type RunResult struct {
 	Variables      map[string]string
 	Completed      bool
 	PendingChoices []Choice // non-empty when execution paused waiting for a player choice
+	// ChoiceHistory is the choices made so far in CurrentNode. Pass it back,
+	// plus the new choice, as selections to resume after a pause.
+	ChoiceHistory []int
 }
 
 type handler struct {
@@ -40,12 +43,15 @@ type handler struct {
 	lineText       map[string]string
 	lines          []string
 	commands       []string
-	selectChoice   *int // when set, use this ID at the next Options call and continue
+	selections     []int // choices to replay, in order, at successive Options calls
+	consumed       int   // how many selections have been applied
+	nodeChoices    []int // choices applied since the current node started
 	pendingChoices []Choice
 }
 
 func (h *handler) NodeStart(nodeName string) error {
 	h.currentNode = nodeName
+	h.nodeChoices = nil
 	return nil
 }
 
@@ -62,21 +68,23 @@ func (h *handler) Line(line yarnvm.Line) error {
 
 // Options is called by the Yarn VM when it reaches a set of player choices.
 //
-// Resume mode (selectChoice != nil): use the pre-selected option ID, reset the
-// collected lines so only post-choice lines are returned to the caller, and
-// continue VM execution.
+// Replay mode (selections remain): apply the next pre-selected option ID and
+// continue. Once the last selection is applied, discard everything collected
+// so far, so the caller only receives output that follows the newest choice.
 //
-// Pause mode (selectChoice == nil): collect available options and return
+// Pause mode (no selections remain): collect available options and return
 // errAwaitingChoice to halt the VM and hand control back to the caller.
 func (h *handler) Options(options []yarnvm.Option) (int, error) {
-	if h.selectChoice != nil {
-		idx := *h.selectChoice
+	if h.consumed < len(h.selections) {
+		idx := h.selections[h.consumed]
 		for _, opt := range options {
 			if opt.ID == idx && opt.IsAvailable {
-				// Discard lines seen before this choice so the caller only
-				// receives narrative and commands that follow the selected option.
-				h.lines = nil
-				h.commands = nil
+				h.consumed++
+				h.nodeChoices = append(h.nodeChoices, idx)
+				if h.consumed == len(h.selections) {
+					h.lines = nil
+					h.commands = nil
+				}
 				return idx, nil
 			}
 		}
@@ -124,13 +132,16 @@ func OpeningLine(fsys fs.FS, stringsPath string) (string, error) {
 
 // RunNode executes a compiled Yarn node and returns the result.
 //
-// selectChoice controls how Options prompts are handled:
-//   - nil: pause execution at the first Options call and return PendingChoices.
-//     Completed will be false and PendingChoices will be non-empty.
-//   - non-nil: resume a previously paused node by selecting the given option ID.
-//     The VM re-runs from the node start and applies the choice when the Options
-//     call is reached. Only lines emitted after the choice are returned.
-func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars map[string]string, selectChoice *int) (RunResult, error) {
+// selections controls how Options prompts are handled. The VM always re-runs
+// from the start of startNode, so a resume must replay every choice already
+// made in that node:
+//   - empty: pause at the first Options call and return PendingChoices.
+//   - non-empty: apply the selections, in order, at successive Options calls.
+//     Only lines and commands emitted after the last selection are returned.
+//     Execution pauses again at the next Options call, if there is one.
+//
+// To resume after a pause, pass append(result.ChoiceHistory, newChoice).
+func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars map[string]string, selections []int) (RunResult, error) {
 	if fsys == nil {
 		return RunResult{}, fmt.Errorf("dialogue source fs is not set")
 	}
@@ -151,7 +162,7 @@ func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars 
 	}
 
 	vars := yarnvm.NewMapVariableStorageFromMap(loadVars(storedVars))
-	h := &handler{lineText: lineText, selectChoice: selectChoice}
+	h := &handler{lineText: lineText, selections: selections}
 	vm := &yarnvm.VirtualMachine{
 		Program: prog,
 		Handler: h,
@@ -166,9 +177,13 @@ func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars 
 				Variables:      storeVars(vars.Contents()),
 				Completed:      false,
 				PendingChoices: h.pendingChoices,
+				ChoiceHistory:  h.nodeChoices,
 			}, nil
 		}
 		return RunResult{}, fmt.Errorf("run dialogue node %q: %w", startNode, err)
+	}
+	if h.consumed < len(h.selections) {
+		return RunResult{}, fmt.Errorf("run dialogue node %q: dialogue ended with %d unused choice(s)", startNode, len(h.selections)-h.consumed)
 	}
 
 	return RunResult{

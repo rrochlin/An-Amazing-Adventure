@@ -111,6 +111,11 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
+	if g.Campaign.RunEnded() {
+		_ = ws.SendError(ctx, connID, "run_ended")
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+
 	// dialogue_choice is handled separately: it broadcasts authored text like
 	// ws-chat does instead of sending a full state update.
 	if msg.SubAction == "dialogue_choice" {
@@ -198,6 +203,24 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		log.Printf("ws-game-action: %s: %v", msg.SubAction, actionErr)
 		_ = ws.SendError(ctx, connID, actionErr.Error())
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+
+	// A monster's reply turn can kill the party, which ends a campaign run.
+	if g.Campaign != nil && g.Campaign.CampaignID != "" {
+		if reg, regErr := getCampaignRegistry(); regErr != nil {
+			log.Printf("ws-game-action: load campaigns: %v", regErr)
+		} else if def, ok := reg.Get(g.Campaign.CampaignID); ok {
+			wipe, wipeErr := campaigns.EndRunIfPartyWiped(def, g)
+			if wipeErr != nil {
+				log.Printf("ws-game-action: end run on party wipe: %v", wipeErr)
+			} else if wipe.Transition.RunEnded {
+				saveState.ChatHistory = append(saveState.ChatHistory, game.ChatMessage{
+					Type:    "narrative",
+					Content: wipe.Transition.DialogueText,
+					Events:  wipe.Events,
+				})
+			}
+		}
 	}
 
 	// Persist
@@ -398,6 +421,14 @@ func handleDialogueChoice(
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
+	// Remember what the player picked so it is recorded in the chat log.
+	pickedText := ""
+	for _, c := range g.Campaign.ActiveDialogue.PendingChoices {
+		if c.ID == choiceID {
+			pickedText = c.Text
+		}
+	}
+
 	choiceText, resumeErr := campaigns.ResumeDialogueWithChoice(campaignDef, g, choiceID)
 	if resumeErr != nil {
 		log.Printf("ws-game-action: dialogue_choice: resume: %v", resumeErr)
@@ -423,6 +454,13 @@ func handleDialogueChoice(
 	// for a campaign transition that may produce additional narrative.
 	history := saveState.ChatHistory
 	narrative := saveState.Narrative
+	if pickedText != "" {
+		history = append(history, game.ChatMessage{Type: "player", Content: pickedText})
+		narrative = append(narrative, game.NarrativeMessage{
+			Role:    "user",
+			Content: []game.NarrativeBlock{{Type: "text", Text: pickedText}},
+		})
+	}
 
 	if choiceText != "" {
 		chunkFrame := wsutil.Frame{

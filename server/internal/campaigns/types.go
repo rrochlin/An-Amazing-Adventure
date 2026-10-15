@@ -22,6 +22,10 @@ type CampaignDefinition struct {
 	StoryNodes        map[string]StoryNode         `json:"story_nodes"`
 	StartNodeID       string                       `json:"start_node_id"`
 	IntroSequence     IntroSequence                `json:"intro_sequence,omitempty"`
+	// Endings are checked in order when a run ends; the first whose
+	// conditions all match is chosen. The last must have no conditions, so it
+	// is the catch-all.
+	Endings []Ending `json:"endings,omitempty"`
 
 	SourceDir string `json:"-"`
 	SourceFS  fs.FS  `json:"-"`
@@ -89,6 +93,10 @@ type ActorTemplate struct {
 	Goal       string    `json:"goal,omitempty"`
 	Importance string    `json:"importance,omitempty"`
 	Rail       ActorRail `json:"rail,omitempty"`
+	// AppearsIn limits the story nodes in which the narrator is told this
+	// actor exists, so later characters aren't foreshadowed early. Empty
+	// means every node.
+	AppearsIn []string `json:"appears_in,omitempty"`
 }
 
 type ActorRail struct {
@@ -120,17 +128,32 @@ type DialogueAsset struct {
 }
 
 type StoryNode struct {
-	Mode              string                 `json:"mode"`
-	DialogueAssetID   string                 `json:"dialogue_asset_id,omitempty"`
-	DialogueStartNode string                 `json:"dialogue_start_node,omitempty"`
-	Title             string                 `json:"title"`
-	Summary           string                 `json:"summary,omitempty"`
+	Mode              string `json:"mode"`
+	DialogueAssetID   string `json:"dialogue_asset_id,omitempty"`
+	DialogueStartNode string `json:"dialogue_start_node,omitempty"`
+	Title             string `json:"title"`
+	Summary           string `json:"summary,omitempty"`
+	// IntroText is authored narration shown to the player when the node is
+	// entered, before any dialogue. It orients them in the new scene.
+	IntroText         string                 `json:"intro_text,omitempty"`
 	ObjectiveText     string                 `json:"objective_text,omitempty"`
 	OnEnter           []Action               `json:"on_enter,omitempty"`
 	CompletionRules   []TransitionRule       `json:"completion_rules,omitempty"`
 	FailureRules      []TransitionRule       `json:"failure_rules,omitempty"`
 	NarratorContract  NodeNarratorContract   `json:"narrator_contract,omitempty"`
 	AllowedConditions []AllowedConditionSpec `json:"allowed_conditions,omitempty"`
+	// EndsRun ends the run when this node is entered.
+	EndsRun bool `json:"ends_run,omitempty"`
+}
+
+// Ending is an authored conclusion to a run (Phase 7 decision 15).
+type Ending struct {
+	ID                string      `json:"id"`
+	Title             string      `json:"title"`
+	Summary           string      `json:"summary,omitempty"`
+	Conditions        []Condition `json:"conditions,omitempty"`
+	DialogueAssetID   string      `json:"dialogue_asset_id,omitempty"`
+	DialogueStartNode string      `json:"dialogue_start_node,omitempty"`
 }
 
 type TransitionRule struct {

@@ -114,7 +114,7 @@ func TestNarrateStream_ReturnsWithoutToolCallAttempt(t *testing.T) {
 		t.Fatalf("ai.New: %v", err)
 	}
 	g := newTestGame(t)
-	_, streamErr := c.NarrateStream(context.Background(), g, nil, "look around", nil)
+	_, streamErr := c.NarrateStream(context.Background(), g, nil, "look around", nil, nil)
 	// Expect a Bedrock connectivity/auth error, NOT a nil pointer or panic
 	if streamErr == nil {
 		t.Log("NarrateStream unexpectedly succeeded (real Bedrock available?)")
@@ -130,7 +130,7 @@ func TestNarrateStream_EmptyHistoryHandled(t *testing.T) {
 		t.Fatalf("ai.New: %v", err)
 	}
 	g := newTestGame(t)
-	_, _ = c.NarrateStream(context.Background(), g, nil, "hello", nil)
+	_, _ = c.NarrateStream(context.Background(), g, nil, "hello", nil, nil)
 	// Passes if no panic
 }
 

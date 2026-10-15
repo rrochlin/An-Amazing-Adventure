@@ -207,6 +207,10 @@ Related notes:
   rejects chat and actions on an ended run, and the client still lets the player read it.
 - Concrete ending triggers are **not defined yet**. They are authored per campaign, starting
   with the Fable-opening campaign (decision 12).
+- Implementation: `endings[]` and `ends_run` in `campaign.json`; `run_status`, `ending_id`,
+  `ending_title`, `ending_summary`, `ended_at` on `CampaignRuntimeState`. A party wipe is checked
+  before the turn's story transition. Ending dialogue must not contain choices, because an ended run
+  accepts no input.
 
 ## Implications For The Runtime Contract
 

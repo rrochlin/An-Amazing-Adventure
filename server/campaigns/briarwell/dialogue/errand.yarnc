@@ -5,50 +5,75 @@ nodes: {
     name: "Errand"
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "errand_001" }
+      operands: { string_value: "line:errand_001" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "errand_002" }
+      operands: { string_value: "line:errand_002" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "errand_opt_eager" }
-      operands: { string_value: "Eager" }
+      operands: { string_value: "line:errand_opt_eager" }
+      operands: { string_value: "L2shortcutoption_Errand_1" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "errand_opt_reluctant" }
-      operands: { string_value: "Reluctant" }
+      operands: { string_value: "line:errand_opt_reluctant" }
+      operands: { string_value: "L3shortcutoption_Errand_2" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: { opcode: SHOW_OPTIONS }
     instructions: { opcode: JUMP }
-    instructions: { opcode: STOP }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label attitude eager" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "errand_ack_eager" }
+      operands: { string_value: "line:errand_ack_eager" }
+      operands: { float_value: 0 }
     }
-    instructions: { opcode: STOP }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
+    }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label attitude reluctant" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "errand_ack_reluctant" }
+      operands: { string_value: "line:errand_ack_reluctant" }
+      operands: { float_value: 0 }
     }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
+    }
+    instructions: { opcode: POP }
     instructions: { opcode: STOP }
     labels: {
-      key: "Eager"
-      value: 7
+      key: "L1group_end"
+      value: 12
     }
     labels: {
-      key: "Reluctant"
-      value: 10
+      key: "L2shortcutoption_Errand_1"
+      value: 6
+    }
+    labels: {
+      key: "L3shortcutoption_Errand_2"
+      value: 9
+    }
+    headers: {
+      key: "title"
+      value: "Errand"
     }
   }
 }

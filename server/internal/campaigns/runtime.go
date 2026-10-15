@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/dialogue"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
@@ -21,6 +22,8 @@ type TransitionResult struct {
 	FromNodeID   string
 	ToNodeID     string
 	DialogueText string
+	// RunEnded is set when this transition ended the run.
+	RunEnded bool
 }
 
 type TurnOrchestrationResult struct {
@@ -161,11 +164,18 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 			g.Campaign.ActiveDialogue.CurrentNode = node.DialogueStartNode
 		}
 	}
-	return currentDialogueOpening(def, g), nil
+	opening := currentDialogueOpening(def, g)
+	if node.IntroText == "" {
+		return opening, nil
+	}
+	if opening == "" {
+		return node.IntroText, nil
+	}
+	return node.IntroText + "\n\n" + opening, nil
 }
 
 func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, error) {
-	if def == nil || g == nil || g.Campaign == nil {
+	if def == nil || g == nil || g.Campaign == nil || g.Campaign.RunEnded() {
 		return TransitionResult{}, nil
 	}
 	currentNode, ok := def.StoryNodes[g.Campaign.ActiveNodeID]
@@ -194,20 +204,34 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 			if err != nil {
 				return TransitionResult{}, err
 			}
-			return TransitionResult{
+			result := TransitionResult{
 				Transitioned: true,
 				FromNodeID:   fromNodeID,
 				ToNodeID:     rule.NextNodeID,
 				DialogueText: dialogueText,
-			}, nil
+			}
+			if def.StoryNodes[rule.NextNodeID].EndsRun {
+				endingText, err := EndRun(def, g)
+				if err != nil {
+					return TransitionResult{}, err
+				}
+				result.RunEnded = true
+				result.DialogueText = joinText(result.DialogueText, endingText)
+			}
+			return result, nil
 		}
 	}
 	return TransitionResult{}, nil
 }
 
 func OrchestrateTurn(def *CampaignDefinition, g *game.Game, resolution ConditionResolution) (TurnOrchestrationResult, error) {
-	if def == nil || g == nil || g.Campaign == nil {
+	if def == nil || g == nil || g.Campaign == nil || g.Campaign.RunEnded() {
 		return TurnOrchestrationResult{}, nil
+	}
+
+	// A party wipe ends the run before any story transition is considered.
+	if wiped, err := EndRunIfPartyWiped(def, g); err != nil || wiped.Transition.RunEnded {
+		return wiped, err
 	}
 
 	node, ok := def.StoryNodes[g.Campaign.ActiveNodeID]
@@ -223,6 +247,10 @@ func OrchestrateTurn(def *CampaignDefinition, g *game.Game, resolution Condition
 	}
 
 	result := TurnOrchestrationResult{Transition: transition}
+	if transition.RunEnded {
+		result.Events = append(result.Events, runEndedEvent(g))
+		return result, nil
+	}
 	if !transition.Transitioned || transition.ToNodeID == "" {
 		return result, nil
 	}
@@ -266,9 +294,11 @@ func currentDialogueOpening(def *CampaignDefinition, g *game.Game) string {
 		}
 		state.ActiveDialogue.AwaitingChoice = true
 		state.ActiveDialogue.PendingChoices = choices
+		state.ActiveDialogue.ChoiceHistory = result.ChoiceHistory
 	} else {
 		state.ActiveDialogue.AwaitingChoice = false
 		state.ActiveDialogue.PendingChoices = nil
+		state.ActiveDialogue.ChoiceHistory = nil
 	}
 	if len(result.Lines) == 0 {
 		return ""
@@ -301,7 +331,7 @@ func ResumeDialogueWithChoice(def *CampaignDefinition, g *game.Game, choiceID in
 		asset.Strings,
 		state.ActiveDialogue.CurrentNode,
 		state.ActiveDialogue.Variables,
-		&choiceID,
+		append(append([]int(nil), state.ActiveDialogue.ChoiceHistory...), choiceID),
 	)
 	if err != nil {
 		return "", fmt.Errorf("resume dialogue with choice %d: %w", choiceID, err)
@@ -323,9 +353,11 @@ func ResumeDialogueWithChoice(def *CampaignDefinition, g *game.Game, choiceID in
 		}
 		state.ActiveDialogue.AwaitingChoice = true
 		state.ActiveDialogue.PendingChoices = choices
+		state.ActiveDialogue.ChoiceHistory = result.ChoiceHistory
 	} else {
 		state.ActiveDialogue.AwaitingChoice = false
 		state.ActiveDialogue.PendingChoices = nil
+		state.ActiveDialogue.ChoiceHistory = nil
 	}
 
 	text := strings.Join(result.Lines, "\n")
@@ -698,4 +730,92 @@ func intValue(v any) (int, error) {
 	default:
 		return 0, fmt.Errorf("unsupported numeric value type %T", v)
 	}
+}
+
+// now is the clock used to stamp ended runs; tests may replace it.
+var now = time.Now
+
+// SelectEnding returns the first ending whose conditions all match the
+// current campaign state, or nil if the campaign defines no endings.
+func SelectEnding(def *CampaignDefinition, g *game.Game) (*Ending, error) {
+	for i := range def.Endings {
+		matched, err := conditionsMatch(def, g, def.Endings[i].Conditions)
+		if err != nil {
+			return nil, fmt.Errorf("ending %q: %w", def.Endings[i].ID, err)
+		}
+		if matched {
+			return &def.Endings[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// EndRun marks the run as ended, records the selected ending, and starts
+// the ending's dialogue if it has one. It returns the ending dialogue text.
+// Ending a run that has already ended does nothing.
+func EndRun(def *CampaignDefinition, g *game.Game) (string, error) {
+	if def == nil || g == nil || g.Campaign == nil || g.Campaign.RunEnded() {
+		return "", nil
+	}
+	ending, err := SelectEnding(def, g)
+	if err != nil {
+		return "", err
+	}
+	state := g.Campaign
+	state.RunStatus = game.RunStatusEnded
+	state.EndedAt = now().UnixMilli()
+	state.ActiveDialogue = nil
+	if ending == nil {
+		return "", nil
+	}
+	state.EndingID = ending.ID
+	state.EndingTitle = ending.Title
+	state.EndingSummary = ending.Summary
+	state.CurrentObjective = ""
+	if ending.DialogueAssetID == "" {
+		return "", nil
+	}
+	state.ActiveDialogue = &game.DialogueRuntimeState{
+		AssetID:     ending.DialogueAssetID,
+		CurrentNode: ending.DialogueStartNode,
+	}
+	return currentDialogueOpening(def, g), nil
+}
+
+// EndRunIfPartyWiped ends the run when every player character is dead.
+func EndRunIfPartyWiped(def *CampaignDefinition, g *game.Game) (TurnOrchestrationResult, error) {
+	if def == nil || g == nil || g.Campaign == nil || g.Campaign.RunEnded() || !g.PartyWiped() {
+		return TurnOrchestrationResult{}, nil
+	}
+	text, err := EndRun(def, g)
+	if err != nil {
+		return TurnOrchestrationResult{}, err
+	}
+	return TurnOrchestrationResult{
+		Transition: TransitionResult{
+			Transitioned: true,
+			FromNodeID:   g.Campaign.ActiveNodeID,
+			DialogueText: text,
+			RunEnded:     true,
+		},
+		Events: []game.WorldEvent{runEndedEvent(g)},
+	}, nil
+}
+
+func runEndedEvent(g *game.Game) game.WorldEvent {
+	msg := "The adventure has ended."
+	if g.Campaign.EndingTitle != "" {
+		msg = "The adventure has ended: " + g.Campaign.EndingTitle
+	}
+	return game.WorldEvent{Type: "campaign_ended", Message: msg}
+}
+
+func joinText(parts ...string) string {
+	var out []string
+	for _, p := range parts {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, "\n")
 }

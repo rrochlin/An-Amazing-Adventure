@@ -13,7 +13,12 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useEffect, useRef } from 'react';
-import { type ChatMessageType, type DialogueChoice, type WorldEvent } from '../types/types';
+import {
+   type ChatMessageType,
+   type DialogueChoice,
+   type EndingView,
+   type WorldEvent,
+} from '../types/types';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -244,6 +249,53 @@ const StreamingChatMessage = ({ content }: { content: string }) => {
    );
 };
 
+// Story events (objective changes, the run ending) are what the player most
+// needs to notice, so they are shown inline rather than inside the accordion.
+const STORY_EVENT_TYPES = new Set(['campaign_progress', 'campaign_ended']);
+
+const isStoryEvent = (e: WorldEvent) => STORY_EVENT_TYPES.has(e.type);
+
+const StoryEventCallout = ({ event }: { event: WorldEvent }) => {
+   const label = event.type === 'campaign_ended' ? 'Ending' : 'New objective';
+   const text = event.message.replace(/^Objective updated:\s*/, '');
+   return (
+      <Box
+         role="note"
+         sx={{
+            mt: 1,
+            px: 1.5,
+            py: 1,
+            borderLeft: 3,
+            borderColor: 'primary.main',
+            borderRadius: 1,
+            backgroundColor: 'rgba(201, 169, 98, 0.12)',
+            maxWidth: '85%',
+         }}
+      >
+         <Typography
+            variant="overline"
+            sx={{
+               display: 'block',
+               lineHeight: 1.4,
+               letterSpacing: 1.5,
+               color: 'primary.main',
+               fontFamily: 'Cinzel, Georgia, serif',
+            }}
+         >
+            {label}
+         </Typography>
+         <Typography
+            sx={{
+               fontFamily: 'Crimson Text, Georgia, serif',
+               color: 'text.primary',
+            }}
+         >
+            {text}
+         </Typography>
+      </Box>
+   );
+};
+
 // WorldEventsAccordion renders a collapsible list of world events under a narrative bubble.
 // Collapsed by default so it doesn't clutter the chat log.
 const WorldEventsAccordion = ({ events }: { events: WorldEvent[] }) => {
@@ -427,7 +479,16 @@ const ChatMessage = ({ message }: { message: ChatMessageType }) => {
             <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
          </Paper>
          {!isPlayer && message.events && message.events.length > 0 && (
-            <WorldEventsAccordion events={message.events} />
+            <>
+               {message.events
+                  .filter((e) => isStoryEvent(e))
+                  .map((e, i) => (
+                     <StoryEventCallout key={i} event={e} />
+                  ))}
+               <WorldEventsAccordion
+                  events={message.events.filter((e) => !isStoryEvent(e))}
+               />
+            </>
          )}
          {/* UI-FUT-7: timestamp shown on hover */}
          {message.timestamp && (
@@ -538,6 +599,8 @@ export const Chat = ({
    pendingChoices,
    onChoiceSelected,
    isSubmittingChoice = false,
+   ending,
+   onStartNewRun,
 }: {
    chatHistory: ChatMessageType[];
    /** Raw text chunks accumulating from the current AI stream. When non-empty,
@@ -553,6 +616,10 @@ export const Chat = ({
    onChoiceSelected?: (id: number) => void;
    /** Prevent duplicate dialogue_choice submissions while awaiting server resolution. */
    isSubmittingChoice?: boolean;
+   /** Set once the campaign run has ended: input is replaced by the ending. */
+   ending?: EndingView | null;
+   /** Called from the ending panel to begin a fresh run. */
+   onStartNewRun?: () => void;
 }) => {
    const { mode } = useColorScheme();
    const isDark = mode === 'dark' || mode === 'system' || !mode;
@@ -686,84 +753,144 @@ export const Chat = ({
             />
          )}
 
-         <Box
-            sx={{
-               display: 'flex',
-               gap: 1,
-               p: 2,
-               borderTop: 2,
-               borderColor: 'primary.dark',
-               backgroundColor: isDark
-                  ? 'rgba(26, 15, 30, 0.8)'
-                  : 'rgba(160, 130, 109, 0.3)',
-            }}
-         >
-            <TextField
-               inputRef={inputRef}
-               fullWidth
-               multiline
-               maxRows={4}
-               value={command}
-               onChange={(e) => setCommand(e.target.value)}
-               onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                     e.preventDefault();
-                     handleSubmit();
-                  }
-               }}
-               placeholder="Speak thy command..."
-               disabled={isLoading || (pendingChoices && pendingChoices.length > 0)}
-               size="small"
-               autoComplete="off"
+         {ending ? (
+            <EndingPanel ending={ending} onStartNewRun={onStartNewRun} />
+         ) : (
+            <Box
                sx={{
-                  '& .MuiOutlinedInput-root': {
-                     backgroundColor: isDark
-                        ? 'rgba(62, 44, 46, 0.6)'
-                        : 'rgba(232, 220, 196, 0.6)',
-                     fontFamily: 'Crimson Text, Georgia, serif',
-                     fontSize: '1rem',
-                     '& fieldset': {
-                        borderColor: 'primary.dark',
-                     },
-                     '&:hover fieldset': {
-                        borderColor: 'primary.main',
-                     },
-                     '&.Mui-focused fieldset': {
-                        borderColor: 'primary.light',
-                        borderWidth: '2px',
-                     },
-                  },
-                  '& .MuiInputBase-input': {
-                     color: 'text.primary',
-                  },
-                  '& .MuiInputBase-input::placeholder': {
-                     color: 'text.secondary',
-                     opacity: 0.7,
-                  },
-               }}
-            />
-            <Button
-               variant="contained"
-               onClick={handleSubmit}
-               disabled={isLoading || !command.trim() || (pendingChoices && pendingChoices.length > 0)}
-               sx={{
-                  minWidth: '100px',
-                  height: '40px', // Match TextField small size height
-                  fontFamily: 'Cinzel, Georgia, serif',
-                  fontSize: '1rem',
-                  fontWeight: 600,
+                  display: 'flex',
+                  gap: 1,
+                  p: 2,
+                  borderTop: 2,
+                  borderColor: 'primary.dark',
+                  backgroundColor: isDark
+                     ? 'rgba(26, 15, 30, 0.8)'
+                     : 'rgba(160, 130, 109, 0.3)',
                }}
             >
-               {isLoading ? (
-                  <CircularProgress
-                     size={20}
-                     sx={{ color: 'primary.contrastText' }}
-                  />
-               ) : (
-                  'Send'
-               )}
-            </Button>
-         </Box>
+               <TextField
+                  inputRef={inputRef}
+                  fullWidth
+                  multiline
+                  maxRows={4}
+                  value={command}
+                  onChange={(e) => setCommand(e.target.value)}
+                  onKeyPress={(e) => {
+                     if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSubmit();
+                     }
+                  }}
+                  placeholder="Speak thy command..."
+                  disabled={isLoading || (pendingChoices && pendingChoices.length > 0)}
+                  size="small"
+                  autoComplete="off"
+                  sx={{
+                     '& .MuiOutlinedInput-root': {
+                        backgroundColor: isDark
+                           ? 'rgba(62, 44, 46, 0.6)'
+                           : 'rgba(232, 220, 196, 0.6)',
+                        fontFamily: 'Crimson Text, Georgia, serif',
+                        fontSize: '1rem',
+                        '& fieldset': {
+                           borderColor: 'primary.dark',
+                        },
+                        '&:hover fieldset': {
+                           borderColor: 'primary.main',
+                        },
+                        '&.Mui-focused fieldset': {
+                           borderColor: 'primary.light',
+                           borderWidth: '2px',
+                        },
+                     },
+                     '& .MuiInputBase-input': {
+                        color: 'text.primary',
+                     },
+                     '& .MuiInputBase-input::placeholder': {
+                        color: 'text.secondary',
+                        opacity: 0.7,
+                     },
+                  }}
+               />
+               <Button
+                  variant="contained"
+                  onClick={handleSubmit}
+                  disabled={isLoading || !command.trim() || (pendingChoices && pendingChoices.length > 0)}
+                  sx={{
+                     minWidth: '100px',
+                     height: '40px', // Match TextField small size height
+                     fontFamily: 'Cinzel, Georgia, serif',
+                     fontSize: '1rem',
+                     fontWeight: 600,
+                  }}
+               >
+                  {isLoading ? (
+                     <CircularProgress
+                        size={20}
+                        sx={{ color: 'primary.contrastText' }}
+                     />
+                  ) : (
+                     'Send'
+                  )}
+               </Button>
+            </Box>
+         )}
       </Box>
    );
 };
+
+/** Replaces the input bar once a run has ended: finished runs are read-only. */
+const EndingPanel = ({
+   ending,
+   onStartNewRun,
+}: {
+   ending: EndingView;
+   onStartNewRun?: () => void;
+}) => (
+   <Box
+      role="status"
+      sx={{
+         p: 2,
+         borderTop: 2,
+         borderColor: 'primary.dark',
+         textAlign: 'center',
+      }}
+   >
+      <Typography
+         variant="overline"
+         sx={{ color: 'text.secondary', letterSpacing: 2 }}
+      >
+         The adventure has ended
+      </Typography>
+      {ending.title && (
+         <Typography
+            variant="h6"
+            sx={{ fontFamily: 'Cinzel, Georgia, serif', color: 'primary.main' }}
+         >
+            {ending.title}
+         </Typography>
+      )}
+      {ending.summary && (
+         <Typography
+            sx={{
+               fontFamily: 'Crimson Text, Georgia, serif',
+               color: 'text.primary',
+               maxWidth: 560,
+               mx: 'auto',
+               mt: 0.5,
+            }}
+         >
+            {ending.summary}
+         </Typography>
+      )}
+      {onStartNewRun && (
+         <Button
+            variant="contained"
+            onClick={onStartNewRun}
+            sx={{ mt: 1.5, fontFamily: 'Cinzel, Georgia, serif' }}
+         >
+            Begin a new adventure
+         </Button>
+      )}
+   </Box>
+);

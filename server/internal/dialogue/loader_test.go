@@ -82,7 +82,7 @@ func TestRunNode_ResumesDialogueWithSelectedChoice(t *testing.T) {
 		t.Fatalf("expected pending choices before resume, got %#v", paused.PendingChoices)
 	}
 	targetChoiceID := paused.PendingChoices[1].ID
-	resumed, err := dialogue.RunNode(def.SourceFS, asset.Program, asset.Strings, "RouteChoice", paused.Variables, &targetChoiceID)
+	resumed, err := dialogue.RunNode(def.SourceFS, asset.Program, asset.Strings, "RouteChoice", paused.Variables, []int{targetChoiceID})
 	if err != nil {
 		t.Fatalf("run node (resume): %v", err)
 	}
@@ -153,7 +153,7 @@ nodes: {
 	}
 
 	choiceID := paused.PendingChoices[0].ID
-	resumed, err := dialogue.RunNode(fsys, "resume-bug.yarnc", "resume-bug.csv", "ChoiceNode", paused.Variables, &choiceID)
+	resumed, err := dialogue.RunNode(fsys, "resume-bug.yarnc", "resume-bug.csv", "ChoiceNode", paused.Variables, []int{choiceID})
 	if err != nil {
 		t.Fatalf("run node (resume): %v", err)
 	}

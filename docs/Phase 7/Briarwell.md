@@ -34,8 +34,8 @@ Dunstan (bully), Red Corwin (bandit leader), Master Holloway (guild master).
 
 ## Deliberately not in this slice
 
-- **Endings:** the runtime has no `endings[]` support yet (decision 15), so `road_to_guild` is a
-  plain terminal node.
+- **Endings:** `road_to_guild` ends the run (`ends_run`) with a single catch-all ending. Specific
+  ending triggers are deferred (decision 15).
 - **Combat:** the raid is narrated. A deterministic fight (decision 14, ~1% odds) comes later.
 - **Morality tracking:** good and bad deeds are recorded as labels only; there is no running tally.
 
@@ -46,10 +46,27 @@ about ten" background, and the player only picks a name (default "Wren"). The se
 create and join. A rogue would suit the child better, but the character builder only supports
 barbarian, fighter, and monk.
 
-## Authoring notes
+## Playtest 1 (2026-10-14)
 
-- `.yarnc` files are Yarn bytecode in protobuf text format, written by hand (there is no compiler in
-  the toolchain). Option labels point at 0-based instruction indices.
-- String tables are two-column `id,text` CSV; quoted text uses standard CSV `""` escaping.
+Session `055f005e-2b41-4430-9bf3-cdf0200fd6db`. The narrator invented a village (Millhaven), an NPC,
+and a missing-girl quest, and wrote the player as an adult. Cause: its system prompt carried no
+campaign context, so authored narrator contracts never reached the model. Fixes: a scene brief in the
+narrator prompt, `intro_text` on scenes, chosen options echoed in chat, objective updates shown
+inline, `appears_in` to keep the bandits and the guild master out of early scenes, and removing the
+square's "notice post", which the narrator had turned into a quest board.
+
+## Authoring notes
+- Give every `ai_scene` node an `intro_text`; it is the only thing that orients the player when the
+  scene starts.
+- Use `appears_in` for characters who should not exist yet from the narrator's point of view.
+- Keep room descriptions free of props that invite new plot (notice boards, rumour mills).
+
+- Dialogue is written as `.yarn` source in `server/campaigns/briarwell/dialogue/` and compiled with
+  `go run ./tools/yarnc` (from `server/`), which writes the `.yarnc` and `.csv` beside it. Commit all
+  three; a test fails if the compiled files are stale.
+- The compiler supports a subset of Yarn Spinner 2: lines (tag them `#line:<id>` for stable IDs),
+  nested `->` options, `<<jump>>`, `<<stop>>`, and game commands such as `<<set_label key value>>`.
+  Variables, `<<if>>`, and `{interpolation}` are rejected. See `server/internal/yarnc`.
+- Several choices in one node work: the runtime saves the choices made so far and replays them.
 - `internal/campaigns/briarwell_test.go` plays the whole campaign through the runtime. Update it when
   the story graph changes.

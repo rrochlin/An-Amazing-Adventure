@@ -66,6 +66,17 @@ export interface CampaignStateView {
    counters?: Record<string, number>;
    active_objectives?: ObjectiveStateView[];
    active_dialogue?: DialogueStateView | null;
+   /** "ended" once the run is over; the session is then read-only. */
+   run_status?: string;
+   ending?: EndingView | null;
+}
+
+export interface EndingView {
+   id?: string;
+   title?: string;
+   summary?: string;
+   /** Unix milliseconds. */
+   ended_at?: number;
 }
 
 export interface ObjectiveStateView {
