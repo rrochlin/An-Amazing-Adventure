@@ -46,7 +46,7 @@ Related notes:
 > - narrator contract / scene package enforcement is still partial
 > - `[[Briarwell]]` (Fable-opening adaptation, decision 12) has its story graph and dialogue; it needs playtesting, endings, and the raid fight. `Lich's Labyrinth` deferred
 > - unified post-turn resolver (EngineerScan + condition resolution are still two passes)
-> - run-end state (read-only finished runs) and ordered `endings[]` selection not yet implemented (decision 15)
+> - endings: `endings[]`, `ends_run`, party-wipe run end, and read-only finished runs are implemented (decision 15); campaigns still need authored ending triggers
 
 ## Phase 7 Workstreams
 
