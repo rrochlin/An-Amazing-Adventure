@@ -243,4 +243,32 @@ describe('Chat component', () => {
       expect(onChoiceSelected).toHaveBeenCalledTimes(1);
       expect(button).toBeDisabled();
    });
+   it('replaces the input with the ending once the run has ended', () => {
+      renderChat({
+         ending: {
+            id: 'road_to_guild',
+            title: 'The Road to the Guild',
+            summary: 'Briarwell is ash behind you.',
+         },
+         onStartNewRun: vi.fn(),
+      });
+      expect(screen.getByText('The adventure has ended')).toBeInTheDocument();
+      expect(screen.getByText('The Road to the Guild')).toBeInTheDocument();
+      expect(screen.getByText('Briarwell is ash behind you.')).toBeInTheDocument();
+      expect(
+         screen.queryByPlaceholderText('Speak thy command...'),
+      ).not.toBeInTheDocument();
+      expect(
+         screen.queryByRole('button', { name: /send/i }),
+      ).not.toBeInTheDocument();
+   });
+
+   it('starts a new run from the ending panel', async () => {
+      const onStartNewRun = vi.fn();
+      renderChat({ ending: { title: 'Failure' }, onStartNewRun });
+      await userEvent.click(
+         screen.getByRole('button', { name: /begin a new adventure/i }),
+      );
+      expect(onStartNewRun).toHaveBeenCalledTimes(1);
+   });
 });
