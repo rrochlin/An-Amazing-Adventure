@@ -31,6 +31,7 @@ import { isAuthenticated } from '@/services/auth.service';
 import { CreateGame, JoinCharacter, ListCampaigns } from '@/services/api.game';
 import type {
    CampaignManifest,
+   PresetCharacter,
    CreateGameData,
 } from '@/types/types';
 import { z } from 'zod';
@@ -419,6 +420,16 @@ export function CreateRoute() {
    const selectedCampaign = availableCampaigns.find(
       (campaign) => campaign.id === selectedCampaignID,
    );
+   const creationRules = selectedCampaign?.character_creation;
+   const preset =
+      creationRules?.mode === 'preset' ? creationRules.preset : undefined;
+   // Campaign restrictions narrow the race and class pickers.
+   const visibleRaces = creationRules?.allowed_races?.length
+      ? RACES.filter((r) => creationRules.allowed_races!.includes(r.id))
+      : RACES;
+   const visibleClasses = creationRules?.allowed_classes?.length
+      ? CLASSES.filter((c) => creationRules.allowed_classes!.includes(c.id))
+      : CLASSES;
    const racialBonuses = getRacialBonuses(raceID, subraceID);
 
    useEffect(() => {
@@ -589,6 +600,36 @@ export function CreateRoute() {
       }
    };
 
+   // ── Preset campaigns: the campaign decides the character; only the name
+   // is the player's. The server enforces the preset regardless of payload.
+   const handlePresetStart = async () => {
+      if (isSubmitting || !preset) return;
+      setError(null);
+      setIsSubmitting(true);
+      try {
+         const result = await CreateGame({
+            name: playerName.trim() || preset.default_name || '',
+            race_id: preset.race_id,
+            subrace_id: preset.subrace_id,
+            class_id: preset.class_id,
+            ability_scores: preset.ability_scores,
+            selected_skills: preset.selected_skills,
+            campaign_id: selectedCampaignID,
+         });
+         navigate({
+            to: '/game-{$sessionUUID}',
+            params: { sessionUUID: result.session_id },
+         });
+      } catch (e: unknown) {
+         const msg =
+            e instanceof Error
+               ? e.message
+               : 'Failed to create adventure — please try again.';
+         setError(msg);
+         setIsSubmitting(false);
+      }
+   };
+
    const handleNext = () => {
       setStep((s) => s + 1);
       setError(null);
@@ -702,7 +743,7 @@ export function CreateRoute() {
             )}
 
             <Stepper activeStep={step} sx={{ mb: 4, mt: 3 }} alternativeLabel>
-               {STEPS.map((label) => (
+               {(preset ? STEPS.slice(0, 1) : STEPS).map((label) => (
                   <Step key={label}>
                      <StepLabel>{label}</StepLabel>
                   </Step>
@@ -847,7 +888,19 @@ export function CreateRoute() {
                      </Box>
                   )}
 
-                  {navButtons(!!selectedCampaignID, 'Next: Character')}
+                  {preset ? (
+                     <PresetCharacterPanel
+                        preset={preset}
+                        lockedBackground={creationRules?.locked_background}
+                        name={playerName}
+                        onNameChange={setPlayerName}
+                        onBack={() => navigate({ to: '/' })}
+                        onBegin={handlePresetStart}
+                        isSubmitting={isSubmitting}
+                     />
+                  ) : (
+                     navButtons(!!selectedCampaignID, 'Next: Character')
+                  )}
                </Box>
             )}
 
@@ -865,16 +918,23 @@ export function CreateRoute() {
                         htmlInput: { maxLength: 40, autoComplete: 'off' },
                      }}
                   />
-                  <TextField
-                     label="Backstory (optional)"
-                     value={backstory}
-                     onChange={(e) => setBackstory(e.target.value)}
-                     fullWidth
-                     multiline
-                     rows={3}
-                     helperText="A brief 2–3 sentence origin for your character. The Dungeon Master will weave it into the story."
-                     slotProps={{ htmlInput: { maxLength: 300 } }}
-                  />
+                  {creationRules?.locked_background ? (
+                     <Alert severity="info">
+                        <strong>Your story is set by this campaign:</strong>{' '}
+                        {creationRules.locked_background}
+                     </Alert>
+                  ) : (
+                     <TextField
+                        label="Backstory (optional)"
+                        value={backstory}
+                        onChange={(e) => setBackstory(e.target.value)}
+                        fullWidth
+                        multiline
+                        rows={3}
+                        helperText="A brief 2–3 sentence origin for your character. The Dungeon Master will weave it into the story."
+                        slotProps={{ htmlInput: { maxLength: 300 } }}
+                     />
+                  )}
                   {navButtons(playerName.trim().length >= 2, 'Next: Race')}
                </Box>
             )}
@@ -902,7 +962,7 @@ export function CreateRoute() {
                         gap: 1.5,
                      }}
                   >
-                     {RACES.map((race) => {
+                     {visibleRaces.map((race) => {
                         const isSelected = raceID === race.id;
                         const hasSubraces = race.subraces.length > 0;
                         return (
@@ -1085,7 +1145,7 @@ export function CreateRoute() {
                      special abilities.
                   </Typography>
 
-                  {CLASSES.map((cls) => (
+                  {visibleClasses.map((cls) => (
                      <Card
                         key={cls.id}
                         variant={classID === cls.id ? 'outlined' : 'elevation'}
@@ -1703,6 +1763,90 @@ export function CreateRoute() {
                </Box>
             )}
          </Paper>
+      </Box>
+   );
+}
+
+// ─── Preset character panel ─────────────────────────────────────────────────
+
+/** Shown instead of the wizard when a campaign hands the player a fixed character. */
+function PresetCharacterPanel({
+   preset,
+   lockedBackground,
+   name,
+   onNameChange,
+   onBack,
+   onBegin,
+   isSubmitting,
+}: {
+   preset: PresetCharacter;
+   lockedBackground?: string;
+   name: string;
+   onNameChange: (name: string) => void;
+   onBack: () => void;
+   onBegin: () => void;
+   isSubmitting: boolean;
+}) {
+   const race = RACES.find((r) => r.id === preset.race_id)?.name ?? preset.race_id;
+   const cls = CLASSES.find((c) => c.id === preset.class_id)?.name ?? preset.class_id;
+   return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+         <Paper
+            variant="outlined"
+            sx={{ p: 2, borderColor: 'rgba(201, 169, 98, 0.3)' }}
+         >
+            <Typography
+               variant="overline"
+               sx={{ color: 'text.secondary', letterSpacing: 1.5 }}
+            >
+               Your character
+            </Typography>
+            <Typography variant="h6" sx={{ fontFamily: '"Cinzel", serif' }}>
+               {race} {cls}
+            </Typography>
+            {lockedBackground && (
+               <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {lockedBackground}
+               </Typography>
+            )}
+            <Typography
+               variant="caption"
+               color="text.secondary"
+               sx={{ display: 'block', mt: 1 }}
+            >
+               This campaign tells a fixed story, so your character is chosen
+               for you. Just give them a name.
+            </Typography>
+         </Paper>
+         <TextField
+            label="Character Name"
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder={preset.default_name}
+            fullWidth
+            helperText={
+               preset.default_name
+                  ? `Leave blank to play as ${preset.default_name}.`
+                  : undefined
+            }
+            slotProps={{ htmlInput: { maxLength: 40, autoComplete: 'off' } }}
+         />
+         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+            <Button variant="outlined" onClick={onBack}>
+               Cancel
+            </Button>
+            <Button
+               variant="contained"
+               onClick={onBegin}
+               disabled={isSubmitting || (!name.trim() && !preset.default_name)}
+            >
+               {isSubmitting ? (
+                  <CircularProgress size={20} sx={{ color: 'inherit' }} />
+               ) : (
+                  'Begin'
+               )}
+            </Button>
+         </Box>
       </Box>
    );
 }
