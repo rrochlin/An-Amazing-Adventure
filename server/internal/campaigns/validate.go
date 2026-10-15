@@ -79,6 +79,11 @@ func (d *CampaignDefinition) Validate() error {
 		if actor.Name == "" {
 			return fmt.Errorf("actor %q name is required", actorID)
 		}
+		for _, nodeID := range actor.AppearsIn {
+			if _, ok := d.StoryNodes[nodeID]; !ok {
+				return fmt.Errorf("actor %q appears_in references unknown story node %q", actorID, nodeID)
+			}
+		}
 		for _, step := range actor.Rail.Steps {
 			if step.ID == "" {
 				return fmt.Errorf("actor %q rail step id is required", actorID)

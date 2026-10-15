@@ -46,7 +46,7 @@ type dbClient interface {
 }
 
 type aiClient interface {
-	NarrateStream(context.Context, *game.Game, []game.NarrativeMessage, string, func(string)) (ai.NarratorResult, error)
+	NarrateStream(context.Context, *game.Game, []game.NarrativeMessage, string, *campaigns.CampaignDefinition, func(string)) (ai.NarratorResult, error)
 	EngineerScan(context.Context, *game.Game, string) (ai.EngineerResult, error)
 	ResolveCampaignConditions(context.Context, *game.Game, *campaigns.CampaignDefinition, string, string) (ai.CampaignConditionResolutionResult, error)
 }
@@ -229,7 +229,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 	// Step 1: Stream narrator prose — broadcast each chunk to all party members.
 	narratorResult, err := aiClient.NarrateStream(
-		ctx, g, saveState.Narrative, msg.Content,
+		ctx, g, saveState.Narrative, msg.Content, campaignDef,
 		func(chunk string) {
 			chunkFrame := wsutil.Frame{
 				Type:    wsutil.FrameNarrativeChunk,

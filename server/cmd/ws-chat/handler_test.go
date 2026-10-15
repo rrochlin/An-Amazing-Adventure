@@ -186,7 +186,7 @@ type fakeAIClient struct {
 	resolverCalls int
 }
 
-func (f *fakeAIClient) NarrateStream(_ context.Context, _ *game.Game, _ []game.NarrativeMessage, _ string, onChunk func(string)) (ai.NarratorResult, error) {
+func (f *fakeAIClient) NarrateStream(_ context.Context, _ *game.Game, _ []game.NarrativeMessage, _ string, _ *campaigns.CampaignDefinition, onChunk func(string)) (ai.NarratorResult, error) {
 	f.narratorCalls++
 	if onChunk != nil {
 		onChunk("chunk-a")
