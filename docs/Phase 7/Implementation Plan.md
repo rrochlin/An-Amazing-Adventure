@@ -44,7 +44,7 @@ Related notes:
 > [!todo]
 > Current major gaps (as of 2026-10-13; open calls tracked in `[[Vision and Design Decisions]]`):
 > - narrator contract / scene package enforcement is still partial
-> - first true campaign vertical slice not yet built — now an adaptation of the *Fable* opening (decision 12); `Lich's Labyrinth` deferred
+> - `[[Briarwell]]` (Fable-opening adaptation, decision 12) has its story graph and dialogue; it needs playtesting, endings, and the raid fight. `Lich's Labyrinth` deferred
 > - unified post-turn resolver (EngineerScan + condition resolution are still two passes)
 > - run-end state (read-only finished runs) and ordered `endings[]` selection not yet implemented (decision 15)
 
