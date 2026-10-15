@@ -80,6 +80,10 @@ type ActorTemplate struct {
 	Goal       string    `json:"goal,omitempty"`
 	Importance string    `json:"importance,omitempty"`
 	Rail       ActorRail `json:"rail,omitempty"`
+	// AppearsIn limits the story nodes in which the narrator is told this
+	// actor exists, so later characters aren't foreshadowed early. Empty
+	// means every node.
+	AppearsIn []string `json:"appears_in,omitempty"`
 }
 
 type ActorRail struct {
@@ -111,11 +115,14 @@ type DialogueAsset struct {
 }
 
 type StoryNode struct {
-	Mode              string                 `json:"mode"`
-	DialogueAssetID   string                 `json:"dialogue_asset_id,omitempty"`
-	DialogueStartNode string                 `json:"dialogue_start_node,omitempty"`
-	Title             string                 `json:"title"`
-	Summary           string                 `json:"summary,omitempty"`
+	Mode              string `json:"mode"`
+	DialogueAssetID   string `json:"dialogue_asset_id,omitempty"`
+	DialogueStartNode string `json:"dialogue_start_node,omitempty"`
+	Title             string `json:"title"`
+	Summary           string `json:"summary,omitempty"`
+	// IntroText is authored narration shown to the player when the node is
+	// entered, before any dialogue. It orients them in the new scene.
+	IntroText         string                 `json:"intro_text,omitempty"`
 	ObjectiveText     string                 `json:"objective_text,omitempty"`
 	OnEnter           []Action               `json:"on_enter,omitempty"`
 	CompletionRules   []TransitionRule       `json:"completion_rules,omitempty"`

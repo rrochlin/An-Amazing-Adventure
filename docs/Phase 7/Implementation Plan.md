@@ -43,7 +43,7 @@ Related notes:
 
 > [!todo]
 > Current major gaps (as of 2026-10-13; open calls tracked in `[[Vision and Design Decisions]]`):
-> - narrator contract / scene package enforcement is still partial
+> - narrator contract: the narrator now receives a scene brief (`campaigns.NarratorBrief`) with the cast, map, scene, and contract; adherence is prompt-level only, nothing checks the narration afterwards
 > - `[[Briarwell]]` (Fable-opening adaptation, decision 12) has its story graph and dialogue; it needs playtesting, endings, and the raid fight. `Lich's Labyrinth` deferred
 > - unified post-turn resolver (EngineerScan + condition resolution are still two passes)
 > - endings: `endings[]`, `ends_run`, party-wipe run end, and read-only finished runs are implemented (decision 15); campaigns still need authored ending triggers

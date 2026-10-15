@@ -362,12 +362,17 @@ func TestHandleDialogueChoice_RouteChoiceProgression(t *testing.T) {
 			if dbFake.putGame.SessionID == "" {
 				t.Fatal("expected updated game state to be persisted")
 			}
-			if len(dbFake.putGame.ChatHistory) != len(tc.wantNarrative) {
-				t.Fatalf("expected %d narrative history messages, got %#v", len(tc.wantNarrative), dbFake.putGame.ChatHistory)
+			// The chosen option is echoed as a player message, then the narrative follows.
+			history := dbFake.putGame.ChatHistory
+			if len(history) != len(tc.wantNarrative)+1 {
+				t.Fatalf("expected the choice echo plus %d narrative messages, got %#v", len(tc.wantNarrative), history)
+			}
+			if history[0].Type != "player" || history[0].Content == "" {
+				t.Fatalf("expected the chosen option echoed as a player message, got %#v", history[0])
 			}
 			for i, want := range tc.wantNarrative {
-				if got := dbFake.putGame.ChatHistory[i].Content; got != want {
-					t.Fatalf("expected chat history[%d]=%q, got %#v", i, want, dbFake.putGame.ChatHistory)
+				if got := history[i+1].Content; got != want {
+					t.Fatalf("expected chat history[%d]=%q, got %#v", i+1, want, history)
 				}
 			}
 			lastHistory := dbFake.putGame.ChatHistory[len(dbFake.putGame.ChatHistory)-1]

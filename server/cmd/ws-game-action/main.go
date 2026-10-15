@@ -421,6 +421,14 @@ func handleDialogueChoice(
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
+	// Remember what the player picked so it is recorded in the chat log.
+	pickedText := ""
+	for _, c := range g.Campaign.ActiveDialogue.PendingChoices {
+		if c.ID == choiceID {
+			pickedText = c.Text
+		}
+	}
+
 	choiceText, resumeErr := campaigns.ResumeDialogueWithChoice(campaignDef, g, choiceID)
 	if resumeErr != nil {
 		log.Printf("ws-game-action: dialogue_choice: resume: %v", resumeErr)
@@ -446,6 +454,13 @@ func handleDialogueChoice(
 	// for a campaign transition that may produce additional narrative.
 	history := saveState.ChatHistory
 	narrative := saveState.Narrative
+	if pickedText != "" {
+		history = append(history, game.ChatMessage{Type: "player", Content: pickedText})
+		narrative = append(narrative, game.NarrativeMessage{
+			Role:    "user",
+			Content: []game.NarrativeBlock{{Type: "text", Text: pickedText}},
+		})
+	}
 
 	if choiceText != "" {
 		chunkFrame := wsutil.Frame{

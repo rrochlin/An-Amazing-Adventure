@@ -97,6 +97,7 @@ func (c *Client) NarrateStream(
 	g *game.Game,
 	history []game.NarrativeMessage,
 	playerInput string,
+	campaignDef *campaigns.CampaignDefinition,
 	onChunk func(string),
 ) (NarratorResult, error) {
 	// Trim history if it has grown too long to avoid context window exhaustion.
@@ -105,15 +106,13 @@ func (c *Client) NarrateStream(
 		log.Printf("NarrateStream: TrimHistory error (proceeding with full history): %v", err)
 		trimmed = history
 	}
-	messages := toBedrockMessages(trimmed)
+	// Append the new player turn (merged into a trailing user turn, if any).
+	messages := toBedrockMessages(append(append([]game.NarrativeMessage(nil), trimmed...), game.NarrativeMessage{
+		Role:    "user",
+		Content: []game.NarrativeBlock{{Type: "text", Text: playerInput}},
+	}))
 
-	// Append the new player turn
-	messages = append(messages, types.Message{
-		Role:    types.ConversationRoleUser,
-		Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: playerInput}},
-	})
-
-	systemPrompt := narratorSystemPrompt(g)
+	systemPrompt := narratorSystemPrompt(g, campaignDef)
 
 	// Single streaming call — Narrator never calls tools so there is no agentic loop.
 	resp, err := c.br.ConverseStream(ctx, &bedrockruntime.ConverseStreamInput{
@@ -802,9 +801,17 @@ func toBedrockMessages(history []game.NarrativeMessage) []types.Message {
 				blocks = append(blocks, &types.ContentBlockMemberText{Value: b.Text})
 			}
 		}
-		if len(blocks) > 0 {
-			msgs = append(msgs, types.Message{Role: role, Content: blocks})
+		if len(blocks) == 0 {
+			continue
 		}
+		// Bedrock requires user/assistant turns to alternate. Authored campaign
+		// text can produce adjacent turns from the same role (for example a
+		// dialogue line followed by a scene intro), so merge them.
+		if n := len(msgs); n > 0 && msgs[n-1].Role == role {
+			msgs[n-1].Content = append(msgs[n-1].Content, blocks...)
+			continue
+		}
+		msgs = append(msgs, types.Message{Role: role, Content: blocks})
 	}
 	return msgs
 }
@@ -837,7 +844,10 @@ func fromBedrockMessages(msgs []types.Message) []game.NarrativeMessage {
 // The Narrator has NO tools — it must write pure prose only.
 // When g.PendingCombatContext is non-empty it is injected as a [COMBAT LOG] block
 // so Claude narrates the mechanical results dramatically without inventing outcomes.
-func narratorSystemPrompt(g *game.Game) string {
+// narratorSystemPrompt builds the narrator's system prompt. For authored
+// campaigns it appends the campaign's scene package, which bounds the
+// narrator to the authored cast, places, and current scene.
+func narratorSystemPrompt(g *game.Game, campaignDef *campaigns.CampaignDefinition) string {
 	owner, _ := g.OwnerCharacter()
 	room, _ := g.GetRoom(owner.LocationID)
 
@@ -855,6 +865,13 @@ func narratorSystemPrompt(g *game.Game) string {
 		g.PendingCombatContext = ""
 	}
 
+	nextSteps := "- Never list options — narrate the world and let the player decide what to do."
+	campaignBrief := campaigns.NarratorBrief(campaignDef, g)
+	if campaignBrief != "" {
+		nextSteps = "- Never leave the player without a direction: close on a concrete in-world hook toward their objective."
+		campaignBrief = "\n\n" + campaignBrief
+	}
+
 	return fmt.Sprintf(`You are an expert Dungeon Master narrating a D&D 5e text adventure game.
 The player's name is %q and they are currently in %q.%s%s
 
@@ -870,11 +887,11 @@ DM Philosophy:
 - Say Yes or Roll the Dice: if nothing is at stake, say yes and move the story forward.
 - Fail Forward: failed attempts create complications and drama, never dead ends.
 - Pacing: cut to the next interesting scene when things drag; slow for dramatic moments.
-- Never list options — narrate the world and let the player decide what to do.
+%s
 - Be specific and sensory: name the smells, the sounds, the textures.
 
-Write 2-4 paragraphs of vivid prose. Do not break the fourth wall.`,
-		owner.Name, room.Name, charContext, combatContext)
+Write 2-4 paragraphs of vivid prose. Do not break the fourth wall.%s`,
+		owner.Name, room.Name, charContext, combatContext, nextSteps, campaignBrief)
 }
 
 // extractText pulls the first text block from a ConverseOutput.
