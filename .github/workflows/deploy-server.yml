@@ -46,6 +46,12 @@ jobs:
     needs: test
     # Only deploy on push to main (not on PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Deploys run one at a time, oldest first. A running deploy is never
+    # cancelled mid-update; GitHub keeps only the newest pending run, so the
+    # latest commit on main is always the last one deployed.
+    concurrency:
+      group: deploy-server-prod
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
