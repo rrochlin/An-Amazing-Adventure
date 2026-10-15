@@ -1,7 +1,7 @@
 id,text
-rescue_001,"A tall figure in a travel-stained cloak kneels beside you in the ashes. ""Easy, little one. The bandits are gone."""
-rescue_002,"""My name is Holloway. I keep the Heroes' Guild. There is nothing left for you here, but there could be something for you there."""
-rescue_opt_go,Take his hand.
-rescue_opt_refuse,"""No! I have to find my family!"""
-rescue_ack_go,His grip is warm and steady. He lifts you onto his horse without another word.
-rescue_ack_refuse,"""If they live, you'll need to be strong enough to find them,"" he says gently, and lifts you up anyway."
+line:rescue_001,"A tall figure in a travel-stained cloak kneels beside you in the ashes. ""Easy, little one. The bandits are gone."""
+line:rescue_002,"""My name is Holloway. I keep the Heroes' Guild. There is nothing left for you here, but there could be something for you there."""
+line:rescue_opt_go,Take his hand.
+line:rescue_opt_refuse,"""No! I have to find my family!"""
+line:rescue_ack_go,His grip is warm and steady. He lifts you onto his horse without another word.
+line:rescue_ack_refuse,"""If they live, you'll need to be strong enough to find them,"" he says gently, and lifts you up anyway."

@@ -5,58 +5,80 @@ nodes: {
     name: "Birthday"
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "bday_001" }
+      operands: { string_value: "line:bday_001" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "bday_002" }
+      operands: { string_value: "line:bday_002" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "bday_opt_give" }
-      operands: { string_value: "Give" }
+      operands: { string_value: "line:bday_opt_give" }
+      operands: { string_value: "L2shortcutoption_Birthday_1" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "bday_opt_keep" }
-      operands: { string_value: "Keep" }
+      operands: { string_value: "line:bday_opt_keep" }
+      operands: { string_value: "L3shortcutoption_Birthday_2" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: { opcode: SHOW_OPTIONS }
     instructions: { opcode: JUMP }
-    instructions: { opcode: STOP }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_flag gift_given" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "bday_ack_give" }
+      operands: { string_value: "line:bday_ack_give" }
+      operands: { float_value: 0 }
     }
     instructions: {
-      opcode: RUN_LINE
-      operands: { string_value: "bday_smoke" }
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
     }
-    instructions: { opcode: STOP }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_flag gift_kept" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "bday_ack_keep" }
+      operands: { string_value: "line:bday_ack_keep" }
+      operands: { float_value: 0 }
     }
     instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
+    }
+    instructions: { opcode: POP }
+    instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "bday_smoke" }
+      operands: { string_value: "line:bday_smoke" }
+      operands: { float_value: 0 }
     }
     instructions: { opcode: STOP }
     labels: {
-      key: "Give"
-      value: 7
+      key: "L1group_end"
+      value: 12
     }
     labels: {
-      key: "Keep"
-      value: 11
+      key: "L2shortcutoption_Birthday_1"
+      value: 6
+    }
+    labels: {
+      key: "L3shortcutoption_Birthday_2"
+      value: 9
+    }
+    headers: {
+      key: "title"
+      value: "Birthday"
     }
   }
 }
