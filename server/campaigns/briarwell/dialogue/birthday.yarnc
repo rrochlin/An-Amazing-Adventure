@@ -36,6 +36,11 @@ nodes: {
     }
     instructions: {
       opcode: RUN_LINE
+      operands: { string_value: "line:bday_ack_give_0" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
       operands: { string_value: "line:bday_ack_give" }
       operands: { float_value: 0 }
     }
@@ -63,10 +68,60 @@ nodes: {
       operands: { string_value: "line:bday_smoke" }
       operands: { float_value: 0 }
     }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:bday_smoke_2" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:bday_father_bed" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "line:bday_opt_bed" }
+      operands: { string_value: "L5shortcutoption_Birthday_1" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "line:bday_opt_ask" }
+      operands: { string_value: "L6shortcutoption_Birthday_2" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
+    }
+    instructions: { opcode: SHOW_OPTIONS }
+    instructions: { opcode: JUMP }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:bday_ack_bed" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L4group_end" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:bday_ack_ask" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:bday_ack_ask_2" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L4group_end" }
+    }
+    instructions: { opcode: POP }
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 12
+      value: 13
     }
     labels: {
       key: "L2shortcutoption_Birthday_1"
@@ -74,7 +129,19 @@ nodes: {
     }
     labels: {
       key: "L3shortcutoption_Birthday_2"
-      value: 9
+      value: 10
+    }
+    labels: {
+      key: "L4group_end"
+      value: 26
+    }
+    labels: {
+      key: "L5shortcutoption_Birthday_1"
+      value: 21
+    }
+    labels: {
+      key: "L6shortcutoption_Birthday_2"
+      value: 23
     }
     headers: {
       key: "title"

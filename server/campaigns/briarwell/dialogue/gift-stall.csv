@@ -1,8 +1,11 @@
 id,text
-line:gift_001,"Old Garrick leans over his stall. ""A birthday, is it? Well, your coin buys any one of these."""
+line:gift_000,"Old Garrick leans over his stall, eyes twinkling."
+line:gift_001,"Old Garrick: A birthday, is it? Well, your coin buys any one of these."
 line:gift_opt_sweets,A paper twist of honey sweets.
 line:gift_opt_ribbon,A ribbon the colour of cornflowers.
 line:gift_opt_bird,"A little wooden bird, carved by hand."
-line:gift_ack_sweets,"""Sweets for the sweet,"" Garrick chuckles, and wraps them tight."
-line:gift_ack_ribbon,"""She'll wear that till it's rags,"" Garrick says, folding it neatly."
-line:gift_ack_bird,"Garrick smiles. ""Took me a week, that one. It'll last her a lifetime."""
+line:gift_ack_sweets,Old Garrick: Sweets for the sweet.
+line:gift_ack_sweets_2,He wraps them tight in brown paper.
+line:gift_ack_ribbon,Old Garrick: She'll wear that till it's rags.
+line:gift_ack_ribbon_2,He folds it neatly into your palm.
+line:gift_ack_bird,"Old Garrick: Took me a week, that one. It'll last her a lifetime."

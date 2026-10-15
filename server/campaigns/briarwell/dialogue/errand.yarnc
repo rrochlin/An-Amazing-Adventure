@@ -5,6 +5,11 @@ nodes: {
     name: "Errand"
     instructions: {
       opcode: RUN_LINE
+      operands: { string_value: "line:errand_000" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
       operands: { string_value: "line:errand_001" }
       operands: { float_value: 0 }
     }
@@ -36,6 +41,11 @@ nodes: {
     }
     instructions: {
       opcode: RUN_LINE
+      operands: { string_value: "line:errand_ack_eager_0" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
       operands: { string_value: "line:errand_ack_eager" }
       operands: { float_value: 0 }
     }
@@ -46,6 +56,11 @@ nodes: {
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label attitude reluctant" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:errand_ack_reluctant_0" }
       operands: { float_value: 0 }
     }
     instructions: {
@@ -61,15 +76,15 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 12
+      value: 15
     }
     labels: {
       key: "L2shortcutoption_Errand_1"
-      value: 6
+      value: 7
     }
     labels: {
       key: "L3shortcutoption_Errand_2"
-      value: 9
+      value: 11
     }
     headers: {
       key: "title"
