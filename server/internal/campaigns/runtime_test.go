@@ -2,9 +2,11 @@ package campaigns_test
 
 import (
 	"testing"
+	"testing/fstest"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/yarnc"
 )
 
 func TestApplyDialogueCommands_AppliesStateAndObjectiveMutations(t *testing.T) {
@@ -703,5 +705,71 @@ func TestFilterConditionResolution_DropsUnexpectedKeys(t *testing.T) {
 	}
 	if len(filtered.Counters) != 0 {
 		t.Fatalf("expected no counters, got %#v", filtered.Counters)
+	}
+}
+
+func TestResumeDialogueWithChoice_SecondChoiceInSameNodeSurvivesReload(t *testing.T) {
+	prog, err := yarnc.Compile("two-choices", `title: Start
+---
+-> Ask about the road
+    <<set_flag asked_road>>
+    -> Go anyway
+        <<set_label route long>>
+    -> Turn back
+        <<set_label route home>>
+        You head home.
+-> Leave
+===
+`)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	def := &campaigns.CampaignDefinition{
+		SourceFS: fstest.MapFS{
+			"d.yarnc": {Data: prog.ProgramText()},
+			"d.csv":   {Data: prog.StringsCSV()},
+		},
+		DialogueAssets: map[string]campaigns.DialogueAsset{
+			"d": {Format: "yarn", Program: "d.yarnc", Strings: "d.csv"},
+		},
+	}
+	g := game.NewGame("session-two-choices", "user-1")
+	g.Campaign = &game.CampaignRuntimeState{
+		ActiveNodeID: "n",
+		ActiveDialogue: &game.DialogueRuntimeState{
+			AssetID:        "d",
+			CurrentNode:    "Start",
+			AwaitingChoice: true,
+			PendingChoices: []game.DialogueChoice{{ID: 0, Text: "Ask about the road"}, {ID: 1, Text: "Leave"}},
+		},
+	}
+
+	if _, err := campaigns.ResumeDialogueWithChoice(def, g, 0); err != nil {
+		t.Fatalf("first choice: %v", err)
+	}
+	if !g.Campaign.BoolFlags["asked_road"] {
+		t.Fatalf("expected command between choices to apply, got %#v", g.Campaign.BoolFlags)
+	}
+	d := g.Campaign.ActiveDialogue
+	if !d.AwaitingChoice || len(d.PendingChoices) != 2 || d.PendingChoices[1].Text != "Turn back" {
+		t.Fatalf("expected nested choices after first choice, got %#v", d)
+	}
+
+	reloaded, err := game.FromSaveState(g.ToSaveState(nil, nil))
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	text, err := campaigns.ResumeDialogueWithChoice(def, reloaded, 1)
+	if err != nil {
+		t.Fatalf("second choice after reload: %v", err)
+	}
+	if text != "You head home." {
+		t.Fatalf("expected only post-choice text, got %q", text)
+	}
+	if reloaded.Campaign.Labels["route"] != "home" {
+		t.Fatalf("expected route=home from the second choice, got %#v", reloaded.Campaign.Labels)
+	}
+	if reloaded.Campaign.ActiveDialogue.AwaitingChoice || len(reloaded.Campaign.ActiveDialogue.ChoiceHistory) != 0 {
+		t.Fatalf("expected dialogue finished with history cleared, got %#v", reloaded.Campaign.ActiveDialogue)
 	}
 }
