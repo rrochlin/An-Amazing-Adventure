@@ -189,6 +189,11 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 	if err != nil {
 		return TransitionResult{}, err
 	}
+	// A scene ends on the player's last choice, not mid-conversation: while
+	// the dialogue is still waiting on a choice, stay in this node.
+	if d := g.Campaign.ActiveDialogue; d != nil && d.AwaitingChoice {
+		return TransitionResult{ObjectiveEvents: objectiveEvents}, nil
+	}
 	for _, rules := range [][]TransitionRule{currentNode.FailureRules, currentNode.CompletionRules} {
 		for _, rule := range rules {
 			matched, err := conditionsMatch(def, g, rule.Conditions)
@@ -313,6 +318,9 @@ func OrchestrateTurn(def *CampaignDefinition, g *game.Game, resolution Condition
 	}
 
 	nextNode, ok := def.StoryNodes[transition.ToNodeID]
+	if ok {
+		result.Events = append(result.Events, SceneStartedEvent(nextNode))
+	}
 	if ok && nextNode.ObjectiveText != "" {
 		result.Events = append(result.Events, game.WorldEvent{
 			Type:    "campaign_progress",
@@ -875,4 +883,10 @@ func joinText(parts ...string) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// SceneStartedEvent marks the start of a story node so the client can show
+// a title card before the scene's text.
+func SceneStartedEvent(node StoryNode) game.WorldEvent {
+	return game.WorldEvent{Type: "scene_started", Message: node.Title}
 }

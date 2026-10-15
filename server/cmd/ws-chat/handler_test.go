@@ -559,10 +559,10 @@ func TestHandlerChat_AuthoredCampaignPathAppendsDialogueAndObjectiveEvent(t *tes
 	if got := dbFake.putGameState.ChatHistory[len(dbFake.putGameState.ChatHistory)-1].Content; got != "Choose your route into the labyrinth." {
 		t.Fatalf("expected entered dialogue appended to history, got %q", got)
 	}
-	if len(wsFake.deltas) != 1 || len(wsFake.deltas[0].Events) != 1 {
-		t.Fatalf("expected one campaign progress event in state delta, got %#v", wsFake.deltas)
+	if len(wsFake.deltas) != 1 || len(wsFake.deltas[0].Events) != 2 || wsFake.deltas[0].Events[0].Type != "scene_started" {
+		t.Fatalf("expected scene_started and campaign progress events in state delta, got %#v", wsFake.deltas)
 	}
-	if got := wsFake.deltas[0].Events[0].Message; got != "Objective updated: Choose how your band will enter the labyrinth and when it will move." {
+	if got := wsFake.deltas[0].Events[1].Message; got != "Objective updated: Choose how your band will enter the labyrinth and when it will move." {
 		t.Fatalf("unexpected campaign progress event %q", got)
 	}
 }

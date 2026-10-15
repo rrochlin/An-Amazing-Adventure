@@ -107,6 +107,13 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 	}
 
 	history := []game.ChatMessage{}
+	// The opening scene gets a title card like every later scene.
+	if node, ok := def.StoryNodes[g.Campaign.ActiveNodeID]; ok {
+		history = append(history, game.ChatMessage{
+			Type:   "narrative",
+			Events: []game.WorldEvent{SceneStartedEvent(node)},
+		})
+	}
 	if def.IntroSequence.OpeningText != "" {
 		history = append(history, game.ChatMessage{Type: "narrative", Content: def.IntroSequence.OpeningText})
 	}

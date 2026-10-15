@@ -152,7 +152,8 @@ func TestBriarwell_ReachingTheRoadEndsTheRun(t *testing.T) {
 	})
 	advanceTo(t, def, g, "gift_stall")
 	chooseOption(t, def, g, "ribbon", "birthday")
-	chooseOption(t, def, g, "Give Ros", "bandit_raid")
+	chooseAndStay(t, def, g, "Give Ros")
+	chooseOption(t, def, g, "Go to bed", "bandit_raid")
 	campaigns.ApplyConditionResolution(g.Campaign, campaigns.ConditionResolution{
 		Labels: map[string]string{"raid_response": "hid"},
 	})
