@@ -108,6 +108,14 @@ func (d *CampaignDefinition) Validate() error {
 		}
 	}
 
+	for objectiveID, obj := range d.Objectives {
+		for name, conds := range map[string][]Condition{"success_when": obj.SuccessWhen, "fail_when": obj.FailWhen, "visible_when": obj.VisibleWhen} {
+			if err := d.validateConditions(conds, fmt.Sprintf("objective %q %s", objectiveID, name)); err != nil {
+				return err
+			}
+		}
+	}
+
 	for assetID, asset := range d.DialogueAssets {
 		if asset.Format == "" {
 			return fmt.Errorf("dialogue_assets.%s format is required", assetID)
