@@ -39,6 +39,13 @@ Dunstan (bully), Red Corwin (bandit leader), Master Holloway (guild master).
 - **Combat:** the raid is narrated. A deterministic fight (decision 14, ~1% odds) comes later.
 - **Morality tracking:** good and bad deeds are recorded as labels only; there is no running tally.
 
+## Character
+
+Briarwell is railed: `character_creation.preset` fixes a human fighter with the locked "child of
+about ten" background, and the player only picks a name (default "Wren"). The server enforces this on
+create and join. A rogue would suit the child better, but the character builder only supports
+barbarian, fighter, and monk.
+
 ## Authoring notes
 
 - `.yarnc` files are Yarn bytecode in protobuf text format, written by hand (there is no compiler in
