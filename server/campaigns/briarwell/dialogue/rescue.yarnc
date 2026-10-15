@@ -5,50 +5,75 @@ nodes: {
     name: "Rescue"
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "rescue_001" }
+      operands: { string_value: "line:rescue_001" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "rescue_002" }
+      operands: { string_value: "line:rescue_002" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "rescue_opt_go" }
-      operands: { string_value: "Willing" }
+      operands: { string_value: "line:rescue_opt_go" }
+      operands: { string_value: "L2shortcutoption_Rescue_1" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: {
       opcode: ADD_OPTION
-      operands: { string_value: "rescue_opt_refuse" }
-      operands: { string_value: "Refuse" }
+      operands: { string_value: "line:rescue_opt_refuse" }
+      operands: { string_value: "L3shortcutoption_Rescue_2" }
+      operands: { float_value: 0 }
+      operands: { bool_value: false }
     }
     instructions: { opcode: SHOW_OPTIONS }
     instructions: { opcode: JUMP }
-    instructions: { opcode: STOP }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label guild_answer went_willingly" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "rescue_ack_go" }
+      operands: { string_value: "line:rescue_ack_go" }
+      operands: { float_value: 0 }
     }
-    instructions: { opcode: STOP }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
+    }
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label guild_answer refused" }
+      operands: { float_value: 0 }
     }
     instructions: {
       opcode: RUN_LINE
-      operands: { string_value: "rescue_ack_refuse" }
+      operands: { string_value: "line:rescue_ack_refuse" }
+      operands: { float_value: 0 }
     }
+    instructions: {
+      opcode: JUMP_TO
+      operands: { string_value: "L1group_end" }
+    }
+    instructions: { opcode: POP }
     instructions: { opcode: STOP }
     labels: {
-      key: "Willing"
-      value: 7
+      key: "L1group_end"
+      value: 12
     }
     labels: {
-      key: "Refuse"
-      value: 10
+      key: "L2shortcutoption_Rescue_1"
+      value: 6
+    }
+    labels: {
+      key: "L3shortcutoption_Rescue_2"
+      value: 9
+    }
+    headers: {
+      key: "title"
+      value: "Rescue"
     }
   }
 }
