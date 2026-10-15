@@ -14,7 +14,7 @@ import {
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { RoomMap } from '../components/RoomMap';
 import { GameInfo } from '../components/GameInfo';
-import { Chat } from '../components/Chat';
+import { DialogueStage } from '../components/dialogue/DialogueStage';
 import { isAuthenticated, getIdTokenClaims } from '../services/auth.service';
 import { LoadGame, RetryWorldGen } from '../services/api.game';
 import { useGameStore } from '../store/gameStore';
@@ -657,26 +657,27 @@ function GamePage() {
                   },
                }}
             >
-               <Chat
-                  chatHistory={displayMessages}
+               <DialogueStage
+                  messages={displayMessages}
                   streamingMessage={streamingMessage || undefined}
-                  command={command}
-                  setCommand={setCommand}
-                  handleCommand={handleCommand}
-                  isLoading={
-                     isStreaming ||
-                     wsError === 'ai_access_not_enabled' ||
-                     wsError === 'quota_exceeded'
-                  }
+                  isLoading={isStreaming}
                   pendingChoices={pendingChoices}
                   onChoiceSelected={handleChoiceSelected}
                   isSubmittingChoice={isSubmittingChoice}
+                  command={command}
+                  setCommand={setCommand}
+                  handleCommand={handleCommand}
+                  inputDisabled={
+                     wsError === 'ai_access_not_enabled' ||
+                     wsError === 'quota_exceeded'
+                  }
                   ending={
                      campaignState?.run_status === 'ended'
                         ? (campaignState.ending ?? {})
                         : undefined
                   }
                   onStartNewRun={() => navigate({ to: '/create' })}
+                  error={wsError}
                />
             </Paper>
             {wsError === 'ai_access_not_enabled' && (

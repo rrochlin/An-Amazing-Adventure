@@ -1,0 +1,438 @@
+import {
+   Alert,
+   Box,
+   Button,
+   CircularProgress,
+   Drawer,
+   IconButton,
+   Paper,
+   Snackbar,
+   Stack,
+   TextField,
+   Typography,
+} from '@mui/material';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {
+   ChatMessage,
+   DialogueChoice,
+   EndingView,
+   WorldEvent,
+} from '@/types/types';
+import { Chat, EndingPanel } from '../Chat';
+import { buildBeats, type Beat } from './beats';
+import { useTypewriter } from './useTypewriter';
+
+/** How long a scene title card holds before moving on by itself. */
+export const SCENE_CARD_MS = 1800;
+
+const NOTICE_LABELS: Record<string, string> = {
+   campaign_progress: 'New objective',
+   objective_completed: 'Objective complete',
+   objective_failed: 'Objective missed',
+};
+
+const noticeText = (e: WorldEvent) =>
+   e.message.replace(/^Objective (updated|complete|missed):\s*/, '');
+
+interface DialogueStageProps {
+   messages: ChatMessage[];
+   streamingMessage?: string;
+   /** The narrator is thinking or streaming. */
+   isLoading: boolean;
+   pendingChoices?: DialogueChoice[];
+   onChoiceSelected?: (id: number) => void;
+   isSubmittingChoice?: boolean;
+   command: string;
+   setCommand: (cmd: string) => void;
+   handleCommand: () => void;
+   /** Free-text input is unavailable (e.g. quota reached). */
+   inputDisabled?: boolean;
+   ending?: EndingView | null;
+   onStartNewRun?: () => void;
+   /** Latest server error; a change stops the "waiting for the story" state. */
+   error?: string | null;
+}
+
+/**
+ * Presents the story like a game rather than a chat: one beat at a time,
+ * typed in, advanced by click / Space / Enter. Scene changes get a title
+ * card, quest updates arrive as toasts, and choices or the text box only
+ * appear once the current text has been read. The full log is in History.
+ */
+export function DialogueStage({
+   messages,
+   streamingMessage,
+   isLoading,
+   pendingChoices,
+   onChoiceSelected,
+   isSubmittingChoice = false,
+   command,
+   setCommand,
+   handleCommand,
+   inputDisabled = false,
+   ending,
+   onStartNewRun,
+   error,
+}: DialogueStageProps) {
+   const beats = useMemo(
+      () => buildBeats(messages, streamingMessage),
+      [messages, streamingMessage],
+   );
+
+   // A session where the player hasn't acted yet plays its opening from the
+   // first beat. Otherwise everything already in the log has been read: it is
+   // shown instantly and never re-announced.
+   const fresh = useRef(!messages.some((m) => m.type === 'player')).current;
+   const alreadyRead = useRef<Set<string> | null>(null);
+   if (alreadyRead.current === null) {
+      alreadyRead.current = new Set(fresh ? [] : beats.map((b) => b.id));
+   }
+   const announced = useRef<Set<string>>(new Set(alreadyRead.current));
+
+   const [cursorId, setCursorId] = useState<string | null>(() => {
+      if (!beats.length) return null;
+      return fresh ? beats[0].id : beats[beats.length - 1].id;
+   });
+   // Whether the player has dismissed the last beat (freeing the text box).
+   const [acknowledged, setAcknowledged] = useState(!fresh);
+   const [historyOpen, setHistoryOpen] = useState(false);
+   const [toasts, setToasts] = useState<WorldEvent[]>([]);
+   // The player acted and the story hasn't answered yet. Covers the gap
+   // before the first streamed chunk, when isLoading is still false.
+   const [waiting, setWaiting] = useState(false);
+   const busy = isLoading || waiting;
+   useEffect(() => setWaiting(false), [beats.length, error]);
+   useEffect(() => {
+      if (!waiting) return;
+      const id = setTimeout(() => setWaiting(false), 30_000);
+      return () => clearTimeout(id);
+   }, [waiting]);
+
+   let index = beats.findIndex((b) => b.id === cursorId);
+   if (index === -1 && beats.length) index = beats.length - 1;
+   const current: Beat | undefined = beats[index];
+   const hasNext = index < beats.length - 1;
+   const instant = !current || alreadyRead.current.has(current.id);
+
+   const { visible, typing, complete } = useTypewriter(
+      current?.kind === 'line' ? current.text : '',
+      current?.id ?? 'none',
+      instant,
+   );
+   const lineDone = !current || current.kind === 'scene' || (!typing && !current.streaming);
+   const atEnd = !hasNext && lineDone;
+   const hasChoices = !!pendingChoices?.length && !!onChoiceSelected;
+   const showChoices = atEnd && hasChoices && !ending;
+   const showEnding = atEnd && !!ending;
+   const showInput = atEnd && acknowledged && !hasChoices && !ending && !busy;
+   // At rest: the player has finished everything on screen and is waiting.
+   const atRest = atEnd && (acknowledged || hasChoices || busy);
+
+   const goNext = useCallback(() => {
+      if (!hasNext) return;
+      setCursorId(beats[index + 1].id);
+      setAcknowledged(false);
+   }, [beats, index, hasNext]);
+
+   const advance = useCallback(() => {
+      if (!current) return;
+      if (current.kind === 'line' && typing) {
+         complete();
+      } else if (hasNext) {
+         goNext();
+      } else if (lineDone) {
+         setAcknowledged(true);
+      }
+   }, [current, typing, complete, hasNext, goNext, lineDone]);
+
+   // New beats arriving while the player waits are shown right away; beats
+   // arriving mid-read wait for the player to continue.
+   const wasAtRest = useRef(atRest);
+   useEffect(() => {
+      if (wasAtRest.current && hasNext) goNext();
+   }, [beats.length]); // eslint-disable-line react-hooks/exhaustive-deps
+   useEffect(() => {
+      wasAtRest.current = atRest;
+   });
+
+   // Title cards hold briefly, then move on by themselves.
+   useEffect(() => {
+      if (current?.kind !== 'scene' || instant || !hasNext) return;
+      const id = setTimeout(goNext, SCENE_CARD_MS);
+      return () => clearTimeout(id);
+   }, [current, instant, hasNext, goNext]);
+
+   // Announce quest updates once their beat has been reached (including
+   // updates that arrive just after their text).
+   useEffect(() => {
+      const fresh: WorldEvent[] = [];
+      for (const beat of beats.slice(0, index + 1)) {
+         if (beat.notices?.length && !announced.current.has(beat.id)) {
+            announced.current.add(beat.id);
+            fresh.push(...beat.notices);
+         }
+      }
+      if (fresh.length) setToasts((t) => [...t, ...fresh]);
+   }, [beats, index]);
+
+   // Space / Enter advance, unless the player is typing in the text box.
+   useEffect(() => {
+      const onKey = (e: KeyboardEvent) => {
+         const target = e.target as HTMLElement | null;
+         if (target?.closest('input, textarea, button')) return;
+         if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            advance();
+         }
+      };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+   }, [advance]);
+
+   const showContinue = !!current && lineDone && current.kind === 'line' && (hasNext || !acknowledged) && !showChoices && !showEnding;
+
+   return (
+      <Paper
+         sx={{
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            position: 'relative',
+         }}
+      >
+         <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
+            <Button size="small" onClick={() => setHistoryOpen(true)}>
+               History
+            </Button>
+         </Box>
+
+         <Box
+            data-testid="dialogue-stage"
+            onClick={advance}
+            sx={{
+               flex: 1,
+               display: 'flex',
+               flexDirection: 'column',
+               justifyContent: 'flex-end',
+               px: { xs: 2, sm: 4 },
+               pb: 2,
+               cursor: showChoices || showInput ? 'default' : 'pointer',
+               userSelect: 'none',
+            }}
+         >
+            {current?.kind === 'scene' ? (
+               <SceneCard key={current.id} title={current.text} />
+            ) : current ? (
+               <Box
+                  sx={{
+                     border: 2,
+                     borderColor: 'primary.dark',
+                     borderRadius: 2,
+                     p: { xs: 2, sm: 3 },
+                     minHeight: 160,
+                     backgroundColor: 'rgba(26, 15, 30, 0.75)',
+                     position: 'relative',
+                  }}
+               >
+                  {current.speaker && (
+                     <Typography
+                        sx={{
+                           fontFamily: 'Cinzel, Georgia, serif',
+                           color: 'primary.main',
+                           letterSpacing: 1.5,
+                           textTransform: 'uppercase',
+                           fontSize: '0.9rem',
+                           mb: 1,
+                        }}
+                     >
+                        {current.speaker}
+                     </Typography>
+                  )}
+                  <Typography
+                     data-testid="stage-text"
+                     sx={{
+                        fontFamily: 'Crimson Text, Georgia, serif',
+                        fontSize: '1.3rem',
+                        lineHeight: 1.6,
+                        color: 'text.primary',
+                        whiteSpace: 'pre-wrap',
+                     }}
+                  >
+                     {visible}
+                  </Typography>
+                  {showContinue && (
+                     <Typography
+                        aria-label="continue"
+                        sx={{
+                           position: 'absolute',
+                           right: 16,
+                           bottom: 8,
+                           color: 'primary.main',
+                           animation: 'bob 1.2s ease-in-out infinite',
+                           '@keyframes bob': {
+                              '0%, 100%': { transform: 'translateY(0)' },
+                              '50%': { transform: 'translateY(3px)' },
+                           },
+                        }}
+                     >
+                        ▼
+                     </Typography>
+                  )}
+                  {busy && atEnd && !streamingMessage && (
+                     <CircularProgress
+                        size={16}
+                        aria-label="the story continues"
+                        sx={{ position: 'absolute', right: 16, bottom: 12 }}
+                     />
+                  )}
+               </Box>
+            ) : null}
+
+            {showChoices && (
+               <Stack spacing={1} sx={{ mt: 2 }} onClick={(e) => e.stopPropagation()}>
+                  {pendingChoices!.map((choice) => (
+                     <Button
+                        key={choice.id}
+                        variant="outlined"
+                        disabled={isSubmittingChoice}
+                        onClick={() => {
+                           setWaiting(true);
+                           onChoiceSelected!(choice.id);
+                        }}
+                        sx={{
+                           justifyContent: 'flex-start',
+                           textAlign: 'left',
+                           fontFamily: 'Crimson Text, Georgia, serif',
+                           fontSize: '1.1rem',
+                           textTransform: 'none',
+                        }}
+                     >
+                        ▸ {choice.text}
+                     </Button>
+                  ))}
+               </Stack>
+            )}
+
+            {showEnding && (
+               <Box sx={{ mt: 2 }} onClick={(e) => e.stopPropagation()}>
+                  <EndingPanel ending={ending!} onStartNewRun={onStartNewRun} />
+               </Box>
+            )}
+
+            {showInput && (
+               <Box
+                  component="form"
+                  onClick={(e) => e.stopPropagation()}
+                  onSubmit={(e) => {
+                     e.preventDefault();
+                     if (!command.trim()) return;
+                     setWaiting(true);
+                     handleCommand();
+                  }}
+                  sx={{ display: 'flex', gap: 1, mt: 2 }}
+               >
+                  {inputDisabled ? (
+                     <Alert severity="info" sx={{ flex: 1 }}>
+                        Free-text play is unavailable right now.
+                     </Alert>
+                  ) : (
+                     <>
+                        <TextField
+                           autoFocus
+                           fullWidth
+                           size="small"
+                           autoComplete="off"
+                           placeholder="What do you do?"
+                           value={command}
+                           onChange={(e) => setCommand(e.target.value)}
+                        />
+                        <Button type="submit" variant="contained" disabled={!command.trim()}>
+                           Act
+                        </Button>
+                     </>
+                  )}
+               </Box>
+            )}
+         </Box>
+
+         <Snackbar
+            open={toasts.length > 0}
+            autoHideDuration={3500}
+            onClose={(_, reason) => {
+               if (reason === 'clickaway') return;
+               setToasts((t) => t.slice(1));
+            }}
+            anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+            sx={{ position: 'absolute' }}
+         >
+            <Alert
+               severity={toasts[0]?.type === 'objective_failed' ? 'warning' : 'success'}
+               variant="filled"
+               onClose={() => setToasts((t) => t.slice(1))}
+            >
+               {toasts[0] && (
+                  <>
+                     <strong>{NOTICE_LABELS[toasts[0].type] ?? 'Update'}:</strong>{' '}
+                     {noticeText(toasts[0])}
+                  </>
+               )}
+            </Alert>
+         </Snackbar>
+
+         <Drawer
+            anchor="right"
+            open={historyOpen}
+            onClose={() => setHistoryOpen(false)}
+            slotProps={{ paper: { sx: { width: { xs: '100%', sm: 520 } } } }}
+         >
+            <Box sx={{ display: 'flex', alignItems: 'center', p: 1 }}>
+               <Typography sx={{ flex: 1, fontFamily: 'Cinzel, Georgia, serif', pl: 1 }}>
+                  History
+               </Typography>
+               <IconButton aria-label="close history" onClick={() => setHistoryOpen(false)}>
+                  ✕
+               </IconButton>
+            </Box>
+            <Box sx={{ flex: 1, minHeight: 0 }}>
+               <Chat
+                  chatHistory={messages}
+                  command=""
+                  setCommand={() => {}}
+                  handleCommand={() => {}}
+                  isLoading={false}
+                  hideInput
+               />
+            </Box>
+         </Drawer>
+      </Paper>
+   );
+}
+
+function SceneCard({ title }: { title: string }) {
+   return (
+      <Box
+         data-testid="scene-card"
+         sx={{
+            alignSelf: 'center',
+            textAlign: 'center',
+            my: 'auto',
+            animation: 'sceneIn 0.8s ease forwards',
+            '@keyframes sceneIn': {
+               from: { opacity: 0, letterSpacing: '0.3em' },
+               to: { opacity: 1, letterSpacing: '0.12em' },
+            },
+         }}
+      >
+         <Typography variant="overline" sx={{ color: 'text.secondary' }}>
+            Scene
+         </Typography>
+         <Typography
+            variant="h4"
+            sx={{ fontFamily: 'Cinzel, Georgia, serif', color: 'primary.main' }}
+         >
+            {title}
+         </Typography>
+      </Box>
+   );
+}
