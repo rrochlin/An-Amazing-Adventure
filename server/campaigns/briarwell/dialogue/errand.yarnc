@@ -1,0 +1,54 @@
+name: "briarwell-errand"
+nodes: {
+  key: "Errand"
+  value: {
+    name: "Errand"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "errand_001" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "errand_002" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "errand_opt_eager" }
+      operands: { string_value: "Eager" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "errand_opt_reluctant" }
+      operands: { string_value: "Reluctant" }
+    }
+    instructions: { opcode: SHOW_OPTIONS }
+    instructions: { opcode: JUMP }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label attitude eager" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "errand_ack_eager" }
+    }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label attitude reluctant" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "errand_ack_reluctant" }
+    }
+    instructions: { opcode: STOP }
+    labels: {
+      key: "Eager"
+      value: 7
+    }
+    labels: {
+      key: "Reluctant"
+      value: 10
+    }
+  }
+}

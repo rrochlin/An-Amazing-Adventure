@@ -1,0 +1,54 @@
+name: "briarwell-rescue"
+nodes: {
+  key: "Rescue"
+  value: {
+    name: "Rescue"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "rescue_001" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "rescue_002" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "rescue_opt_go" }
+      operands: { string_value: "Willing" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "rescue_opt_refuse" }
+      operands: { string_value: "Refuse" }
+    }
+    instructions: { opcode: SHOW_OPTIONS }
+    instructions: { opcode: JUMP }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label guild_answer went_willingly" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "rescue_ack_go" }
+    }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_label guild_answer refused" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "rescue_ack_refuse" }
+    }
+    instructions: { opcode: STOP }
+    labels: {
+      key: "Willing"
+      value: 7
+    }
+    labels: {
+      key: "Refuse"
+      value: 10
+    }
+  }
+}

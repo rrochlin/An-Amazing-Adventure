@@ -1,0 +1,439 @@
+{
+  "id": "briarwell",
+  "version": "1",
+  "title": "The Burning of Briarwell",
+  "premise": "A village child spends their sister's birthday earning coin for a gift, until bandits put Briarwell to the torch and a stranger from the Heroes' Guild pulls them from the ashes.",
+  "description": "A short origin story: small kindnesses and small cruelties in a sleepy village, one terrible night, and the road to the Guild. Modeled on the beats of a classic hero-origin opening to validate the authored runtime.",
+  "tone": "warm pastoral turning to dread; fairy-tale cadence, never grimdark",
+  "character_creation": {
+    "use_standard_creator": true,
+    "allowed_classes": ["fighter", "rogue"],
+    "allowed_races": ["human"],
+    "locked_background_prompt": "You are a child of about ten growing up in the village of Briarwell, with a gruff, loving father, a patient mother, and a younger sister whose birthday is today.",
+    "theme_hint_mode": "disabled",
+    "preference_mode": "disabled"
+  },
+  "player_role": {
+    "name": "Child of Briarwell",
+    "premise": "You are a village child whose choices today decide what kind of hero you might one day become.",
+    "role_summary": "Curious, small, and free to be kind or cruel while the village is still standing."
+  },
+  "party": {
+    "max_human_players": 1,
+    "starting_room_id": "family_cottage"
+  },
+  "map": {
+    "rooms": {
+      "family_cottage": {
+        "name": "Family Cottage",
+        "type": "home",
+        "description": "A low thatched cottage that smells of bread and woodsmoke.",
+        "tags": ["safe", "family"],
+        "connections": { "east": "village_square" }
+      },
+      "village_square": {
+        "name": "Village Square",
+        "type": "hub",
+        "description": "A well, a notice post, and gossiping neighbours.",
+        "connections": {
+          "west": "family_cottage",
+          "north": "market_lane",
+          "east": "old_mill",
+          "south": "meadow"
+        }
+      },
+      "market_lane": {
+        "name": "Market Lane",
+        "type": "shop",
+        "description": "Old Garrick's stall of sweets, ribbons, and whittled trinkets.",
+        "connections": { "south": "village_square" }
+      },
+      "old_mill": {
+        "name": "Old Mill",
+        "type": "landmark",
+        "description": "The miller's water wheel, and a barn behind it where people meet who should not.",
+        "connections": { "west": "village_square" }
+      },
+      "meadow": {
+        "name": "Meadow",
+        "type": "outdoors",
+        "description": "Long grass where the village children play, and where Dunstan does his bullying.",
+        "connections": { "north": "village_square", "south": "woods_edge" }
+      },
+      "woods_edge": {
+        "name": "Woods' Edge",
+        "type": "outdoors",
+        "description": "A hollow under an old oak at the treeline, a good place to hide.",
+        "tags": ["hiding_spot"],
+        "connections": { "north": "meadow" }
+      }
+    },
+    "entrances": [
+      { "id": "home", "name": "Home", "start_room_id": "family_cottage" }
+    ]
+  },
+  "actors": {
+    "father": {
+      "name": "Tomas",
+      "kind": "npc",
+      "goal": "Teach his child that a coin earned honestly is worth more than one taken.",
+      "importance": "primary"
+    },
+    "mother": {
+      "name": "Elin",
+      "kind": "npc",
+      "goal": "Keep the household warm and the birthday a happy one.",
+      "importance": "secondary"
+    },
+    "sister": {
+      "name": "Ros",
+      "kind": "npc",
+      "goal": "Have the best birthday ever.",
+      "importance": "primary"
+    },
+    "trader": {
+      "name": "Old Garrick",
+      "kind": "npc",
+      "goal": "Sell a child something nice for a fair coin.",
+      "importance": "secondary"
+    },
+    "bess": {
+      "name": "Little Bess",
+      "kind": "npc",
+      "goal": "Find her lost rag doll.",
+      "importance": "minor"
+    },
+    "miller": {
+      "name": "Hob the Miller",
+      "kind": "npc",
+      "goal": "Keep his wife from learning about his secret meetings behind the barn.",
+      "importance": "minor"
+    },
+    "bully": {
+      "name": "Dunstan",
+      "kind": "npc",
+      "goal": "Push the smaller children around.",
+      "importance": "minor"
+    },
+    "bandit_leader": {
+      "name": "Red Corwin",
+      "kind": "antagonist",
+      "goal": "Raid Briarwell and carry off anything, or anyone, worth selling.",
+      "importance": "primary",
+      "rail": {
+        "steps": [
+          { "id": "lurking", "location_id": "woods_edge" },
+          { "id": "raiding", "location_id": "village_square" }
+        ]
+      }
+    },
+    "guild_master": {
+      "name": "Master Holloway",
+      "kind": "npc",
+      "goal": "Find a child with the spark of a hero, and get them out alive.",
+      "importance": "primary",
+      "rail": {
+        "steps": [
+          { "id": "travelling" },
+          { "id": "arrived", "location_id": "woods_edge" }
+        ]
+      }
+    }
+  },
+  "objectives": {
+    "hear_father": {
+      "title": "Listen to Father",
+      "description": "Father has something to ask of you on your sister's birthday."
+    },
+    "earn_coins": {
+      "title": "Earn Some Coin",
+      "description": "Do good turns (or bad ones) around Briarwell to earn coin for Ros's gift. Two will do."
+    },
+    "return_doll": {
+      "title": "Bess's Lost Doll",
+      "description": "Little Bess has lost her rag doll somewhere in the village.",
+      "optional": true
+    },
+    "miller_secret": {
+      "title": "The Miller's Secret",
+      "description": "Hob the Miller is up to something behind the barn.",
+      "optional": true
+    },
+    "meadow_bully": {
+      "title": "Trouble in the Meadow",
+      "description": "Dunstan is picking on the smaller children again.",
+      "optional": true
+    },
+    "buy_gift": {
+      "title": "Buy Ros a Gift",
+      "description": "Spend your coin at Old Garrick's stall."
+    },
+    "give_gift": {
+      "title": "Happy Birthday, Ros",
+      "description": "Bring the gift home."
+    },
+    "survive_raid": {
+      "title": "Survive the Night",
+      "description": "Bandits are burning Briarwell."
+    }
+  },
+  "dialogue_assets": {
+    "errand": {
+      "format": "yarn",
+      "program": "dialogue/errand.yarnc",
+      "strings": "dialogue/errand.csv"
+    },
+    "gift_stall": {
+      "format": "yarn",
+      "program": "dialogue/gift-stall.yarnc",
+      "strings": "dialogue/gift-stall.csv"
+    },
+    "birthday": {
+      "format": "yarn",
+      "program": "dialogue/birthday.yarnc",
+      "strings": "dialogue/birthday.csv"
+    },
+    "rescue": {
+      "format": "yarn",
+      "program": "dialogue/rescue.yarnc",
+      "strings": "dialogue/rescue.csv"
+    }
+  },
+  "story_nodes": {
+    "morning_errand": {
+      "mode": "yarn_dialogue",
+      "dialogue_asset_id": "errand",
+      "dialogue_start_node": "Errand",
+      "title": "A Birthday Errand",
+      "summary": "Father asks the child to earn a few coins by honest work and buy Ros a birthday gift.",
+      "objective_text": "Answer Father.",
+      "on_enter": [
+        { "type": "activate_objective", "objective_id": "hear_father" },
+        { "type": "start_dialogue", "asset_id": "errand", "start_node": "Errand" }
+      ],
+      "allowed_conditions": [
+        { "type": "label_equals", "key": "attitude", "allowed_values": ["eager", "reluctant"] }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "label_in", "key": "attitude", "values": ["eager", "reluctant"] }
+          ],
+          "next_node_id": "village_deeds",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "hear_father" },
+            { "type": "activate_objective", "objective_id": "earn_coins" },
+            { "type": "activate_objective", "objective_id": "return_doll" },
+            { "type": "activate_objective", "objective_id": "miller_secret" },
+            { "type": "activate_objective", "objective_id": "meadow_bully" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "a warm family morning, and the birthday errand",
+        "must_mention": ["Ros's birthday", "earning coin for a gift"],
+        "must_not_reveal": ["the bandits", "the coming raid"],
+        "tone_notes": ["cosy and gently funny", "Father is gruff but loving"]
+      }
+    },
+    "village_deeds": {
+      "mode": "ai_scene",
+      "title": "Good Turns and Bad",
+      "summary": "The child roams Briarwell. Three villagers need something; each can be helped or exploited for a coin.",
+      "objective_text": "Earn coin around the village. Help (or don't) Bess, the miller's wife, or the children in the meadow.",
+      "allowed_conditions": [
+        { "type": "label_equals", "key": "deed_doll", "allowed_values": ["returned", "kept"] },
+        { "type": "label_equals", "key": "deed_miller", "allowed_values": ["told_wife", "took_bribe"] },
+        { "type": "label_equals", "key": "deed_bully", "allowed_values": ["stopped", "joined"] }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "label_in", "key": "deed_doll", "values": ["returned", "kept"] },
+            { "type": "label_in", "key": "deed_miller", "values": ["told_wife", "took_bribe"] }
+          ],
+          "next_node_id": "gift_stall",
+          "actions": [{ "type": "complete_objective", "objective_id": "earn_coins" }]
+        },
+        {
+          "conditions": [
+            { "type": "label_in", "key": "deed_doll", "values": ["returned", "kept"] },
+            { "type": "label_in", "key": "deed_bully", "values": ["stopped", "joined"] }
+          ],
+          "next_node_id": "gift_stall",
+          "actions": [{ "type": "complete_objective", "objective_id": "earn_coins" }]
+        },
+        {
+          "conditions": [
+            { "type": "label_in", "key": "deed_miller", "values": ["told_wife", "took_bribe"] },
+            { "type": "label_in", "key": "deed_bully", "values": ["stopped", "joined"] }
+          ],
+          "next_node_id": "gift_stall",
+          "actions": [{ "type": "complete_objective", "objective_id": "earn_coins" }]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "small-village moral choices, each worth a coin",
+        "must_mention": ["Little Bess's lost doll", "the miller sneaking behind the barn", "Dunstan in the meadow"],
+        "must_not_reveal": ["the bandits", "the coming raid"],
+        "tone_notes": ["villagers react honestly to kindness and cruelty", "a good or bad deed pays the same coin"]
+      }
+    },
+    "gift_stall": {
+      "mode": "hybrid",
+      "dialogue_asset_id": "gift_stall",
+      "dialogue_start_node": "GiftStall",
+      "title": "Old Garrick's Stall",
+      "summary": "The child spends their coin on a birthday gift.",
+      "objective_text": "Choose a gift for Ros.",
+      "on_enter": [
+        { "type": "activate_objective", "objective_id": "buy_gift" },
+        { "type": "start_dialogue", "asset_id": "gift_stall", "start_node": "GiftStall" }
+      ],
+      "allowed_conditions": [
+        { "type": "label_equals", "key": "gift", "allowed_values": ["sweets", "ribbon", "carved_bird"] }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "label_in", "key": "gift", "values": ["sweets", "ribbon", "carved_bird"] }
+          ],
+          "next_node_id": "birthday",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "buy_gift" },
+            { "type": "activate_objective", "objective_id": "give_gift" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "the market stall and the joy of a first purchase",
+        "must_mention": ["Old Garrick"],
+        "must_not_reveal": ["the bandits"]
+      }
+    },
+    "birthday": {
+      "mode": "hybrid",
+      "dialogue_asset_id": "birthday",
+      "dialogue_start_node": "Birthday",
+      "title": "Ros's Birthday",
+      "summary": "Back home at dusk. The child can give Ros the gift, or keep it. As the evening ends, smoke rises from the woods.",
+      "objective_text": "Bring the gift home to Ros.",
+      "on_enter": [
+        { "type": "start_dialogue", "asset_id": "birthday", "start_node": "Birthday" }
+      ],
+      "allowed_conditions": [
+        { "type": "flag_true", "key": "gift_given" },
+        { "type": "flag_true", "key": "gift_kept" }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [{ "type": "flag_true", "key": "gift_given" }],
+          "next_node_id": "bandit_raid",
+          "actions": [
+            { "type": "complete_objective", "objective_id": "give_gift" },
+            { "type": "activate_objective", "objective_id": "survive_raid" },
+            { "type": "move_actor_to_step", "actor_id": "bandit_leader", "step_id": "raiding" }
+          ]
+        },
+        {
+          "conditions": [{ "type": "flag_true", "key": "gift_kept" }],
+          "next_node_id": "bandit_raid",
+          "actions": [
+            { "type": "fail_objective", "objective_id": "give_gift" },
+            { "type": "activate_objective", "objective_id": "survive_raid" },
+            { "type": "move_actor_to_step", "actor_id": "bandit_leader", "step_id": "raiding" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "family warmth at dusk, with the first hint of smoke at the end",
+        "must_mention": ["Ros", "the gift"],
+        "must_not_reveal": ["who the bandits are"],
+        "tone_notes": ["let the happy moment land before anything goes wrong"]
+      }
+    },
+    "bandit_raid": {
+      "mode": "ai_scene",
+      "title": "Briarwell Burns",
+      "summary": "Night. Red Corwin's bandits torch the village. Father falls defending the door; Mother and Ros vanish in the chaos. The child must decide what to do.",
+      "objective_text": "Survive. Hide, fight, or search for your family.",
+      "allowed_conditions": [
+        { "type": "label_equals", "key": "raid_response", "allowed_values": ["hid", "fought", "searched_family"] }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [{ "type": "label_equals", "key": "raid_response", "value": "hid" }],
+          "next_node_id": "rescue",
+          "actions": [
+            { "type": "set_flag", "key": "stayed_hidden", "value": true },
+            { "type": "complete_objective", "objective_id": "survive_raid" },
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+          ]
+        },
+        {
+          "conditions": [{ "type": "label_equals", "key": "raid_response", "value": "fought" }],
+          "next_node_id": "rescue",
+          "actions": [
+            { "type": "set_flag", "key": "wounded", "value": true },
+            { "type": "complete_objective", "objective_id": "survive_raid" },
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+          ]
+        },
+        {
+          "conditions": [{ "type": "label_equals", "key": "raid_response", "value": "searched_family" }],
+          "next_node_id": "rescue",
+          "actions": [
+            { "type": "set_flag", "key": "saw_ros_taken", "value": true },
+            { "type": "complete_objective", "objective_id": "survive_raid" },
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+          ]
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "fire, panic, and a child far too small to stop it",
+        "must_mention": ["Father falling at the cottage door", "the bandits' torches"],
+        "must_not_reveal": ["whether Mother and Ros are alive"],
+        "tone_notes": ["frightening, not gory", "a child cannot win this fight; fighting ends with the child struck down, not killed"]
+      }
+    },
+    "rescue": {
+      "mode": "yarn_dialogue",
+      "dialogue_asset_id": "rescue",
+      "dialogue_start_node": "Rescue",
+      "title": "The Stranger in the Ashes",
+      "summary": "Master Holloway of the Heroes' Guild finds the child at the woods' edge and offers to take them away.",
+      "objective_text": "Answer the stranger.",
+      "on_enter": [
+        { "type": "start_dialogue", "asset_id": "rescue", "start_node": "Rescue" }
+      ],
+      "allowed_conditions": [
+        { "type": "label_equals", "key": "guild_answer", "allowed_values": ["went_willingly", "refused"] }
+      ],
+      "completion_rules": [
+        {
+          "conditions": [
+            { "type": "label_in", "key": "guild_answer", "values": ["went_willingly", "refused"] }
+          ],
+          "next_node_id": "road_to_guild"
+        }
+      ],
+      "narrator_contract": {
+        "scene_focus": "grief, smoke, and a hand held out",
+        "must_mention": ["Master Holloway", "the Heroes' Guild"],
+        "must_not_reveal": ["whether Mother and Ros are alive"]
+      }
+    },
+    "road_to_guild": {
+      "mode": "ai_scene",
+      "title": "The Road to the Guild",
+      "summary": "Briarwell burns behind them as Master Holloway carries the child toward the Guild. The opening ends here.",
+      "objective_text": "Your story begins."
+    }
+  },
+  "start_node_id": "morning_errand",
+  "intro_sequence": {
+    "mode": "streamed_briefing",
+    "opening_node_id": "morning_errand",
+    "opening_text": "Sunlight spills through the cottage shutters in Briarwell. Somewhere in the kitchen your sister Ros is singing, badly, about turning seven."
+  }
+}

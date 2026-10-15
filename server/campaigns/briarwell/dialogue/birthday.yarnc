@@ -1,0 +1,62 @@
+name: "briarwell-birthday"
+nodes: {
+  key: "Birthday"
+  value: {
+    name: "Birthday"
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "bday_001" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "bday_002" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "bday_opt_give" }
+      operands: { string_value: "Give" }
+    }
+    instructions: {
+      opcode: ADD_OPTION
+      operands: { string_value: "bday_opt_keep" }
+      operands: { string_value: "Keep" }
+    }
+    instructions: { opcode: SHOW_OPTIONS }
+    instructions: { opcode: JUMP }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_flag gift_given" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "bday_ack_give" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "bday_smoke" }
+    }
+    instructions: { opcode: STOP }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "set_flag gift_kept" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "bday_ack_keep" }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "bday_smoke" }
+    }
+    instructions: { opcode: STOP }
+    labels: {
+      key: "Give"
+      value: 7
+    }
+    labels: {
+      key: "Keep"
+      value: 11
+    }
+  }
+}

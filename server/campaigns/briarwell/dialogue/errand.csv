@@ -1,0 +1,7 @@
+id,text
+errand_001,"Father sets down his mug. ""It's your sister's birthday, and I've no coin to spare for a present. But you've two hands and a good heart."""
+errand_002,"""Do a good turn for someone in the village and they'll likely pay you for it. Earn enough, and buy Ros something from Old Garrick's stall."""
+errand_opt_eager,"""I'll do it! I'll get her the best present ever."""
+errand_opt_reluctant,"""Do I have to? Can't Mother just buy something?"""
+errand_ack_eager,"Father ruffles your hair. ""That's my child. Off you go, then."""
+errand_ack_reluctant,"Father raises an eyebrow. ""A gift you earn means more. Go on, before I find you chores instead."""
