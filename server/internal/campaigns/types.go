@@ -35,6 +35,19 @@ type CharacterCreationRules struct {
 	LockedBackgroundText string   `json:"locked_background_prompt,omitempty"`
 	ThemeHintMode        string   `json:"theme_hint_mode,omitempty"`
 	PreferenceMode       string   `json:"preference_mode,omitempty"`
+	// Preset railroads character creation: the player only chooses a name,
+	// and race, class, scores, and skills come from here.
+	Preset *PresetCharacter `json:"preset,omitempty"`
+}
+
+// PresetCharacter is the fixed character a railed campaign hands the player.
+type PresetCharacter struct {
+	DefaultName    string         `json:"default_name,omitempty"`
+	RaceID         string         `json:"race_id"`
+	SubraceID      string         `json:"subrace_id,omitempty"`
+	ClassID        string         `json:"class_id"`
+	AbilityScores  map[string]int `json:"ability_scores"`
+	SelectedSkills []string       `json:"selected_skills"`
 }
 
 type PlayerRoleTemplate struct {
@@ -172,10 +185,21 @@ type Action struct {
 }
 
 type Manifest struct {
-	ID          string `json:"id"`
-	Version     string `json:"version"`
-	Title       string `json:"title"`
-	Premise     string `json:"premise"`
-	Description string `json:"description,omitempty"`
-	Tone        string `json:"tone,omitempty"`
+	ID                string                    `json:"id"`
+	Version           string                    `json:"version"`
+	Title             string                    `json:"title"`
+	Premise           string                    `json:"premise"`
+	Description       string                    `json:"description,omitempty"`
+	Tone              string                    `json:"tone,omitempty"`
+	CharacterCreation CharacterCreationManifest `json:"character_creation"`
+}
+
+// CharacterCreationManifest tells the create wizard which steps to show.
+type CharacterCreationManifest struct {
+	Mode             string           `json:"mode"` // "standard" | "preset"
+	AllowedRaces     []string         `json:"allowed_races,omitempty"`
+	AllowedSubraces  []string         `json:"allowed_subraces,omitempty"`
+	AllowedClasses   []string         `json:"allowed_classes,omitempty"`
+	LockedBackground string           `json:"locked_background,omitempty"`
+	Preset           *PresetCharacter `json:"preset,omitempty"`
 }

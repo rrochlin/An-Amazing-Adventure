@@ -7,8 +7,15 @@
   "tone": "warm pastoral turning to dread; fairy-tale cadence, never grimdark",
   "character_creation": {
     "use_standard_creator": true,
-    "allowed_classes": ["fighter", "rogue"],
+    "allowed_classes": ["fighter"],
     "allowed_races": ["human"],
+    "preset": {
+      "default_name": "Wren",
+      "race_id": "human",
+      "class_id": "fighter",
+      "ability_scores": { "str": 13, "dex": 15, "con": 14, "int": 10, "wis": 12, "cha": 8 },
+      "selected_skills": ["athletics", "perception"]
+    },
     "locked_background_prompt": "You are a child of about ten growing up in the village of Briarwell, with a gruff, loving father, a patient mother, and a younger sister whose birthday is today.",
     "theme_hint_mode": "disabled",
     "preference_mode": "disabled"

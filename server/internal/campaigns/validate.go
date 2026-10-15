@@ -157,6 +157,10 @@ func (d *CampaignDefinition) Validate() error {
 		}
 	}
 
+	if err := d.CharacterCreation.validate(); err != nil {
+		return fmt.Errorf("character_creation: %w", err)
+	}
+
 	if d.IntroSequence.OpeningNodeID != "" {
 		if _, ok := d.StoryNodes[d.IntroSequence.OpeningNodeID]; !ok {
 			return fmt.Errorf("intro_sequence opening_node_id %q does not exist in story_nodes", d.IntroSequence.OpeningNodeID)
