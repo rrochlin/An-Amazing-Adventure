@@ -161,7 +161,14 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 			g.Campaign.ActiveDialogue.CurrentNode = node.DialogueStartNode
 		}
 	}
-	return currentDialogueOpening(def, g), nil
+	opening := currentDialogueOpening(def, g)
+	if node.IntroText == "" {
+		return opening, nil
+	}
+	if opening == "" {
+		return node.IntroText, nil
+	}
+	return node.IntroText + "\n\n" + opening, nil
 }
 
 func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, error) {
