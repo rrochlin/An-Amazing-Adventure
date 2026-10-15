@@ -157,6 +157,10 @@ func (d *CampaignDefinition) Validate() error {
 		}
 	}
 
+	if err := d.validateEndings(); err != nil {
+		return err
+	}
+
 	if d.IntroSequence.OpeningNodeID != "" {
 		if _, ok := d.StoryNodes[d.IntroSequence.OpeningNodeID]; !ok {
 			return fmt.Errorf("intro_sequence opening_node_id %q does not exist in story_nodes", d.IntroSequence.OpeningNodeID)
@@ -302,6 +306,45 @@ func requireFileFS(fsys fs.FS, path string) error {
 	}
 	if info.IsDir() {
 		return fmt.Errorf("%q is a directory, expected file", path)
+	}
+	return nil
+}
+
+func (d *CampaignDefinition) validateEndings() error {
+	endsRun := false
+	for _, node := range d.StoryNodes {
+		endsRun = endsRun || node.EndsRun
+	}
+	if endsRun && len(d.Endings) == 0 {
+		return fmt.Errorf("a story node has ends_run but the campaign defines no endings")
+	}
+	seen := map[string]bool{}
+	for i, ending := range d.Endings {
+		context := fmt.Sprintf("endings[%d]", i)
+		if ending.ID == "" {
+			return fmt.Errorf("%s id is required", context)
+		}
+		if seen[ending.ID] {
+			return fmt.Errorf("%s id %q is duplicated", context, ending.ID)
+		}
+		seen[ending.ID] = true
+		if ending.Title == "" {
+			return fmt.Errorf("%s (%s) title is required", context, ending.ID)
+		}
+		if ending.DialogueAssetID != "" {
+			if _, ok := d.DialogueAssets[ending.DialogueAssetID]; !ok {
+				return fmt.Errorf("%s (%s) dialogue_asset_id %q does not exist", context, ending.ID, ending.DialogueAssetID)
+			}
+			if ending.DialogueStartNode == "" {
+				return fmt.Errorf("%s (%s) dialogue_asset_id requires dialogue_start_node", context, ending.ID)
+			}
+		}
+		if err := d.validateConditions(ending.Conditions, context+".conditions"); err != nil {
+			return err
+		}
+	}
+	if n := len(d.Endings); n > 0 && len(d.Endings[n-1].Conditions) > 0 {
+		return fmt.Errorf("the last ending (%s) must have no conditions so every run has an ending", d.Endings[n-1].ID)
 	}
 	return nil
 }
