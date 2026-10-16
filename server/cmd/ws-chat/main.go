@@ -266,6 +266,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		log.Printf("ws-chat: engineer scan error: %v", err)
 	}
 	authoredDialogueText := ""
+	var sceneEvents []game.WorldEvent
 
 	if campaignDef != nil {
 		resolverResult, resolveErr := aiClient.ResolveCampaignConditions(
@@ -283,7 +284,16 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 				log.Printf("ws-chat: campaign transition error: %v", transitionErr)
 			} else {
 				authoredDialogueText = turnResult.Transition.DialogueText
-				engineerResult.Events = append(engineerResult.Events, turnResult.Events...)
+				// Scene changes belong to the new scene's authored text (so the
+				// client shows the title card before it); everything else stays
+				// with the narration that caused it.
+				for _, e := range turnResult.Events {
+					if authoredDialogueText != "" && isSceneEvent(e) {
+						sceneEvents = append(sceneEvents, e)
+					} else {
+						engineerResult.Events = append(engineerResult.Events, e)
+					}
+				}
 			}
 			engineerResult.Tokens.InputTokens += resolverResult.Tokens.InputTokens
 			engineerResult.Tokens.OutputTokens += resolverResult.Tokens.OutputTokens
@@ -304,7 +314,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			Role:    "assistant",
 			Content: []game.NarrativeBlock{{Type: "text", Text: authoredDialogueText}},
 		})
-		history = append(history, game.ChatMessage{Type: "narrative", Content: authoredDialogueText})
+		history = append(history, game.ChatMessage{Type: "narrative", Content: authoredDialogueText, Events: sceneEvents})
 		chunkFrame := wsutil.Frame{
 			Type:    wsutil.FrameNarrativeChunk,
 			Payload: map[string]string{"content": authoredDialogueText},
@@ -370,7 +380,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
 		delta := game.StateDelta{
-			Events:   engineerResult.Events,
+			Events:   append(append([]game.WorldEvent(nil), engineerResult.Events...), sceneEvents...),
 			Player:   &memberView.Player,
 			Self:     &memberView.Self,
 			Campaign: g.BuildCampaignStateView(),
@@ -413,4 +423,13 @@ func ensureSenderConnection(conns []db.Connection, sender db.Connection) []db.Co
 
 func main() {
 	lambda.Start(handler)
+}
+
+// isSceneEvent reports events that announce a new scene or its objective.
+func isSceneEvent(e game.WorldEvent) bool {
+	switch e.Type {
+	case "scene_started", "campaign_progress", "campaign_ended":
+		return true
+	}
+	return false
 }

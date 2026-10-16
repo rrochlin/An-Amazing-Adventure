@@ -376,7 +376,7 @@ func TestHandleDialogueChoice_RouteChoiceProgression(t *testing.T) {
 				}
 			}
 			lastHistory := dbFake.putGame.ChatHistory[len(dbFake.putGame.ChatHistory)-1]
-			if len(lastHistory.Events) != 1 || lastHistory.Events[0].Message != tc.wantEvent {
+			if len(lastHistory.Events) != 2 || lastHistory.Events[0].Type != "scene_started" || lastHistory.Events[1].Message != tc.wantEvent {
 				t.Fatalf("expected progress event on persisted narrative, got %#v", lastHistory.Events)
 			}
 			if wsFake.deltaCount == 0 || len(wsFake.deltas) == 0 {
@@ -386,7 +386,7 @@ func TestHandleDialogueChoice_RouteChoiceProgression(t *testing.T) {
 			if delta.Campaign == nil {
 				t.Fatalf("expected campaign state in delta, got %#v", delta)
 			}
-			if len(delta.Events) != 1 || delta.Events[0].Message != tc.wantEvent {
+			if len(delta.Events) != 2 || delta.Events[0].Type != "scene_started" || delta.Events[1].Message != tc.wantEvent {
 				t.Fatalf("expected campaign-progress event in delta, got %#v", delta.Events)
 			}
 			if delta.Campaign.Labels["selected_branch"] != tc.wantSelectedBranch {

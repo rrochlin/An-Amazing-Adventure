@@ -128,8 +128,11 @@ func TestOrchestrateTurn_FiltersResolutionTransitionsAndEmitsObjectiveEvent(t *t
 	if result.Transition.DialogueText != "Route prompt: choose Hidden Route, Target Route, or Novice Route." {
 		t.Fatalf("unexpected dialogue text %q", result.Transition.DialogueText)
 	}
-	if len(result.Events) != 1 || result.Events[0].Message != "Objective updated: Choose one of the presented route options to test deterministic branching." {
-		t.Fatalf("expected campaign progress event, got %#v", result.Events)
+	// A new scene announces itself, then its objective.
+	if len(result.Events) != 2 ||
+		result.Events[0].Type != "scene_started" || result.Events[0].Message != "Route Choice" ||
+		result.Events[1].Message != "Objective updated: Choose one of the presented route options to test deterministic branching." {
+		t.Fatalf("expected scene_started then campaign progress, got %#v", result.Events)
 	}
 	if got := g.Campaign.Labels["entry_route"]; got != "" {
 		t.Fatalf("expected disallowed label resolution to be ignored on intro node, got %q", got)
@@ -207,10 +210,13 @@ func TestBootstrapGame_SeedsOpeningDialogueLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bootstrap game: %v", err)
 	}
-	if len(history) < 2 {
-		t.Fatalf("expected opening text and dialogue line, got %#v", history)
+	if len(history) < 3 {
+		t.Fatalf("expected title card, opening text, and dialogue line, got %#v", history)
 	}
-	if history[1].Content != "Intro prompt: send a message containing proceed to advance the route-selection test." {
+	if len(history[0].Events) != 1 || history[0].Events[0].Type != "scene_started" || history[0].Events[0].Message != "Intro" {
+		t.Fatalf("expected the opening scene's title card first, got %#v", history[0])
+	}
+	if history[2].Content != "Intro prompt: send a message containing proceed to advance the route-selection test." {
 		t.Fatalf("expected seeded dialogue line, got %#v", history)
 	}
 }

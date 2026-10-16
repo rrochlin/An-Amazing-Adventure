@@ -606,6 +606,7 @@ export const Chat = ({
    isSubmittingChoice = false,
    ending,
    onStartNewRun,
+   hideInput = false,
 }: {
    chatHistory: ChatMessageType[];
    /** Raw text chunks accumulating from the current AI stream. When non-empty,
@@ -625,6 +626,8 @@ export const Chat = ({
    ending?: EndingView | null;
    /** Called from the ending panel to begin a fresh run. */
    onStartNewRun?: () => void;
+   /** Read-only log (the History drawer): no input, choices, or ending panel. */
+   hideInput?: boolean;
 }) => {
    const { mode } = useColorScheme();
    const isDark = mode === 'dark' || mode === 'system' || !mode;
@@ -750,7 +753,7 @@ export const Chat = ({
 
          {/* Authored dialogue choices — shown above the input when a Yarn scene
              is paused awaiting a player selection. */}
-         {pendingChoices && pendingChoices.length > 0 && onChoiceSelected && (
+         {!hideInput && pendingChoices && pendingChoices.length > 0 && onChoiceSelected && (
             <ChoicePanel
                choices={pendingChoices}
                onChoiceSelected={onChoiceSelected}
@@ -758,7 +761,7 @@ export const Chat = ({
             />
          )}
 
-         {ending ? (
+         {hideInput ? null : ending ? (
             <EndingPanel ending={ending} onStartNewRun={onStartNewRun} />
          ) : (
             <Box
@@ -845,7 +848,7 @@ export const Chat = ({
 };
 
 /** Replaces the input bar once a run has ended: finished runs are read-only. */
-const EndingPanel = ({
+export const EndingPanel = ({
    ending,
    onStartNewRun,
 }: {

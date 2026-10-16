@@ -5,6 +5,11 @@ nodes: {
     name: "Rescue"
     instructions: {
       opcode: RUN_LINE
+      operands: { string_value: "line:rescue_000" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
       operands: { string_value: "line:rescue_001" }
       operands: { float_value: 0 }
     }
@@ -54,6 +59,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:rescue_ack_refuse_2" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: JUMP_TO
       operands: { string_value: "L1group_end" }
     }
@@ -61,15 +71,15 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 12
+      value: 14
     }
     labels: {
       key: "L2shortcutoption_Rescue_1"
-      value: 6
+      value: 7
     }
     labels: {
       key: "L3shortcutoption_Rescue_2"
-      value: 9
+      value: 10
     }
     headers: {
       key: "title"

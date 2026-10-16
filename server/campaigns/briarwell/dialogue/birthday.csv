@@ -1,8 +1,16 @@
 id,text
 line:bday_001,"The cottage glows with candlelight. Mother has baked a honey cake, and Ros is bouncing on her toes."
-line:bday_002,"""Did you get me something? Did you, did you?"""
+line:bday_002,"Ros: Did you get me something? Did you, did you?"
 line:bday_opt_give,Give Ros her gift.
 line:bday_opt_keep,Keep the gift for yourself.
-line:bday_ack_give,"Ros squeals and throws her arms around you. ""It's perfect! You're the best!"""
+line:bday_ack_give_0,Ros squeals and throws her arms around you.
+line:bday_ack_give,Ros: It's perfect! You're the best!
 line:bday_ack_keep,"Ros's face falls. She says nothing, but she doesn't look at you for the rest of supper."
-line:bday_smoke,"Later, as the candles gutter, Father goes to the window and goes very still. There is smoke rising from the woods."
+line:bday_smoke,"Later, as the candles gutter, Father goes to the window and goes very still."
+line:bday_smoke_2,There is smoke rising from the woods.
+line:bday_father_bed,"Father: Charcoal burners, most likely. Off to bed, the both of you."
+line:bday_opt_bed,Go to bed.
+line:bday_opt_ask,Ask Father what's wrong.
+line:bday_ack_bed,"You lie awake a long time, listening to Father's boots creak by the door."
+line:bday_ack_ask,Father: Nothing for you to worry about. Bed. Now.
+line:bday_ack_ask_2,"You lie awake a long time, listening to his boots creak by the door."

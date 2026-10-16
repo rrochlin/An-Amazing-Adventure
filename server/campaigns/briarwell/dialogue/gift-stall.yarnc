@@ -5,6 +5,11 @@ nodes: {
     name: "GiftStall"
     instructions: {
       opcode: RUN_LINE
+      operands: { string_value: "line:gift_000" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
       operands: { string_value: "line:gift_001" }
       operands: { float_value: 0 }
     }
@@ -42,6 +47,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:gift_ack_sweets_2" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: JUMP_TO
       operands: { string_value: "L1group_end" }
     }
@@ -53,6 +63,11 @@ nodes: {
     instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:gift_ack_ribbon" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_LINE
+      operands: { string_value: "line:gift_ack_ribbon_2" }
       operands: { float_value: 0 }
     }
     instructions: {
@@ -77,19 +92,19 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 15
+      value: 18
     }
     labels: {
       key: "L2shortcutoption_GiftStall_1"
-      value: 6
+      value: 7
     }
     labels: {
       key: "L3shortcutoption_GiftStall_2"
-      value: 9
+      value: 11
     }
     labels: {
       key: "L4shortcutoption_GiftStall_3"
-      value: 12
+      value: 15
     }
     headers: {
       key: "title"

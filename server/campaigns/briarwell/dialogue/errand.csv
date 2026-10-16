@@ -1,7 +1,10 @@
 id,text
-line:errand_001,"Father sets down his mug. ""It's your sister's birthday, and I've no coin to spare for a present. But you've two hands and a good heart."""
-line:errand_002,"""Do a good turn for someone in the village and they'll likely pay you for it. Earn enough, and buy Ros something from Old Garrick's stall."""
-line:errand_opt_eager,"""I'll do it! I'll get her the best present ever."""
-line:errand_opt_reluctant,"""Do I have to? Can't Mother just buy something?"""
-line:errand_ack_eager,"Father ruffles your hair. ""That's my child. Off you go, then."""
-line:errand_ack_reluctant,"Father raises an eyebrow. ""A gift you earn means more. Go on, before I find you chores instead."""
+line:errand_000,Father sets down his mug and looks at you over the rim.
+line:errand_001,"Father: It's your sister's birthday, and I've no coin to spare for a present. But you've two hands and a good heart."
+line:errand_002,"Father: Do a good turn for someone in the village and they'll likely pay you for it. Earn enough, and buy Ros something from Old Garrick's stall."
+line:errand_opt_eager,I'll do it! I'll get her the best present ever.
+line:errand_opt_reluctant,Do I have to? Can't Mother just buy something?
+line:errand_ack_eager_0,Father ruffles your hair.
+line:errand_ack_eager,"Father: That's my child. Off you go, then."
+line:errand_ack_reluctant_0,Father raises an eyebrow.
+line:errand_ack_reluctant,"Father: A gift you earn means more. Go on, before I find you chores instead."

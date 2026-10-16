@@ -56,6 +56,35 @@ func chooseOption(t *testing.T, def *campaigns.CampaignDefinition, g *game.Game,
 	return text
 }
 
+// chooseAndStay picks a choice that should not end the scene: the dialogue
+// continues to another choice and the campaign stays on the same node.
+func chooseAndStay(t *testing.T, def *campaigns.CampaignDefinition, g *game.Game, want string) string {
+	t.Helper()
+	node := g.Campaign.ActiveNodeID
+	d := g.Campaign.ActiveDialogue
+	choiceID := -1
+	for _, c := range d.PendingChoices {
+		if strings.Contains(c.Text, want) {
+			choiceID = c.ID
+		}
+	}
+	if choiceID < 0 {
+		t.Fatalf("node %q: no choice containing %q in %#v", node, want, d.PendingChoices)
+	}
+	text, err := campaigns.ResumeDialogueWithChoice(def, g, choiceID)
+	if err != nil {
+		t.Fatalf("resume with %q: %v", want, err)
+	}
+	result, err := campaigns.AdvanceCampaign(def, g)
+	if err != nil {
+		t.Fatalf("advance: %v", err)
+	}
+	if result.Transitioned || g.Campaign.ActiveNodeID != node || !g.Campaign.ActiveDialogue.AwaitingChoice {
+		t.Fatalf("expected to stay in %q awaiting another choice, got %#v", node, result)
+	}
+	return text
+}
+
 func advanceTo(t *testing.T, def *campaigns.CampaignDefinition, g *game.Game, wantNode string) {
 	t.Helper()
 	from := g.Campaign.ActiveNodeID
@@ -89,7 +118,7 @@ func TestBriarwell_BootstrapOpensFatherErrand(t *testing.T) {
 		joined += m.Content + "\n"
 	}
 	// Quoted dialogue must survive the string table round trip intact.
-	if !strings.Contains(joined, `"It's your sister's birthday, and I've no coin to spare for a present.`) {
+	if !strings.Contains(joined, "Father: It's your sister's birthday, and I've no coin to spare for a present.") {
 		t.Fatalf("expected father's quoted line in opening history, got:\n%s", joined)
 	}
 	if strings.Contains(joined, `""`) {
@@ -123,10 +152,12 @@ func TestBriarwell_FullPlaythrough(t *testing.T) {
 		t.Fatalf("expected gift=carved_bird, got %#v", g.Campaign.Labels)
 	}
 
-	text := chooseOption(t, def, g, "Give Ros", "bandit_raid")
+	// Giving the gift doesn't end the night; going to bed does.
+	text := chooseAndStay(t, def, g, "Give Ros")
 	if !strings.Contains(text, "smoke rising from the woods") {
 		t.Fatalf("expected smoke foreshadowing after the gift, got %q", text)
 	}
+	chooseOption(t, def, g, "Go to bed", "bandit_raid")
 	if got := g.Campaign.ActorStates["bandit_leader"].CurrentRailStepID; got != "raiding" {
 		t.Fatalf("expected bandit_leader at raiding step, got %q", got)
 	}
@@ -163,7 +194,8 @@ func TestBriarwell_KeepingTheGiftFailsObjectiveButRaidStillComes(t *testing.T) {
 	})
 	advanceTo(t, def, g, "gift_stall")
 	chooseOption(t, def, g, "honey sweets", "birthday")
-	chooseOption(t, def, g, "Keep the gift", "bandit_raid")
+	chooseAndStay(t, def, g, "Keep the gift")
+	chooseOption(t, def, g, "Ask Father", "bandit_raid")
 
 	if got := objectiveStatuses(g)["give_gift"]; got != "failed" {
 		t.Fatalf("expected give_gift failed, got %q", got)
