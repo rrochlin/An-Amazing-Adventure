@@ -19,7 +19,7 @@ import type {
    WorldEvent,
 } from '@/types/types';
 import { Chat, EndingPanel } from '../Chat';
-import { buildBeats, type Beat } from './beats';
+import { buildBeats, buildTranscript, type Beat } from './beats';
 import { useTypewriter } from './useTypewriter';
 
 /** How long a scene title card holds before moving on by itself. */
@@ -51,6 +51,10 @@ interface DialogueStageProps {
    onStartNewRun?: () => void;
    /** Latest server error; a change stops the "waiting for the story" state. */
    error?: string | null;
+   /** Where the player is, for the header. */
+   location?: string;
+   sceneTitle?: string;
+   objective?: string;
 }
 
 /**
@@ -73,6 +77,9 @@ export function DialogueStage({
    ending,
    onStartNewRun,
    error,
+   location,
+   sceneTitle,
+   objective,
 }: DialogueStageProps) {
    const beats = useMemo(
       () => buildBeats(messages, streamingMessage),
@@ -189,6 +196,12 @@ export function DialogueStage({
       return () => window.removeEventListener('keydown', onKey);
    }, [advance]);
 
+   const transcript = useMemo(
+      // Enough lines to fill the stage; the top fades out.
+      () => buildTranscript(messages, current?.id ?? null, 40),
+      [messages, current?.id],
+   );
+
    const showContinue = !!current && lineDone && current.kind === 'line' && (hasNext || !acknowledged) && !showChoices && !showEnding;
 
    return (
@@ -201,8 +214,49 @@ export function DialogueStage({
             position: 'relative',
          }}
       >
-         <Box sx={{ display: 'flex', justifyContent: 'flex-end', p: 1 }}>
-            <Button size="small" onClick={() => setHistoryOpen(true)}>
+         <Box
+            data-testid="stage-header"
+            sx={{
+               display: 'flex',
+               alignItems: 'flex-start',
+               gap: 2,
+               px: 2,
+               py: 1,
+               borderBottom: 1,
+               borderColor: 'divider',
+               flexShrink: 0,
+            }}
+         >
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+               <Typography
+                  sx={{
+                     fontFamily: 'Cinzel, Georgia, serif',
+                     color: 'primary.main',
+                     fontSize: '1rem',
+                  }}
+               >
+                  {location ?? 'Unknown place'}
+                  {sceneTitle && (
+                     <Typography
+                        component="span"
+                        sx={{ color: 'text.secondary', fontSize: '0.85rem', ml: 1 }}
+                     >
+                        · {sceneTitle}
+                     </Typography>
+                  )}
+               </Typography>
+               {objective && (
+                  <Typography
+                     variant="body2"
+                     sx={{ color: 'text.secondary', mt: 0.25 }}
+                     noWrap
+                     title={objective}
+                  >
+                     Objective: {objective}
+                  </Typography>
+               )}
+            </Box>
+            <Button size="small" variant="outlined" onClick={() => setHistoryOpen(true)}>
                History
             </Button>
          </Box>
@@ -212,6 +266,8 @@ export function DialogueStage({
             onClick={advance}
             sx={{
                flex: 1,
+               // Let the transcript give up space, not the header or dialogue box.
+               minHeight: 0,
                display: 'flex',
                flexDirection: 'column',
                justifyContent: 'flex-end',
@@ -221,6 +277,56 @@ export function DialogueStage({
                userSelect: 'none',
             }}
          >
+            {transcript.length > 0 && (
+               <Box
+                  data-testid="stage-transcript"
+                  aria-label="recent lines"
+                  sx={{
+                     flex: 1,
+                     minHeight: 0,
+                     overflow: 'hidden',
+                     mb: 2,
+                     display: 'flex',
+                     flexDirection: 'column',
+                     justifyContent: 'flex-end',
+                     gap: 0.75,
+                     maskImage: 'linear-gradient(to bottom, transparent 0, black 30%)',
+                  }}
+               >
+                  {transcript.map((item, i) => (
+                     <Typography
+                        key={item.key}
+                        sx={{
+                           // The newest lines read clearest.
+                           opacity: i >= transcript.length - 3 ? 0.85 : 0.6,
+                           flexShrink: 0,
+                           fontFamily: 'Crimson Text, Georgia, serif',
+                           fontSize: '1rem',
+                           lineHeight: 1.45,
+                           color: item.kind === 'player' ? 'secondary.light' : 'text.primary',
+                           textAlign: item.kind === 'scene' ? 'center' : 'left',
+                           fontStyle: item.kind === 'player' ? 'italic' : 'normal',
+                        }}
+                     >
+                        {item.kind === 'scene' ? (
+                           `— ${item.text} —`
+                        ) : item.kind === 'player' ? (
+                           `You: ${item.text}`
+                        ) : (
+                           <>
+                              {item.speaker && (
+                                 <Box component="span" sx={{ fontWeight: 700, mr: 0.75 }}>
+                                    {item.speaker}:
+                                 </Box>
+                              )}
+                              {item.text}
+                           </>
+                        )}
+                     </Typography>
+                  ))}
+               </Box>
+            )}
+
             {current?.kind === 'scene' ? (
                <SceneCard key={current.id} title={current.text} />
             ) : current ? (
@@ -230,7 +336,7 @@ export function DialogueStage({
                      borderColor: 'primary.dark',
                      borderRadius: 2,
                      p: { xs: 2, sm: 3 },
-                     minHeight: 160,
+                     minHeight: 110,
                      backgroundColor: 'rgba(26, 15, 30, 0.75)',
                      position: 'relative',
                   }}

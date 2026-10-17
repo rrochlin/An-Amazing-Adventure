@@ -32,9 +32,11 @@ type AdventureCreationParams struct {
 // sessions. It is persisted directly rather than reconstructed from chat
 // history so reconnects and debugging remain deterministic.
 type CampaignRuntimeState struct {
-	CampaignID       string                       `json:"campaign_id" dynamodbav:"campaign_id"`
-	CampaignVersion  string                       `json:"campaign_version" dynamodbav:"campaign_version"`
-	ActiveNodeID     string                       `json:"active_node_id" dynamodbav:"active_node_id"`
+	CampaignID      string `json:"campaign_id" dynamodbav:"campaign_id"`
+	CampaignVersion string `json:"campaign_version" dynamodbav:"campaign_version"`
+	ActiveNodeID    string `json:"active_node_id" dynamodbav:"active_node_id"`
+	// ActiveNodeTitle is the current scene's authored title, for the client.
+	ActiveNodeTitle  string                       `json:"active_node_title,omitempty" dynamodbav:"active_node_title,omitempty"`
 	CurrentObjective string                       `json:"current_objective,omitempty" dynamodbav:"current_objective,omitempty"`
 	PreviousNodeIDs  []string                     `json:"previous_node_ids,omitempty" dynamodbav:"previous_node_ids,omitempty"`
 	BoolFlags        map[string]bool              `json:"bool_flags,omitempty" dynamodbav:"bool_flags,omitempty"`
@@ -111,6 +113,7 @@ type CampaignStateView struct {
 	CampaignID       string             `json:"campaign_id"`
 	CampaignVersion  string             `json:"campaign_version"`
 	ActiveNodeID     string             `json:"active_node_id"`
+	ActiveNodeTitle  string             `json:"active_node_title,omitempty"`
 	CurrentObjective string             `json:"current_objective,omitempty"`
 	BoolFlags        map[string]bool    `json:"bool_flags,omitempty"`
 	Labels           map[string]string  `json:"labels,omitempty"`
@@ -944,6 +947,7 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 		CampaignID:       g.Campaign.CampaignID,
 		CampaignVersion:  g.Campaign.CampaignVersion,
 		ActiveNodeID:     g.Campaign.ActiveNodeID,
+		ActiveNodeTitle:  g.Campaign.ActiveNodeTitle,
 		CurrentObjective: g.Campaign.CurrentObjective,
 		BoolFlags:        copyBoolMap(g.Campaign.BoolFlags),
 		Labels:           copyStringMap(g.Campaign.Labels),

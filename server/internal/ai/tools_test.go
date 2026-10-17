@@ -571,3 +571,32 @@ func TestCreateRoom_NoEvent(t *testing.T) {
 		t.Errorf("expected nil event for create_room, got %+v", ev)
 	}
 }
+
+// Playtest 3: narration took the player around the village, but nothing
+// moved them, so the map never updated.
+func TestDispatchMovePlayer_FollowsTheNarration(t *testing.T) {
+	g, startID, northID := newTestGameWithRooms(t)
+
+	_, ev, err := dispatchWithEvent(g, "move_player", map[string]any{"room_name": "alley"})
+	if err != nil {
+		t.Fatalf("move_player: %v", err)
+	}
+	owner, _ := g.OwnerCharacter()
+	if owner.LocationID != northID {
+		t.Fatalf("expected the player in the Alley, got %q", owner.LocationID)
+	}
+	if ev == nil || ev.Type != "player_moved" || !strings.Contains(ev.Message, "Alley") {
+		t.Fatalf("expected a player_moved event, got %#v", ev)
+	}
+	if room := g.Rooms[startID]; len(room.Occupants) != 0 {
+		t.Fatalf("expected the Tavern to be empty after leaving, got %v", room.Occupants)
+	}
+
+	// Moving to where the player already is changes nothing.
+	if _, ev, err := dispatchWithEvent(g, "move_player", map[string]any{"room_name": "Alley"}); err != nil || ev != nil {
+		t.Fatalf("expected a no-op, got event %#v err %v", ev, err)
+	}
+	if _, err := dispatch(g, "move_player", map[string]any{"room_name": "Moon"}); err == nil {
+		t.Fatal("expected an unknown room to be rejected")
+	}
+}

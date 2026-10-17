@@ -151,6 +151,7 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 		return "", fmt.Errorf("active story node %q not found", g.Campaign.ActiveNodeID)
 	}
 	g.Campaign.CurrentObjective = node.ObjectiveText
+	g.Campaign.ActiveNodeTitle = node.Title
 	if err := applyActions(def, g, node.OnEnter); err != nil {
 		return "", err
 	}

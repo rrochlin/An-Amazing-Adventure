@@ -74,6 +74,16 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 		g.Rooms[startRoomID] = room
 	}
 
+	// Lay the map out from the exits (east is one step right, north one step
+	// up), as procedural worlds do. Without this every room sat at (0, 0) and
+	// the map drew a single node. The authored floor stays the map layer.
+	g.CalculateRoomCoordinates()
+	for authoredID, room := range def.Map.Rooms {
+		area := g.Rooms[roomIDMap[authoredID]]
+		area.Coordinates.Z = float64(room.Floor)
+		g.Rooms[area.ID] = area
+	}
+
 	for _, actorID := range def.Party.CompanionIDs {
 		a, ok := def.Actors[actorID]
 		if !ok {

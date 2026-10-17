@@ -15,6 +15,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { RoomMap } from '../components/RoomMap';
 import { GameInfo } from '../components/GameInfo';
 import { DialogueStage } from '../components/dialogue/DialogueStage';
+import { GameLayout } from '../components/GameLayout';
 import { isAuthenticated, getIdTokenClaims } from '../services/auth.service';
 import { LoadGame, RetryWorldGen } from '../services/api.game';
 import { useGameStore } from '../store/gameStore';
@@ -529,157 +530,96 @@ function GamePage() {
    const displayMessages = chatMessages;
 
    return (
-      <Box
-         sx={{
-            height: `calc(100vh - ${AppTheme.mixins.toolbar.minHeight}px)`,
-            display: 'flex',
-            flexDirection: 'row',
-            overflow: 'hidden',
-            animation: 'fadeInGame 0.8s ease forwards',
-            '@keyframes fadeInGame': {
-               from: { opacity: 0, transform: 'translateY(8px)' },
-               to: { opacity: 1, transform: 'translateY(0)' },
-            },
-            backgroundColor: 'background.default',
-            gap: 2,
-            p: 2,
-            pr: 3,
-            width: '100%',
-            maxWidth: '100vw',
-            boxSizing: 'border-box',
-         }}
-      >
-         {/* Left — Map (25% normal → 75% expanded, covering Chat only) */}
-         <Box
-            sx={{
-               flex: mapExpanded ? '0 0 75%' : '0 0 25%',
-               minWidth: 0,
-               display: 'flex',
-               flexDirection: 'column',
-               gap: 2,
-               transition: 'flex-basis 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-         >
-            <Paper
+      <GameLayout
+         mapExpanded={mapExpanded}
+         map={
+            <>
+            <Box
                sx={{
-                  flex: 1,
-                  p: 2,
                   display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                  transition: 'all 0.3s ease-in-out',
-                  '&:hover': {
-                     boxShadow:
-                        '0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)',
-                  },
+                  alignItems: 'center',
+                  mb: 2,
+                  borderBottom: `2px solid ${AppTheme.palette.primary.main}`,
+                  pb: 1,
                }}
             >
-               <Box
-                  sx={{
-                     display: 'flex',
-                     alignItems: 'center',
-                     mb: 2,
-                     borderBottom: `2px solid ${AppTheme.palette.primary.main}`,
-                     pb: 1,
-                  }}
-               >
-                  <Typography
-                     variant="h6"
-                     sx={{
-                        flex: 1,
-                        textAlign: 'center',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.1em',
-                     }}
-                  >
-                     World Map
-                  </Typography>
-                  <Tooltip title="Adventure details">
-                     <IconButton
-                        size="small"
-                        onClick={() =>
-                           navigate({
-                              to: '/game-{$sessionUUID}/details',
-                              params: { sessionUUID },
-                           })
-                        }
-                        sx={{
-                           color: 'primary.main',
-                           opacity: 0.7,
-                           '&:hover': { opacity: 1 },
-                        }}
-                     >
-                        <InfoOutlinedIcon fontSize="small" />
-                     </IconButton>
-                  </Tooltip>
-               </Box>
-               {/* Map fills all remaining vertical space inside the Paper */}
-               <Box
+               <Typography
+                  variant="h6"
                   sx={{
                      flex: 1,
-                     minHeight: 0,
-                     display: 'flex',
-                     flexDirection: 'column',
+                     textAlign: 'center',
+                     textTransform: 'uppercase',
+                     letterSpacing: '0.1em',
                   }}
                >
-                  <RoomMap
-                     gameState={gameState}
-                     onRoomFocus={setFocusedRoom}
-                     onExpand={() => setMapExpanded((v) => !v)}
-                     expanded={mapExpanded}
-                  />
-               </Box>
-            </Paper>
-         </Box>
-
-         {/* Center — Chat (50% normal → hidden when expanded) */}
-         <Box
-            sx={{
-               flex: mapExpanded ? '0 0 0%' : '0 0 50%',
-               minWidth: 0,
-               display: 'flex',
-               flexDirection: 'column',
-               overflow: 'hidden',
-               opacity: mapExpanded ? 0 : 1,
-               pointerEvents: mapExpanded ? 'none' : 'auto',
-               transition:
-                  'flex-basis 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease',
-            }}
-         >
-            <Paper
+                  World Map
+               </Typography>
+               <Tooltip title="Adventure details">
+                  <IconButton
+                     size="small"
+                     onClick={() =>
+                        navigate({
+                           to: '/game-{$sessionUUID}/details',
+                           params: { sessionUUID },
+                        })
+                     }
+                     sx={{
+                        color: 'primary.main',
+                        opacity: 0.7,
+                        '&:hover': { opacity: 1 },
+                     }}
+                  >
+                     <InfoOutlinedIcon fontSize="small" />
+                  </IconButton>
+               </Tooltip>
+            </Box>
+            {/* Map fills all remaining vertical space inside the Paper */}
+            <Box
                sx={{
                   flex: 1,
-                  overflow: 'hidden',
-                  transition: 'all 0.3s ease-in-out',
-                  '&:hover': {
-                     boxShadow:
-                        '0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)',
-                  },
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
                }}
             >
-               <DialogueStage
-                  messages={displayMessages}
-                  streamingMessage={streamingMessage || undefined}
-                  isLoading={isStreaming}
-                  pendingChoices={pendingChoices}
-                  onChoiceSelected={handleChoiceSelected}
-                  isSubmittingChoice={isSubmittingChoice}
-                  command={command}
-                  setCommand={setCommand}
-                  handleCommand={handleCommand}
-                  inputDisabled={
-                     wsError === 'ai_access_not_enabled' ||
-                     wsError === 'quota_exceeded'
-                  }
-                  ending={
-                     campaignState?.run_status === 'ended'
-                        ? (campaignState.ending ?? {})
-                        : undefined
-                  }
-                  onStartNewRun={() => navigate({ to: '/create' })}
-                  error={wsError}
+               <RoomMap
+                  gameState={gameState}
+                  onRoomFocus={setFocusedRoom}
+                  onExpand={() => setMapExpanded((v) => !v)}
+                  expanded={mapExpanded}
                />
-            </Paper>
+            </Box>
+            </>
+         }
+         stage={
+            <DialogueStage
+               messages={displayMessages}
+               streamingMessage={streamingMessage || undefined}
+               isLoading={isStreaming}
+               pendingChoices={pendingChoices}
+               onChoiceSelected={handleChoiceSelected}
+               isSubmittingChoice={isSubmittingChoice}
+               command={command}
+               setCommand={setCommand}
+               handleCommand={handleCommand}
+               inputDisabled={
+                  wsError === 'ai_access_not_enabled' ||
+                  wsError === 'quota_exceeded'
+               }
+               ending={
+                  campaignState?.run_status === 'ended'
+                     ? (campaignState.ending ?? {})
+                     : undefined
+               }
+               onStartNewRun={() => navigate({ to: '/create' })}
+               error={wsError}
+               location={gameState?.current_room?.name}
+               sceneTitle={campaignState?.active_node_title}
+               objective={campaignState?.current_objective}
+            />
+         }
+         alerts={
+            <>
             {wsError === 'ai_access_not_enabled' && (
                <Alert severity="info" sx={{ mt: 1 }}>
                   <strong>Preview Mode</strong> — AI narration is not enabled
@@ -700,47 +640,24 @@ function GamePage() {
                      {wsError ?? 'Connection lost — retrying...'}
                   </Alert>
                )}
-         </Box>
-
-         {/* Right — Game Info (25%, always visible) */}
-         <Box sx={{ flex: '0 0 25%', minWidth: 0, display: 'flex', gap: 2 }}>
-            <Paper
-               sx={{
-                  flex: 1,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  transition: 'all 0.3s ease-in-out',
-                  '&:hover': {
-                     boxShadow:
-                        '0 6px 24px rgba(0,0,0,0.6), inset 0 1px 0 rgba(201,169,98,0.2)',
-                  },
-               }}
-            >
-                <GameInfo
-                   gameState={gameState}
-                   campaignState={campaignState}
-                   sendAction={sendAction}
-                   focusedRoom={focusedRoom}
-                   sessionId={sessionUUID}
-                   adventureTitle={adventureTitle ?? undefined}
-                   isOwner={
-                     ownerID != null
-                        ? ownerID === currentUserID
-                        : currentUserID != null && gameState != null
-                  }
-               />
-            </Paper>
-            <Box
-               sx={{
-                  width: '4px',
-                  backgroundColor: '#000',
-                  opacity: 0.5,
-                  borderRadius: '2px',
-               }}
+            </>
+         }
+         info={
+             <GameInfo
+                gameState={gameState}
+                campaignState={campaignState}
+                sendAction={sendAction}
+                focusedRoom={focusedRoom}
+                sessionId={sessionUUID}
+                adventureTitle={adventureTitle ?? undefined}
+                isOwner={
+                  ownerID != null
+                     ? ownerID === currentUserID
+                     : currentUserID != null && gameState != null
+               }
             />
-         </Box>
-
+         }
+      >
          {/* UI-FUT-8: Reconnection toast */}
          <Snackbar
             open={reconnectToast}
@@ -757,6 +674,6 @@ function GamePage() {
                Reconnected to the adventure
             </Alert>
          </Snackbar>
-      </Box>
+      </GameLayout>
    );
 }
