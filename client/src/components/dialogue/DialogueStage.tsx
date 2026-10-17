@@ -197,7 +197,8 @@ export function DialogueStage({
    }, [advance]);
 
    const transcript = useMemo(
-      () => buildTranscript(messages, current?.id ?? null),
+      // Enough lines to fill the stage; the top fades out.
+      () => buildTranscript(messages, current?.id ?? null, 40),
       [messages, current?.id],
    );
 
@@ -223,6 +224,7 @@ export function DialogueStage({
                py: 1,
                borderBottom: 1,
                borderColor: 'divider',
+               flexShrink: 0,
             }}
          >
             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -264,6 +266,8 @@ export function DialogueStage({
             onClick={advance}
             sx={{
                flex: 1,
+               // Let the transcript give up space, not the header or dialogue box.
+               minHeight: 0,
                display: 'flex',
                flexDirection: 'column',
                justifyContent: 'flex-end',
@@ -277,14 +281,25 @@ export function DialogueStage({
                <Box
                   data-testid="stage-transcript"
                   aria-label="recent lines"
-                  sx={{ mb: 2, display: 'flex', flexDirection: 'column', gap: 0.75 }}
+                  sx={{
+                     flex: 1,
+                     minHeight: 0,
+                     overflow: 'hidden',
+                     mb: 2,
+                     display: 'flex',
+                     flexDirection: 'column',
+                     justifyContent: 'flex-end',
+                     gap: 0.75,
+                     maskImage: 'linear-gradient(to bottom, transparent 0, black 30%)',
+                  }}
                >
                   {transcript.map((item, i) => (
                      <Typography
                         key={item.key}
                         sx={{
-                           // Older lines fade back so the current one leads.
-                           opacity: 0.35 + (0.45 * (i + 1)) / transcript.length,
+                           // The newest lines read clearest.
+                           opacity: i >= transcript.length - 3 ? 0.85 : 0.6,
+                           flexShrink: 0,
                            fontFamily: 'Crimson Text, Georgia, serif',
                            fontSize: '1rem',
                            lineHeight: 1.45,
@@ -321,7 +336,7 @@ export function DialogueStage({
                      borderColor: 'primary.dark',
                      borderRadius: 2,
                      p: { xs: 2, sm: 3 },
-                     minHeight: 160,
+                     minHeight: 110,
                      backgroundColor: 'rgba(26, 15, 30, 0.75)',
                      position: 'relative',
                   }}

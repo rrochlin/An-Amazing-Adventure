@@ -17,6 +17,7 @@ import {
    type CampaignStateView,
    type GameStateView,
    type ItemView,
+   type ObjectiveStateView,
    type RoomView,
 } from '../types/types';
 import type { CreateInviteResponse } from '../types/types';
@@ -258,6 +259,7 @@ export const GameInfo = ({
             {campaignState && (
                <Paper
                   variant="outlined"
+                  data-testid="quest-log"
                   sx={{
                      mt: 1.5,
                      mb: 1.5,
@@ -277,58 +279,7 @@ export const GameInfo = ({
                   >
                      {adventureTitle ?? campaignState.campaign_id}
                   </Typography>
-                  <Typography variant="body2" sx={{ mb: 0.5 }}>
-                     Node: {campaignState.active_node_id}
-                  </Typography>
-                  {campaignState.current_objective && (
-                     <Typography
-                        variant="body2"
-                        sx={{ color: 'text.secondary', mb: 0.75 }}
-                     >
-                        Objective: {campaignState.current_objective}
-                     </Typography>
-                  )}
-                  {campaignState.active_dialogue && (
-                     <Box sx={{ mb: 0.75 }}>
-                        <Typography variant="body2" sx={{ mb: 0.25 }}>
-                           Dialogue Asset: {campaignState.active_dialogue.asset_id}
-                        </Typography>
-                        {campaignState.active_dialogue.current_node && (
-                           <Typography
-                              variant="body2"
-                              sx={{ color: 'text.secondary' }}
-                           >
-                              Dialogue Node: {campaignState.active_dialogue.current_node}
-                           </Typography>
-                        )}
-                     </Box>
-                  )}
-                  {campaignState.active_objectives &&
-                     campaignState.active_objectives.length > 0 && (
-                        <Box
-                           sx={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 0.5,
-                           }}
-                        >
-                           {campaignState.active_objectives.map((objective) => (
-                              <Chip
-                                 key={objective.id}
-                                 label={objective.visible_text ?? objective.id}
-                                 size="small"
-                                 color={
-                                    objective.status === 'completed'
-                                       ? 'success'
-                                       : objective.status === 'failed'
-                                         ? 'error'
-                                         : 'primary'
-                                 }
-                                 variant="outlined"
-                              />
-                           ))}
-                        </Box>
-                     )}
+                  <QuestList objectives={campaignState.active_objectives ?? []} />
                </Paper>
             )}
 
@@ -1037,3 +988,49 @@ export const GameInfo = ({
       </Box>
    );
 };
+
+// Quests: active first, then completed and missed, each with a status mark.
+const QUEST_ORDER: Record<string, number> = { active: 0, completed: 1, failed: 2 };
+const QUEST_MARK: Record<string, string> = { active: '◆', completed: '✓', failed: '✗' };
+
+function QuestList({ objectives }: { objectives: ObjectiveStateView[] }) {
+   if (!objectives.length) {
+      return (
+         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            No quests yet.
+         </Typography>
+      );
+   }
+   const sorted = [...objectives].sort(
+      (a, b) => (QUEST_ORDER[a.status] ?? 3) - (QUEST_ORDER[b.status] ?? 3),
+   );
+   return (
+      <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+         {sorted.map((o) => (
+            <Box
+               component="li"
+               key={o.id}
+               aria-label={`${o.visible_text ?? o.id} (${o.status})`}
+               sx={{
+                  display: 'flex',
+                  gap: 1,
+                  py: 0.25,
+                  fontSize: '0.95rem',
+                  color:
+                     o.status === 'active'
+                        ? 'text.primary'
+                        : o.status === 'completed'
+                          ? 'success.main'
+                          : 'text.disabled',
+                  textDecoration: o.status === 'failed' ? 'line-through' : 'none',
+               }}
+            >
+               <Box component="span" sx={{ color: o.status === 'active' ? 'primary.main' : 'inherit' }}>
+                  {QUEST_MARK[o.status] ?? '•'}
+               </Box>
+               {o.visible_text ?? o.id}
+            </Box>
+         ))}
+      </Box>
+   );
+}

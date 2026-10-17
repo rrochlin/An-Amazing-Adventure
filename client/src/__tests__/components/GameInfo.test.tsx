@@ -151,31 +151,36 @@ describe('GameInfo', () => {
        expect(sendAction).toHaveBeenCalledWith('drop', 'Health Potion');
     });
 
-    it('shows campaign and dialogue metadata when provided', () => {
+    it('shows the adventure title and a quest log, active quests first', () => {
        render(
           <ThemeProvider theme={AppTheme}>
              <GameInfo
                 gameState={makeGameState()}
                 sendAction={vi.fn()}
-                adventureTitle="Lich's Labyrinth"
+                adventureTitle="The Burning of Briarwell"
                 campaignState={{
-                   campaign_id: 'lichs-labyrinth',
+                   campaign_id: 'briarwell',
                    campaign_version: '1',
-                   active_node_id: 'camp_briefing',
-                   current_objective: 'Understand the mission.',
-                   active_dialogue: {
-                      asset_id: 'camp_briefing',
-                      current_node: 'CampBriefing',
-                   },
+                   active_node_id: 'village_deeds',
+                   active_objectives: [
+                      { id: 'hear_father', status: 'completed', visible_text: 'Listen to Father' },
+                      { id: 'return_doll', status: 'failed', visible_text: "Bess's Lost Doll" },
+                      { id: 'earn_coins', status: 'active', visible_text: 'Earn Some Coin' },
+                   ],
                 }}
              />
           </ThemeProvider>,
        );
 
-       expect(screen.getByText("Lich's Labyrinth")).toBeInTheDocument();
-       expect(screen.getByText(/Node: camp_briefing/i)).toBeInTheDocument();
-       expect(
-          screen.getByText(/Dialogue Asset: camp_briefing/i),
-       ).toBeInTheDocument();
+       const log = screen.getByTestId('quest-log');
+       expect(log).toHaveTextContent('The Burning of Briarwell');
+       const quests = screen.getAllByRole('listitem').map((li) => li.getAttribute('aria-label'));
+       expect(quests).toEqual([
+          'Earn Some Coin (active)',
+          'Listen to Father (completed)',
+          "Bess's Lost Doll (failed)",
+       ]);
+       // Internal ids are not shown to players.
+       expect(log).not.toHaveTextContent('village_deeds');
     });
 });
