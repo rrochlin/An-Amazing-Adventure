@@ -158,4 +158,35 @@ describe('DialogueStage', () => {
       tick(SCENE_CARD_MS + 5000);
       expect(stageText()).toBe('Sunlight spills through the shutters.');
    });
+
+   it('shows where the player is and what they are doing', () => {
+      setup(inProgress, {
+         location: 'Village Square',
+         sceneTitle: 'Good Turns and Bad',
+         objective: 'Earn two coins.',
+      });
+      const header = screen.getByTestId('stage-header');
+      expect(header).toHaveTextContent('Village Square');
+      expect(header).toHaveTextContent('Good Turns and Bad');
+      expect(header).toHaveTextContent('Objective: Earn two coins.');
+   });
+
+   it('keeps the previous lines and the player\'s words on screen', () => {
+      const { update } = setup(inProgress);
+      update({
+         messages: [
+            ...inProgress,
+            { type: 'narrative', content: 'Father: Off you go.\nThe door creaks shut.' },
+         ],
+      });
+      tick(5000);
+      fireEvent.click(stage()); // on to the second new line
+      tick(5000);
+      const transcript = screen.getByTestId('stage-transcript');
+      expect(transcript).toHaveTextContent('You: I wake up');
+      expect(transcript).toHaveTextContent('Sunlight spills through the shutters.');
+      expect(transcript).toHaveTextContent('Father:Off you go.');
+      expect(transcript).not.toHaveTextContent('The door creaks shut.'); // that's the current line
+      expect(stageText()).toBe('The door creaks shut.');
+   });
 });

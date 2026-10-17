@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildBeats, parseLine } from '@/components/dialogue/beats';
+import { buildBeats, buildTranscript, parseLine } from '@/components/dialogue/beats';
 import type { ChatMessage } from '@/types/types';
 
 describe('parseLine', () => {
@@ -61,5 +61,46 @@ describe('buildBeats', () => {
          { type: 'narrative', content: 'First paragraph.\n\nSecond, still arriving.' },
       ]);
       expect(committed.map((b) => b.id)).toEqual(['0-L0', '0-L1']);
+   });
+});
+
+describe('buildTranscript', () => {
+   const msgs: ChatMessage[] = [
+      { type: 'narrative', content: 'Sunlight spills in.\nFather: Off you go.' },
+      { type: 'player', content: 'I head to the square' },
+      {
+         type: 'narrative',
+         content: 'The square bustles.\nBess is crying by the well.',
+         events: [{ type: 'scene_started', message: 'Good Turns and Bad' }],
+      },
+   ];
+
+   it('shows what came before the current line, with the player\'s words', () => {
+      const items = buildTranscript(msgs, '2-L1');
+      expect(items.map((i) => [i.kind, i.speaker, i.text])).toEqual([
+         ['line', undefined, 'Sunlight spills in.'],
+         ['line', 'Father', 'Off you go.'],
+         ['player', undefined, 'I head to the square'],
+         ['scene', undefined, 'Good Turns and Bad'],
+         ['line', undefined, 'The square bustles.'],
+      ]);
+   });
+
+   it('leaves out the scene card while it is the current beat', () => {
+      const items = buildTranscript(msgs, '2-scene');
+      expect(items.map((i) => i.kind)).toEqual(['line', 'line', 'player']);
+   });
+
+   it('includes what the player just said before the story answers', () => {
+      const withReply = [...msgs, { type: 'player' as const, content: 'I help Bess' }];
+      const items = buildTranscript(withReply, '2-L1');
+      expect(items[items.length - 1]).toMatchObject({ kind: 'player', text: 'I help Bess' });
+   });
+
+   it('keeps only the most recent lines', () => {
+      expect(buildTranscript(msgs, '2-L1', 2).map((i) => i.text)).toEqual([
+         'Good Turns and Bad',
+         'The square bustles.',
+      ]);
    });
 });

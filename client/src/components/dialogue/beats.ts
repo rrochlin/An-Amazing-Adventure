@@ -93,3 +93,55 @@ export function buildBeats(
    }
    return beats;
 }
+
+/** One line of the on-stage transcript (what came just before). */
+export interface TranscriptItem {
+   key: string;
+   kind: 'scene' | 'line' | 'player';
+   text: string;
+   speaker?: string;
+}
+
+/**
+ * The lines already shown before `currentBeatId`, oldest first, ending with
+ * anything the player has just said. Gives the stage continuity without
+ * opening History.
+ */
+export function buildTranscript(
+   messages: ChatMessage[],
+   currentBeatId: string | null,
+   limit = 6,
+): TranscriptItem[] {
+   if (!currentBeatId) return [];
+   const [msgPart, beatPart] = currentBeatId.split('-');
+   const curMsg = Number(msgPart);
+   // Lines of the current message that are already behind the player.
+   const linesBefore = beatPart === 'scene' ? -1 : Number(beatPart.slice(1));
+
+   const items: TranscriptItem[] = [];
+   const lastNarrative = messages.reduce(
+      (last, m, i) => (m.type === 'narrative' ? i : last),
+      -1,
+   );
+   messages.forEach((msg, i) => {
+      const trailingPlayer = msg.type === 'player' && i > lastNarrative;
+      if (i > curMsg && !trailingPlayer) return;
+      if (msg.type === 'player') {
+         items.push({ key: `${i}-p`, kind: 'player', text: msg.content });
+         return;
+      }
+      const scene = msg.events?.find((e) => e.type === 'scene_started' && e.message);
+      if (scene && (i < curMsg || linesBefore >= 0)) {
+         items.push({ key: `${i}-scene`, kind: 'scene', text: scene.message });
+      }
+      msg.content
+         .split(/\n+/)
+         .map((l) => l.trim())
+         .filter(Boolean)
+         .forEach((line, n) => {
+            if (i === curMsg && n >= linesBefore) return;
+            items.push({ key: `${i}-L${n}`, kind: 'line', ...parseLine(line) });
+         });
+   });
+   return items.slice(-limit);
+}

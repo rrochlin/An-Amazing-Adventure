@@ -60,6 +60,8 @@ export interface CampaignStateView {
    campaign_id: string;
    campaign_version: string;
    active_node_id: string;
+   /** The current scene's title. */
+   active_node_title?: string;
    current_objective?: string;
    bool_flags?: Record<string, boolean>;
    labels?: Record<string, string>;

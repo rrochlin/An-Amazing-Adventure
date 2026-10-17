@@ -678,6 +678,9 @@ function GamePage() {
                   }
                   onStartNewRun={() => navigate({ to: '/create' })}
                   error={wsError}
+                  location={gameState?.current_room?.name}
+                  sceneTitle={campaignState?.active_node_title}
+                  objective={campaignState?.current_objective}
                />
             </Paper>
             {wsError === 'ai_access_not_enabled' && (
