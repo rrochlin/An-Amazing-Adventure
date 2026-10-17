@@ -62,6 +62,13 @@ func NarratorTools() []types.Tool {
 			),
 			[]string{"name", "description", "backstory", "room_name"},
 		),
+		tool("move_player",
+			"Move the player to a room when the narrative shows them arriving there (walking to the meadow, ducking into the mill). Only for rooms listed in Current Game State; never for rooms the player merely looks at or talks about.",
+			props(
+				req("room_name", "string", "Destination room name, exactly as listed"),
+			),
+			[]string{"room_name"},
+		),
 		tool("move_character",
 			"Move an NPC from their current room to another room.",
 			props(
@@ -163,6 +170,8 @@ func DispatchTool(ctx context.Context, g *game.Game, name string, input map[stri
 		result, event, err = execCreateItem(g, input)
 	case "create_character":
 		result, event, err = execCreateCharacter(g, input)
+	case "move_player":
+		result, event, err = execMovePlayer(g, input)
 	case "move_character":
 		result, event, err = execMoveCharacter(g, input)
 	case "damage_character":
@@ -301,6 +310,27 @@ func execCreateCharacter(g *game.Game, in map[string]any) (string, *game.WorldEv
 		ev = &game.WorldEvent{Type: "character_arrived", Message: fmt.Sprintf("%s appears.", name)}
 	}
 	return fmt.Sprintf("Created character %q in room %q", name, roomName), ev, nil
+}
+
+// execMovePlayer keeps the player's location in step with the narration, so
+// the map and room panels follow the story.
+func execMovePlayer(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	room, err := resolveRoomByName(g, strArg(in, "room_name"))
+	if err != nil {
+		return "", nil, err
+	}
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return "", nil, fmt.Errorf("no player to move")
+	}
+	if owner.LocationID == room.ID {
+		return fmt.Sprintf("Player is already in %q", room.Name), nil, nil
+	}
+	if err := g.PlaceCharacter(g.OwnerID, room.ID); err != nil {
+		return "", nil, err
+	}
+	return fmt.Sprintf("Moved player to %q", room.Name),
+		&game.WorldEvent{Type: "player_moved", Message: "You arrive at the " + room.Name + "."}, nil
 }
 
 func execMoveCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {

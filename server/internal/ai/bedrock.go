@@ -458,7 +458,8 @@ Examples of what to look for:
 - "The merchant gives you a healing potion" → give_item_to_player(healing potion)
 - "A warded chest materializes beside the altar" → create_item + place_item_in_room
 - "The bridge collapses, blocking the northern passage" → update_room(current room, updated description)
-- "A cloaked figure emerges from the shadows" → move_character or create_character if not yet present`
+- "A cloaked figure emerges from the shadows" → move_character or create_character if not yet present
+- "You cut across the square and out into the meadow" → move_player(Meadow)`
 }
 
 // engineerUserMessage builds the user-turn message for the Engineer.
