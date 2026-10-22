@@ -175,6 +175,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	// Record the whole turn for debugging; stored however the turn ends.
 	tr := trace.Start(trace.KindChat, "ws-chat", conn.GameID, g)
 	tr.RequestID, tr.ConnectionID, tr.UserID, tr.Input = reqID, connID, userID, msg.Content
+	tr.Before.World = trace.WorldOf(saveState) // for replaying the turn
 	defer trace.Save(ctx, dbClient, tr, g)
 	sendError := func(message string) {
 		tr.Errorf("sent error: %s", message)
