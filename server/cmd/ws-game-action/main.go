@@ -59,6 +59,13 @@ type dialogueChoiceSender interface {
 	SendDelta(context.Context, string, any) error
 }
 
+// withoutChat drops the chat log from a state view for the trace: the log is
+// unbounded and already stored on the session.
+func withoutChat(v game.GameStateView) game.GameStateView {
+	v.ChatHistory = nil
+	return v
+}
+
 // tracedSender records every frame it sends in the turn's trace.
 type tracedSender struct {
 	dialogueChoiceSender
@@ -274,13 +281,13 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	if len(allConns) == 0 {
 		// Fallback: send only to the requesting connection
 		stateView := g.BuildGameStateView(userID, saveState.ChatHistory)
-		tr.Frame(string(wsutil.FrameGameStateUpdate), connID, stateView)
+		tr.Frame(string(wsutil.FrameGameStateUpdate), connID, withoutChat(stateView))
 		_ = ws.SendFullState(ctx, connID, stateView)
 	} else {
 		for _, gc := range allConns {
 			memberUID := string(gc.UserID)
 			memberView := g.BuildGameStateView(memberUID, saveState.ChatHistory)
-			tr.Frame(string(wsutil.FrameGameStateUpdate), gc.ConnectionID, memberView)
+			tr.Frame(string(wsutil.FrameGameStateUpdate), gc.ConnectionID, withoutChat(memberView))
 			if sendErr := ws.SendFullState(ctx, gc.ConnectionID, memberView); sendErr != nil {
 				log.Printf("ws-game-action: send state to %s: %v", gc.ConnectionID, sendErr)
 				_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)
