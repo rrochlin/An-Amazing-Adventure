@@ -28,6 +28,7 @@ type Client struct {
 	usersTable       string
 	invitesTable     string
 	membershipsTable string
+	tracesTable      string
 }
 
 // New creates a Client from the current AWS environment.
@@ -47,6 +48,7 @@ func New(ctx context.Context) (*Client, error) {
 		usersTable:       os.Getenv("USERS_TABLE"),       // checked at use
 		invitesTable:     os.Getenv("INVITES_TABLE"),     // checked at use
 		membershipsTable: os.Getenv("MEMBERSHIPS_TABLE"), // checked at use
+		tracesTable:      os.Getenv("TRACES_TABLE"),      // optional: tracing is skipped when unset
 	}, nil
 }
 
