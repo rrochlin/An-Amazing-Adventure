@@ -3,12 +3,14 @@ package ai
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	brdocument "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/document"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	smithydocument "github.com/aws/smithy-go/document"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
@@ -80,8 +82,10 @@ func TestEngineerScan_ToolLoopDispatchesAndReturnsEventsMutations(t *testing.T) 
 	}
 	client := &Client{br: br}
 
+	var gotInput map[string]any
 	originalDispatch := dispatchToolFn
 	dispatchToolFn = func(_ context.Context, gameState *game.Game, name string, input map[string]any) (string, *game.WorldEvent, error) {
+		gotInput = input
 		owner, _ := gameState.OwnerCharacter()
 		owner.Health -= 6
 		gameState.Players[gameState.OwnerID] = owner
@@ -101,6 +105,10 @@ func TestEngineerScan_ToolLoopDispatchesAndReturnsEventsMutations(t *testing.T) 
 	if len(br.converseInputs[1].Messages) != 3 {
 		t.Fatalf("expected tool_result follow-up message chain, got %d messages", len(br.converseInputs[1].Messages))
 	}
+	// The model's arguments must reach the tool (they were silently empty).
+	if gotInput["character_name"] != "player" || gotInput["amount"] != float64(6) {
+		t.Fatalf("tool received input %v, want the model's arguments", gotInput)
+	}
 	if len(result.Events) != 1 || result.Events[0].Type != "damage" {
 		t.Fatalf("expected one damage event, got %+v", result.Events)
 	}
@@ -116,5 +124,36 @@ func TestEngineerScan_ToolLoopDispatchesAndReturnsEventsMutations(t *testing.T) 
 	}
 	if result.Tokens.InputTokens != 14 || result.Tokens.OutputTokens != 5 {
 		t.Fatalf("unexpected token totals: %+v", result.Tokens)
+	}
+}
+
+func TestToolInputDecodesResponseDocuments(t *testing.T) {
+	// A Bedrock response document decodes numbers as document.Number; tools
+	// read float64, so toolInput must convert them, nested values included.
+	doc := brdocument.NewLazyDocument(map[string]any{
+		"room_name": "Meadow",
+		"amount":    3,
+		"friendly":  true,
+		"nested":    map[string]any{"weight": 1.5, "list": []any{2}},
+	})
+	input, raw := toolInput(types.ToolUseBlock{Name: aws.String("t"), Input: doc})
+	if input["room_name"] != "Meadow" || input["amount"] != float64(3) || input["friendly"] != true {
+		t.Fatalf("unexpected input %#v", input)
+	}
+	nested := input["nested"].(map[string]any)
+	if nested["weight"] != 1.5 || nested["list"].([]any)[0] != float64(2) {
+		t.Fatalf("nested numbers not converted: %#v", nested)
+	}
+	if !strings.Contains(string(raw), `"room_name":"Meadow"`) {
+		t.Fatalf("log JSON should carry the arguments, got %s", raw)
+	}
+	if got, _ := toolInput(types.ToolUseBlock{Name: aws.String("t")}); len(got) != 0 {
+		t.Fatalf("missing input should decode to an empty map, got %v", got)
+	}
+}
+
+func TestPlainNumbersConvertsDocumentNumber(t *testing.T) {
+	if got := plainNumbers(smithydocument.Number("7")); got != float64(7) {
+		t.Fatalf("document.Number not converted: %#v", got)
 	}
 }

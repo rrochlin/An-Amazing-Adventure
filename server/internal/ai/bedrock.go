@@ -14,6 +14,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	smithydocument "github.com/aws/smithy-go/document"
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 	"github.com/rrochlin/an-amazing-adventure/internal/trace"
@@ -295,7 +296,7 @@ func (c *Client) EngineerScan(
 					fmt.Fprintf(&said, "[round %d] %s\n", round, b.Value)
 				}
 			case *types.ContentBlockMemberToolUse:
-				rawInput, _ := json.Marshal(b.Value.Input)
+				_, rawInput := toolInput(b.Value)
 				log.Printf("[engineer] round=%d tool_use: name=%s input=%s",
 					round, aws.ToString(b.Value.Name), string(rawInput))
 				fmt.Fprintf(&said, "[round %d] tool_use %s %s\n", round, aws.ToString(b.Value.Name), rawInput)
@@ -326,10 +327,7 @@ func (c *Client) EngineerScan(
 			toolName := aws.ToString(tu.Value.Name)
 			toolID := aws.ToString(tu.Value.ToolUseId)
 
-			// Unmarshal the tool input from the lazy document
-			var input map[string]any
-			raw, _ := json.Marshal(tu.Value.Input)
-			_ = json.Unmarshal(raw, &input)
+			input, _ := toolInput(tu.Value)
 
 			toolResult, event, dispatchErr := dispatchToolFn(ctx, g, toolName, input)
 			if dispatchErr != nil {
@@ -391,6 +389,46 @@ func (c *Client) EngineerScan(
 
 	finish(nil)
 	return result, nil
+}
+
+// toolInput decodes a tool call's arguments, also returning them as JSON for
+// logs. The SDK's document keeps its value in an unexported field, so it must
+// be read with UnmarshalSmithyDocument: encoding/json sees an empty object.
+func toolInput(tu types.ToolUseBlock) (map[string]any, []byte) {
+	input := map[string]any{}
+	if tu.Input == nil {
+		return input, []byte("{}")
+	}
+	if err := tu.Input.UnmarshalSmithyDocument(&input); err != nil {
+		log.Printf("[engineer] tool=%s: decode input: %v", aws.ToString(tu.Name), err)
+	}
+	for k, v := range input {
+		input[k] = plainNumbers(v)
+	}
+	raw, _ := json.Marshal(input)
+	return input, raw
+}
+
+// plainNumbers turns decoded document numbers into float64, the type the
+// tools read, as encoding/json would have.
+func plainNumbers(v any) any {
+	switch n := v.(type) {
+	case smithydocument.Number:
+		f, _ := n.Float64()
+		return f
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	case map[string]any:
+		for k, e := range n {
+			n[k] = plainNumbers(e)
+		}
+	case []any:
+		for i, e := range n {
+			n[i] = plainNumbers(e)
+		}
+	}
+	return v
 }
 
 func (c *Client) ResolveCampaignConditions(
