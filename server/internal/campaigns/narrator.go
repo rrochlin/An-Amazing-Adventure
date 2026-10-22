@@ -72,13 +72,23 @@ func NarratorBrief(def *CampaignDefinition, g *game.Game) string {
 		if !appearsIn(a, g.Campaign.ActiveNodeID) {
 			continue
 		}
+		// Where the character is: the live world state for cast who exist as
+		// characters, otherwise their rail position.
 		where := ""
-		if st, ok := g.Campaign.ActorStates[id]; ok && st.CurrentLocationID != "" {
-			if room, ok := def.Map.Rooms[st.CurrentLocationID]; ok {
-				where = " Currently at: " + room.Name + "."
-			}
+		locationID := ""
+		if npc, ok := g.NPCs[id]; ok {
+			locationID = npc.LocationID
+		} else if st, ok := g.Campaign.ActorStates[id]; ok {
+			locationID = st.CurrentLocationID
 		}
-		line("- %s (%s): %s%s", a.Name, a.Kind, a.Goal, where)
+		if room, ok := def.Map.Rooms[locationID]; ok {
+			where = " Currently at: " + room.Name + "."
+		}
+		who := ""
+		if a.Description != "" {
+			who = " " + a.Description
+		}
+		line("- %s (%s):%s Wants: %s%s", a.Name, a.Kind, who, a.Goal, where)
 	}
 
 	line("\n## Places (the only locations that exist)")
