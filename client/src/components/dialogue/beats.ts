@@ -3,7 +3,8 @@ import type { ChatMessage, WorldEvent } from '@/types/types';
 /**
  * A beat is one unit the dialogue stage presents at a time: a scene title
  * card, or a single line of narration or speech. Player messages are not
- * beats; the player already knows what they said, so it lives in History.
+ * beats; the player already knows what they said, so it lives in the
+ * transcript.
  */
 export interface Beat {
    /**
@@ -94,7 +95,7 @@ export function buildBeats(
    return beats;
 }
 
-/** One line of the on-stage transcript (what came just before). */
+/** One line of the on-stage transcript (everything that came before). */
 export interface TranscriptItem {
    key: string;
    kind: 'scene' | 'line' | 'player';
@@ -104,16 +105,14 @@ export interface TranscriptItem {
 
 /**
  * The lines already shown before `currentBeatId`, oldest first, ending with
- * anything the player has just said. Gives the stage continuity without
- * opening History.
+ * anything the player has just said. With no current beat, every line is
+ * behind the player. This is the stage's scrollback.
  */
 export function buildTranscript(
    messages: ChatMessage[],
    currentBeatId: string | null,
-   limit = 6,
 ): TranscriptItem[] {
-   if (!currentBeatId) return [];
-   const [msgPart, beatPart] = currentBeatId.split('-');
+   const [msgPart, beatPart] = (currentBeatId ?? `${messages.length}-scene`).split('-');
    const curMsg = Number(msgPart);
    // Lines of the current message that are already behind the player.
    const linesBefore = beatPart === 'scene' ? -1 : Number(beatPart.slice(1));
@@ -143,5 +142,5 @@ export function buildTranscript(
             items.push({ key: `${i}-L${n}`, kind: 'line', ...parseLine(line) });
          });
    });
-   return items.slice(-limit);
+   return items;
 }

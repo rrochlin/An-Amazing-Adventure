@@ -3,23 +3,22 @@ import {
    Box,
    Button,
    CircularProgress,
-   Drawer,
-   IconButton,
    Paper,
    Snackbar,
    Stack,
    TextField,
    Typography,
 } from '@mui/material';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
    ChatMessage,
    DialogueChoice,
    EndingView,
    WorldEvent,
 } from '@/types/types';
-import { Chat, EndingPanel } from '../Chat';
+import { EndingPanel } from '../Chat';
 import { buildBeats, buildTranscript, type Beat } from './beats';
+import { renderInline } from './inline';
 import { useTypewriter } from './useTypewriter';
 
 /** How long a scene title card holds before moving on by itself. */
@@ -61,7 +60,8 @@ interface DialogueStageProps {
  * Presents the story like a game rather than a chat: one beat at a time,
  * typed in, advanced by click / Space / Enter. Scene changes get a title
  * card, quest updates arrive as toasts, and choices or the text box only
- * appear once the current text has been read. The full log is in History.
+ * appear once the current text has been read. Everything before the current
+ * line stays above it as a scrollback.
  */
 export function DialogueStage({
    messages,
@@ -102,7 +102,6 @@ export function DialogueStage({
    });
    // Whether the player has dismissed the last beat (freeing the text box).
    const [acknowledged, setAcknowledged] = useState(!fresh);
-   const [historyOpen, setHistoryOpen] = useState(false);
    const [toasts, setToasts] = useState<WorldEvent[]>([]);
    // The player acted and the story hasn't answered yet. Covers the gap
    // before the first streamed chunk, when isLoading is still false.
@@ -143,6 +142,8 @@ export function DialogueStage({
 
    const advance = useCallback(() => {
       if (!current) return;
+      // Selecting text to copy shouldn't move the story on.
+      if (window.getSelection()?.toString()) return;
       if (current.kind === 'line' && typing) {
          complete();
       } else if (hasNext) {
@@ -196,11 +197,28 @@ export function DialogueStage({
       return () => window.removeEventListener('keydown', onKey);
    }, [advance]);
 
+   // What the player just said, until the story answers. It takes the
+   // dialogue box so the player's words read last, after everything before.
+   const lastMessage = messages[messages.length - 1];
+   const pendingPlayer =
+      atEnd && lastMessage?.type === 'player' && !streamingMessage ? lastMessage : null;
+
    const transcript = useMemo(
-      // Enough lines to fill the stage; the top fades out.
-      () => buildTranscript(messages, current?.id ?? null, 40),
-      [messages, current?.id],
+      () =>
+         pendingPlayer
+            ? buildTranscript(messages.slice(0, -1), null)
+            : buildTranscript(messages, current?.id ?? null),
+      [messages, current?.id, pendingPlayer],
    );
+
+   // Keep the scrollback pinned to the newest line, unless the player has
+   // scrolled up to reread.
+   const scrollRef = useRef<HTMLDivElement>(null);
+   const pinned = useRef(true);
+   useLayoutEffect(() => {
+      const el = scrollRef.current;
+      if (el && pinned.current) el.scrollTop = el.scrollHeight;
+   }, [transcript.length]);
 
    const showContinue = !!current && lineDone && current.kind === 'line' && (hasNext || !acknowledged) && !showChoices && !showEnding;
 
@@ -256,9 +274,6 @@ export function DialogueStage({
                   </Typography>
                )}
             </Box>
-            <Button size="small" variant="outlined" onClick={() => setHistoryOpen(true)}>
-               History
-            </Button>
          </Box>
 
          <Box
@@ -274,23 +289,28 @@ export function DialogueStage({
                px: { xs: 2, sm: 4 },
                pb: 2,
                cursor: showChoices || showInput ? 'default' : 'pointer',
-               userSelect: 'none',
             }}
          >
             {transcript.length > 0 && (
                <Box
+                  ref={scrollRef}
                   data-testid="stage-transcript"
-                  aria-label="recent lines"
+                  aria-label="story so far"
+                  onScroll={(e) => {
+                     const el = e.currentTarget;
+                     pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+                  }}
                   sx={{
                      flex: 1,
                      minHeight: 0,
-                     overflow: 'hidden',
+                     overflowY: 'auto',
                      mb: 2,
+                     pr: 1,
                      display: 'flex',
                      flexDirection: 'column',
-                     justifyContent: 'flex-end',
                      gap: 0.75,
-                     maskImage: 'linear-gradient(to bottom, transparent 0, black 30%)',
+                     // Short logs sit just above the dialogue box.
+                     '& > :first-of-type': { mt: 'auto' },
                   }}
                >
                   {transcript.map((item, i) => (
@@ -298,7 +318,7 @@ export function DialogueStage({
                         key={item.key}
                         sx={{
                            // The newest lines read clearest.
-                           opacity: i >= transcript.length - 3 ? 0.85 : 0.6,
+                           opacity: i >= transcript.length - 3 ? 0.85 : 0.65,
                            flexShrink: 0,
                            fontFamily: 'Crimson Text, Georgia, serif',
                            fontSize: '1rem',
@@ -319,7 +339,7 @@ export function DialogueStage({
                                     {item.speaker}:
                                  </Box>
                               )}
-                              {item.text}
+                              {renderInline(item.text)}
                            </>
                         )}
                      </Typography>
@@ -327,7 +347,52 @@ export function DialogueStage({
                </Box>
             )}
 
-            {current?.kind === 'scene' ? (
+            {pendingPlayer ? (
+               <Box
+                  data-testid="stage-player-line"
+                  sx={{
+                     border: 2,
+                     borderColor: 'secondary.dark',
+                     borderRadius: 2,
+                     p: { xs: 2, sm: 3 },
+                     minHeight: 110,
+                     backgroundColor: 'rgba(26, 15, 30, 0.75)',
+                     position: 'relative',
+                  }}
+               >
+                  <Typography
+                     sx={{
+                        fontFamily: 'Cinzel, Georgia, serif',
+                        color: 'secondary.light',
+                        letterSpacing: 1.5,
+                        textTransform: 'uppercase',
+                        fontSize: '0.9rem',
+                        mb: 1,
+                     }}
+                  >
+                     You
+                  </Typography>
+                  <Typography
+                     sx={{
+                        fontFamily: 'Crimson Text, Georgia, serif',
+                        fontSize: '1.3rem',
+                        lineHeight: 1.6,
+                        color: 'secondary.light',
+                        fontStyle: 'italic',
+                        whiteSpace: 'pre-wrap',
+                     }}
+                  >
+                     {pendingPlayer.content}
+                  </Typography>
+                  {busy && (
+                     <CircularProgress
+                        size={16}
+                        aria-label="the story continues"
+                        sx={{ position: 'absolute', right: 16, bottom: 12 }}
+                     />
+                  )}
+               </Box>
+            ) : current?.kind === 'scene' ? (
                <SceneCard key={current.id} title={current.text} />
             ) : current ? (
                <Box
@@ -365,7 +430,7 @@ export function DialogueStage({
                         whiteSpace: 'pre-wrap',
                      }}
                   >
-                     {visible}
+                     {renderInline(visible)}
                   </Typography>
                   {showContinue && (
                      <Typography
@@ -486,31 +551,6 @@ export function DialogueStage({
             </Alert>
          </Snackbar>
 
-         <Drawer
-            anchor="right"
-            open={historyOpen}
-            onClose={() => setHistoryOpen(false)}
-            slotProps={{ paper: { sx: { width: { xs: '100%', sm: 520 } } } }}
-         >
-            <Box sx={{ display: 'flex', alignItems: 'center', p: 1 }}>
-               <Typography sx={{ flex: 1, fontFamily: 'Cinzel, Georgia, serif', pl: 1 }}>
-                  History
-               </Typography>
-               <IconButton aria-label="close history" onClick={() => setHistoryOpen(false)}>
-                  ✕
-               </IconButton>
-            </Box>
-            <Box sx={{ flex: 1, minHeight: 0 }}>
-               <Chat
-                  chatHistory={messages}
-                  command=""
-                  setCommand={() => {}}
-                  handleCommand={() => {}}
-                  isLoading={false}
-                  hideInput
-               />
-            </Box>
-         </Drawer>
       </Paper>
    );
 }
