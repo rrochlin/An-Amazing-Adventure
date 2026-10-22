@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/trace"
 )
 
 // Model IDs — must be cross-region inference profile IDs, not bare model IDs.
@@ -73,6 +74,7 @@ type NarratorResult struct {
 	Narrative   string                  // accumulated text sent to the player
 	NewMessages []game.NarrativeMessage // updated history to persist
 	Tokens      TokenUsage              // token usage for this turn
+	Calls       []trace.ModelCall       // what was sent and received, for the turn trace
 }
 
 // EngineerResult holds the world mutations the Engineer inferred from the narrative.
@@ -80,11 +82,13 @@ type EngineerResult struct {
 	Events    []game.WorldEvent    // player-visible world events
 	Mutations []game.MutationEntry // audit log entries
 	Tokens    TokenUsage           // token usage for the Engineer call
+	Calls     []trace.ModelCall    // what was sent and received, for the turn trace
 }
 
 type CampaignConditionResolutionResult struct {
 	Resolution campaigns.ConditionResolution
 	Tokens     TokenUsage
+	Calls      []trace.ModelCall // what was sent and received, for the turn trace
 }
 
 // NarrateStream runs a single narrator turn with streaming.
@@ -113,6 +117,21 @@ func (c *Client) NarrateStream(
 	}))
 
 	systemPrompt := narratorSystemPrompt(g, campaignDef)
+	call := trace.ModelCall{
+		Role:   "narrator",
+		Model:  ModelNarrator,
+		System: systemPrompt,
+		Messages: append(append([]game.NarrativeMessage(nil), trimmed...), game.NarrativeMessage{
+			Role:    "user",
+			Content: []game.NarrativeBlock{{Type: "text", Text: playerInput}},
+		}),
+	}
+	started := time.Now()
+	failed := func(err error) (NarratorResult, error) {
+		call.Error = err.Error()
+		call.DurationMs = time.Since(started).Milliseconds()
+		return NarratorResult{Calls: []trace.ModelCall{call}}, err
+	}
 
 	// Single streaming call — Narrator never calls tools so there is no agentic loop.
 	resp, err := c.br.ConverseStream(ctx, &bedrockruntime.ConverseStreamInput{
@@ -126,7 +145,7 @@ func (c *Client) NarrateStream(
 		},
 	})
 	if err != nil {
-		return NarratorResult{}, fmt.Errorf("converse stream: %w", err)
+		return failed(fmt.Errorf("converse stream: %w", err))
 	}
 
 	var fullNarrative strings.Builder
@@ -144,6 +163,8 @@ func (c *Client) NarrateStream(
 					onChunk(d.Value)
 				}
 			}
+		case *types.ConverseStreamOutputMemberMessageStop:
+			call.StopReason = string(e.Value.StopReason)
 		case *types.ConverseStreamOutputMemberMetadata:
 			if e.Value.Usage != nil {
 				totalTokens.InputTokens += int(aws.ToInt32(e.Value.Usage.InputTokens))
@@ -152,8 +173,12 @@ func (c *Client) NarrateStream(
 		}
 	}
 	if err := stream.Err(); err != nil {
-		return NarratorResult{}, fmt.Errorf("stream error: %w", err)
+		call.Output = fullNarrative.String()
+		return failed(fmt.Errorf("stream error: %w", err))
 	}
+	call.Output = fullNarrative.String()
+	call.InputTok, call.OutputTok = totalTokens.InputTokens, totalTokens.OutputTokens
+	call.DurationMs = time.Since(started).Milliseconds()
 
 	// Append this exchange to history (user turn + assistant text turn)
 	newHistory := append(trimmed,
@@ -171,6 +196,7 @@ func (c *Client) NarrateStream(
 		Narrative:   fullNarrative.String(),
 		NewMessages: newHistory,
 		Tokens:      totalTokens,
+		Calls:       []trace.ModelCall{call},
 	}, nil
 }
 
@@ -207,6 +233,28 @@ func (c *Client) EngineerScan(
 	}}
 
 	var result EngineerResult
+	// The trace keeps what the model said each round; tool results are in
+	// result.Mutations.
+	started := time.Now()
+	var said strings.Builder
+	var stopReason types.StopReason
+	finish := func(err error) {
+		call := trace.ModelCall{
+			Role:       "engineer",
+			Model:      ModelSubAgent,
+			System:     systemPrompt,
+			Input:      userMsg,
+			Output:     said.String(),
+			StopReason: string(stopReason),
+			InputTok:   result.Tokens.InputTokens,
+			OutputTok:  result.Tokens.OutputTokens,
+			DurationMs: time.Since(started).Milliseconds(),
+		}
+		if err != nil {
+			call.Error = err.Error()
+		}
+		result.Calls = []trace.ModelCall{call}
+	}
 
 	for round := 0; round < engineerMaxRounds; round++ {
 		resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
@@ -222,7 +270,9 @@ func (c *Client) EngineerScan(
 			},
 		})
 		if err != nil {
-			return result, fmt.Errorf("engineer scan round %d: %w", round, err)
+			err = fmt.Errorf("engineer scan round %d: %w", round, err)
+			finish(err)
+			return result, err
 		}
 
 		if resp.Usage != nil {
@@ -242,11 +292,13 @@ func (c *Client) EngineerScan(
 			case *types.ContentBlockMemberText:
 				if b.Value != "" {
 					log.Printf("[engineer] round=%d assistant text: %s", round, b.Value)
+					fmt.Fprintf(&said, "[round %d] %s\n", round, b.Value)
 				}
 			case *types.ContentBlockMemberToolUse:
 				rawInput, _ := json.Marshal(b.Value.Input)
 				log.Printf("[engineer] round=%d tool_use: name=%s input=%s",
 					round, aws.ToString(b.Value.Name), string(rawInput))
+				fmt.Fprintf(&said, "[round %d] tool_use %s %s\n", round, aws.ToString(b.Value.Name), rawInput)
 			}
 		}
 
@@ -258,7 +310,7 @@ func (c *Client) EngineerScan(
 			}
 		}
 
-		stopReason := resp.StopReason
+		stopReason = resp.StopReason
 		log.Printf("[engineer] round=%d stopReason=%v toolCalls=%d",
 			round, stopReason, len(toolUseBlocks))
 
@@ -337,6 +389,7 @@ func (c *Client) EngineerScan(
 		g.ConversationCount, len(result.Mutations), len(result.Events),
 		result.Tokens.InputTokens, result.Tokens.OutputTokens)
 
+	finish(nil)
 	return result, nil
 }
 
@@ -383,16 +436,22 @@ Latest assistant narrative: %q`,
 		playerInput,
 		narrative,
 	)
+	call := trace.ModelCall{Role: "resolver", Model: ModelSubAgent, System: resolverSystemPrompt, Input: userPrompt}
+	started := time.Now()
+	result := CampaignConditionResolutionResult{}
+	// Every return below carries the call, so failed resolutions are traced too.
+	done := func(err error) (CampaignConditionResolutionResult, error) {
+		call.DurationMs = time.Since(started).Milliseconds()
+		call.InputTok, call.OutputTok = result.Tokens.InputTokens, result.Tokens.OutputTokens
+		if err != nil {
+			call.Error = err.Error()
+		}
+		result.Calls = []trace.ModelCall{call}
+		return result, err
+	}
 	resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
 		ModelId: aws.String(ModelSubAgent),
-		System: []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: `You are a deterministic campaign condition resolver.
-Use only the latest player input and latest assistant narrative to decide whether authored campaign conditions were satisfied this turn.
-Return strict JSON with exactly these top-level keys: bool_flags, labels, counters.
-Only include keys that appear in the allowed condition specs.
-For boolean flags, set true only when the turn clearly establishes that authored condition.
-For labels, only emit one of the allowed values.
-For counters, emit integers only when the turn clearly advances a tracked quantity.
-Do not invent keys, branches, dialogue, or explanations.`}},
+		System:  []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: resolverSystemPrompt}},
 		Messages: []types.Message{{
 			Role:    types.ConversationRoleUser,
 			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: userPrompt}},
@@ -403,16 +462,16 @@ Do not invent keys, branches, dialogue, or explanations.`}},
 		},
 	})
 	if err != nil {
-		return CampaignConditionResolutionResult{}, fmt.Errorf("resolve campaign conditions: %w", err)
+		return done(fmt.Errorf("resolve campaign conditions: %w", err))
 	}
-	result := CampaignConditionResolutionResult{}
 	if resp.Usage != nil {
 		result.Tokens.InputTokens = int(aws.ToInt32(resp.Usage.InputTokens))
 		result.Tokens.OutputTokens = int(aws.ToInt32(resp.Usage.OutputTokens))
 	}
+	call.StopReason = string(resp.StopReason)
 	msg, ok := resp.Output.(*types.ConverseOutputMemberMessage)
 	if !ok {
-		return result, fmt.Errorf("resolve campaign conditions: missing message output")
+		return done(fmt.Errorf("resolve campaign conditions: missing message output"))
 	}
 	var text strings.Builder
 	for _, block := range msg.Value.Content {
@@ -420,15 +479,26 @@ Do not invent keys, branches, dialogue, or explanations.`}},
 			text.WriteString(b.Value)
 		}
 	}
+	call.Output = text.String()
 	raw := extractJSONObject(text.String())
 	if raw == "" {
-		return result, fmt.Errorf("resolve campaign conditions: no JSON object in %q", text.String())
+		return done(fmt.Errorf("resolve campaign conditions: no JSON object in %q", text.String()))
 	}
 	if err := json.Unmarshal([]byte(raw), &result.Resolution); err != nil {
-		return result, fmt.Errorf("resolve campaign conditions: parse JSON: %w", err)
+		return done(fmt.Errorf("resolve campaign conditions: parse JSON: %w", err))
 	}
-	return result, nil
+	return done(nil)
 }
+
+// resolverSystemPrompt instructs the campaign condition resolver.
+const resolverSystemPrompt = `You are a deterministic campaign condition resolver.
+Use only the latest player input and latest assistant narrative to decide whether authored campaign conditions were satisfied this turn.
+Return strict JSON with exactly these top-level keys: bool_flags, labels, counters.
+Only include keys that appear in the allowed condition specs.
+For boolean flags, set true only when the turn clearly establishes that authored condition.
+For labels, only emit one of the allowed values.
+For counters, emit integers only when the turn clearly advances a tracked quantity.
+Do not invent keys, branches, dialogue, or explanations.`
 
 func extractJSONObject(raw string) string {
 	start := strings.Index(raw, "{")

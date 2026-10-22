@@ -5,16 +5,16 @@
 *.so
 *.dylib
 an-amazing-adventure
-cognito-post-confirm
-http-admin
-http-games
-http-invites
-http-users
-world-gen
-ws-connect
-ws-disconnect
-ws-chat
-ws-game-action
+/cognito-post-confirm
+/http-admin
+/http-games
+/http-invites
+/http-users
+/world-gen
+/ws-connect
+/ws-disconnect
+/ws-chat
+/ws-game-action
 
 # Test binary, built with `go test -c`
 *.test

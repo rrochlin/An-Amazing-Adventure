@@ -21,6 +21,7 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/combat"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/trace"
 	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
 )
 
@@ -56,6 +57,35 @@ type dialogueChoiceSender interface {
 	SendError(context.Context, string, string) error
 	Broadcast(context.Context, []string, wsutil.Frame) ([]string, error)
 	SendDelta(context.Context, string, any) error
+}
+
+// withoutChat drops the chat log from a state view for the trace: the log is
+// unbounded and already stored on the session.
+func withoutChat(v game.GameStateView) game.GameStateView {
+	v.ChatHistory = nil
+	return v
+}
+
+// tracedSender records every frame it sends in the turn's trace.
+type tracedSender struct {
+	dialogueChoiceSender
+	tr *trace.Turn
+}
+
+func (s tracedSender) SendError(ctx context.Context, connID, message string) error {
+	s.tr.Errorf("sent error: %s", message)
+	s.tr.Frame(string(wsutil.FrameError), connID, message)
+	return s.dialogueChoiceSender.SendError(ctx, connID, message)
+}
+
+func (s tracedSender) Broadcast(ctx context.Context, connIDs []string, f wsutil.Frame) ([]string, error) {
+	s.tr.Frame(string(f.Type), "", f.Payload)
+	return s.dialogueChoiceSender.Broadcast(ctx, connIDs, f)
+}
+
+func (s tracedSender) SendDelta(ctx context.Context, connID string, delta any) error {
+	s.tr.Frame(string(wsutil.FrameStateDelta), connID, delta)
+	return s.dialogueChoiceSender.SendDelta(ctx, connID, delta)
 }
 
 func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (events.APIGatewayProxyResponse, error) {
@@ -111,15 +141,26 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
+	// Record the whole turn for debugging; stored however the turn ends.
+	kind := trace.KindGameAction
+	if msg.SubAction == "dialogue_choice" {
+		kind = trace.KindDialogueChoice
+	}
+	tr := trace.Start(kind, "ws-game-action", conn.GameID, g)
+	tr.RequestID, tr.ConnectionID, tr.UserID = reqID, connID, userID
+	tr.Input = msg.SubAction + " " + msg.Payload
+	defer trace.Save(ctx, dbClient, tr, g)
+	sender := tracedSender{ws, tr}
+
 	if g.Campaign.RunEnded() {
-		_ = ws.SendError(ctx, connID, "run_ended")
+		_ = sender.SendError(ctx, connID, "run_ended")
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
 
 	// dialogue_choice is handled separately: it broadcasts authored text like
 	// ws-chat does instead of sending a full state update.
 	if msg.SubAction == "dialogue_choice" {
-		return handleDialogueChoice(ctx, dbClient, ws, conn, g, &saveState, msg.Payload)
+		return handleDialogueChoice(ctx, dbClient, sender, conn, g, &saveState, msg.Payload)
 	}
 
 	// Execute the action
@@ -201,7 +242,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 	if actionErr != nil {
 		log.Printf("ws-game-action: %s: %v", msg.SubAction, actionErr)
-		_ = ws.SendError(ctx, connID, actionErr.Error())
+		_ = sender.SendError(ctx, connID, actionErr.Error())
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
 
@@ -213,7 +254,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			wipe, wipeErr := campaigns.EndRunIfPartyWiped(def, g)
 			if wipeErr != nil {
 				log.Printf("ws-game-action: end run on party wipe: %v", wipeErr)
+				tr.Errorf("end run on party wipe: %v", wipeErr)
 			} else if wipe.Transition.RunEnded {
+				tr.Transition = wipe.Transition
+				tr.Events = wipe.Events
 				saveState.ChatHistory = append(saveState.ChatHistory, game.ChatMessage{
 					Type:    "narrative",
 					Content: wipe.Transition.DialogueText,
@@ -228,7 +272,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	saved := g.ToSaveState(saveState.Narrative, saveState.ChatHistory)
 	if err := dbClient.PutGame(ctx, saved); err != nil {
 		log.Printf("ws-game-action: put game: %v", err)
-		_ = ws.SendError(ctx, connID, "Failed to save game state")
+		_ = sender.SendError(ctx, connID, "Failed to save game state")
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
@@ -237,11 +281,13 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	if len(allConns) == 0 {
 		// Fallback: send only to the requesting connection
 		stateView := g.BuildGameStateView(userID, saveState.ChatHistory)
+		tr.Frame(string(wsutil.FrameGameStateUpdate), connID, withoutChat(stateView))
 		_ = ws.SendFullState(ctx, connID, stateView)
 	} else {
 		for _, gc := range allConns {
 			memberUID := string(gc.UserID)
 			memberView := g.BuildGameStateView(memberUID, saveState.ChatHistory)
+			tr.Frame(string(wsutil.FrameGameStateUpdate), gc.ConnectionID, withoutChat(memberView))
 			if sendErr := ws.SendFullState(ctx, gc.ConnectionID, memberView); sendErr != nil {
 				log.Printf("ws-game-action: send state to %s: %v", gc.ConnectionID, sendErr)
 				_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)

@@ -86,6 +86,7 @@ cd server
 go build ./...
 go test ./...
 go run ./tools/yarnc   # compile campaign dialogue: campaigns/**/*.yarn → .yarnc + .csv
+go run ./tools/sessiondump SESSION_ID   # turn-by-turn debugging report (see Debugging Sessions)
 ```
 
 ### Terraform
@@ -227,6 +228,18 @@ Branch protection: all changes must go through PRs. Direct push to `main` is blo
 - **CONNECTIONS_TABLE**: `http-games` and `world-gen` don't need it at startup — `db.New()` defers the panic to actual connection methods via `requireConnectionsTable()`.
 - **Inference profiles**: Bedrock requires `us.` prefixed profile IDs, not bare model IDs.
 - **WebSocket endpoint**: `WEBSOCKET_API_ENDPOINT` env var is `domain/stage` (e.g. `ba2t50m7se.execute-api.us-west-2.amazonaws.com/prod`). The api-gateway Terraform module output already includes the stage — do not append it again. `wsutil.New()` prepends `https://` at runtime.
+
+## Debugging Sessions
+
+Every chat and game-action turn writes a **turn trace** to `TRACES_TABLE` (`internal/trace`). The trace holds
+each model call with its full prompt and raw output, the campaign state before and after the turn, the resolver
+verdict, the transition, events, every frame sent, and any errors. Traces are kept 30 days. Tracing is
+optional: without `TRACES_TABLE` the Lambdas skip it, which is why the variable is not in
+`TestAllRequiredEnvVarsPanic`.
+
+Read a session with `go run ./tools/sessiondump [-full] [-json] SESSION_ID` from `server/` (needs read access to
+the sessions, mutations and traces tables). See `.github/agents/game-session-debugger.agent.md` for the
+full protocol.
 
 ## Testing Notes
 
