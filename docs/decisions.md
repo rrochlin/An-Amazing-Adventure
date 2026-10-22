@@ -9,6 +9,17 @@ force are summarised at the end of this file.
 
 ---
 
+## 2026-10-22 — Map: room data model, illustrated where there's art
+
+- Spike #118 (`map/map-prototypes.md`) compared a room graph with points of interest (A), an
+  illustrated region map (B), and a tile world (C).
+- **Decision:** A's data model (rooms, points of interest, character positions, discovery state)
+  rendered in B's illustrated style. A campaign with map art gets the illustrated layer; any world
+  without art, procedural ones included, falls back to the room graph in the same visual language.
+- Not chosen: the tile world, which is only worth it for positional movement or grid combat.
+- Still open: how much screen the map gets (#129).
+- Build issues: under #117 (map) and #109 (points of interest, discovery state).
+
 ## 2026-10-22 — Plan with a GitHub Project and epics, not phases
 
 - Work is tracked in one GitHub Project using **Kanban** (no sprints): a prioritised backlog, little in
