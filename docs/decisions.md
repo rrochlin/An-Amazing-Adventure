@@ -29,16 +29,14 @@ force are summarised at the end of this file.
 - This keeps Phase 7's principle that the authored script, not the AI, drives the main arc.
 - Epic: game master (#99).
 
-## 2026-10-22 — Characters are players with motivations, told what they need to know
+## 2026-10-22 — Characters get only what they need to know (framing still open)
 
-- Non-player characters are thought of as **players** (with backstories and motivations) run by the game
-  master, rather than actors reading lines.
 - Characters receive information **on a need-to-know basis**, never the whole world state by default.
-  Facts are recorded once in world state; the game master shares the relevant ones.
-- The film framing (screenplay, stage directions, actors) is still useful and has to be reconciled with
-  the tabletop framing. That choice leaks into the product, so it gets its own spike (#92) before the
-  script format is fixed.
-- Epics: story model (#91), character players (#103), world state (#109).
+  Facts are recorded once in world state, and the game master shares the relevant ones.
+- **Not decided:** whether characters are framed as **actors** (film: performing a part from a script)
+  or **players** (tabletop: pursuing their own motivations). Rob leans toward players but is still
+  debating. The framing spike (#92) compares them; see `story-engine/framing.md`.
+- Epics: story model (#91), character agents (#103), world state (#109).
 
 ## 2026-10-22 — Scenes decide who acts
 
