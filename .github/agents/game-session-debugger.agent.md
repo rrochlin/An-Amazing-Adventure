@@ -38,13 +38,14 @@ Use these as first-pass expected names unless deployment overrides `prefix`.
   - `${prefix}-sessions`: PK `session_id` (B), GSI `user-sessions-index` on `user_id` (B)
   - `${prefix}-connections`: PK `connection_id` (S), GSIs `user-connections-index` on `user_id` (B), `game-connections-index` on `game_id` (S)
   - `${prefix}-mutations`: PK `session_id` (B), SK `ts` (N)
+  - `${prefix}-traces`: PK `session_id` (B), SK `ts` (N), TTL `expires_at`. One item per turn; the full trace is gzipped JSON in `data` (B)
   - `${prefix}-users`: PK `user_id` (B)
   - `${prefix}-memberships`: PK `user_id` (B), SK `session_id` (B), GSI `session-members-index` on `session_id` (B)
   - `${prefix}-invites`: PK `code` (S)
 
 ## Asset and Schema Discovery Rules
 When exact deployed asset names are not provided, discover first before concluding:
-1. Resolve active Lambda function names and environment variables from Terraform under `server/infra/`.
+1. Resolve active Lambda function names and environment variables from Terraform in `rrochlin/terraform-infrastructure` (`amazing-adventure/`), or from `aws lambda get-function-configuration`.
 2. Resolve table names from Lambda env vars (for example `SESSIONS_TABLE`, `CONNECTIONS_TABLE`, `USERS_TABLE`, `INVITES_TABLE`, `MEMBERSHIPS_TABLE` where applicable).
 3. Verify key schema and attribute types for target DynamoDB tables before proposing a query.
 4. Map symptom to owning handler path in `server/cmd/*` and domain logic in `server/internal/*`.
@@ -68,15 +69,17 @@ Use this exact order when debugging by session ID to avoid slow or misleading lo
 - Build binary payload as base64 of the exact UUID bytes (no trailing newline).
 - Use `get-item --consistent-read --query 'Item'`.
 
-5. If point-read is unexpectedly empty, use app-native read path
-- Run a tiny helper inside `server/cmd/*` that calls `db.New()` + `GetGame(sessionID)` with `SESSIONS_TABLE` set.
-- Treat this as source of truth because it uses the same marshalling and decode path as production handlers.
+5. Prefer the app-native report: `go run ./tools/sessiondump` (see the playbook below)
+- It uses the production decode path (`db.GetGame`, `ListTraces`, `ListMutations`) and prints the transcript, every traced turn and the mutation log.
+- Treat it as the source of truth over hand-built CLI reads.
 
 6. Use scan only as a last-resort diagnostic
 - Scans are for proving table contents or key-shape anomalies, not first-line retrieval.
 
 ## Transcript and "Why AI Said That" Protocol
 When a user asks why the model produced a response:
+
+0. Start from `sessiondump -full`: each turn's narrator call holds the exact system prompt and message history the model saw.
 
 1. Extract persisted transcript in order
 - `chat_history` entries (`player` and `narrative`).
@@ -189,11 +192,17 @@ aws dynamodb get-item --region us-west-2 --table-name "$TABLE" --consistent-read
   --key "{\"session_id\":{\"B\":\"$SID_B64\"}}" --query 'Item' --output json
 ```
 
-8. App-native fallback (authoritative decode)
+8. App-native session report (authoritative decode)
 ```bash
 cd server
-SESSIONS_TABLE="$TABLE" AWS_REGION=us-west-2 go run ./cmd/_session_dump "$SID"
+SESSIONS_TABLE=amazing-adventure-prod-sessions \
+MUTATIONS_TABLE=amazing-adventure-prod-mutations \
+TRACES_TABLE=amazing-adventure-prod-traces \
+AWS_REGION=us-west-2 go run ./tools/sessiondump "$SID"         # report
+# add -full for every model call's system prompt, messages and raw output
+# add -json for the raw session + traces + mutations
 ```
+Each traced turn shows: the input, the player's room, the campaign node, objective, flag, label, counter and dialogue changes, each model call (latency, tokens, stop reason, errors), the resolver's raw verdict, the transition, events, every frame sent, and errors. Sessions from before tracing shipped have no traces.
 
 ## Performance Rules
 - Prefer point reads and indexed queries; avoid scans unless proving a mismatch.
