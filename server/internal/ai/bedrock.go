@@ -451,7 +451,7 @@ Latest assistant narrative: %q`,
 	}
 	resp, err := c.br.Converse(ctx, &bedrockruntime.ConverseInput{
 		ModelId: aws.String(ModelSubAgent),
-		System: []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: resolverSystemPrompt}},
+		System:  []types.SystemContentBlock{&types.SystemContentBlockMemberText{Value: resolverSystemPrompt}},
 		Messages: []types.Message{{
 			Role:    types.ConversationRoleUser,
 			Content: []types.ContentBlock{&types.ContentBlockMemberText{Value: userPrompt}},

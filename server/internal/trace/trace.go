@@ -9,13 +9,43 @@
 package trace
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
+
+// ErrDisabled is returned by a Store that has no traces table configured.
+var ErrDisabled = errors.New("TRACES_TABLE is not set; turn tracing is disabled")
+
+// Store holds traces. *db.Client implements it; handler test fakes may not.
+type Store interface {
+	PutTrace(context.Context, *Turn) error
+}
+
+var disabledOnce sync.Once
+
+// Save finishes t against g and stores it if store can hold traces. It
+// never fails the turn: problems are logged.
+func Save(ctx context.Context, store any, t *Turn, g *game.Game) {
+	t.Finish(g)
+	s, ok := store.(Store)
+	if !ok {
+		return
+	}
+	if err := s.PutTrace(ctx, t); err != nil {
+		if errors.Is(err, ErrDisabled) {
+			disabledOnce.Do(func() { log.Printf("trace: %v", err) })
+			return
+		}
+		log.Printf("trace: save %s turn for %s: %v", t.Kind, t.SessionID, err)
+	}
+}
 
 // Retention is how long a trace is kept before DynamoDB TTL removes it.
 const Retention = 30 * 24 * time.Hour
@@ -25,7 +55,6 @@ const (
 	KindChat           = "chat"
 	KindDialogueChoice = "dialogue_choice"
 	KindGameAction     = "game_action"
-	KindBootstrap      = "bootstrap"
 )
 
 // Turn is the debugging record of one handled turn.

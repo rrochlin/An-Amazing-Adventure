@@ -24,6 +24,7 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/trace"
 	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
 )
 
@@ -171,6 +172,16 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
+	// Record the whole turn for debugging; stored however the turn ends.
+	tr := trace.Start(trace.KindChat, "ws-chat", conn.GameID, g)
+	tr.RequestID, tr.ConnectionID, tr.UserID, tr.Input = reqID, connID, userID, msg.Content
+	defer trace.Save(ctx, dbClient, tr, g)
+	sendError := func(message string) {
+		tr.Errorf("sent error: %s", message)
+		tr.Frame(string(wsutil.FrameError), connID, message)
+		_ = ws.SendError(ctx, connID, message)
+	}
+
 	// Load D&D characters for this invocation (binds a fresh event bus)
 	if saveState.PlayersData != nil {
 		if _, loadErr := g.LoadDnDCharacters(ctx, saveState.PlayersData); loadErr != nil {
@@ -183,13 +194,14 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		reg, regErr := getCampaignRegistry()
 		if regErr != nil {
 			log.Printf("ws-chat: load campaigns: %v", regErr)
+			tr.Errorf("load campaigns: %v", regErr)
 			return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 		}
 		var ok bool
 		campaignDef, ok = reg.Get(g.Campaign.CampaignID)
 		if !ok {
 			log.Printf("ws-chat: campaign %q missing for game %s", g.Campaign.CampaignID, conn.GameID)
-			_ = ws.SendError(ctx, connID, "campaign_not_found")
+			sendError("campaign_not_found")
 			return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 		}
 	}
@@ -198,7 +210,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	aiClient, err := newAIClient(ctx)
 	if err != nil {
 		log.Printf("ws-chat: ai init: %v", err)
-		_ = ws.SendError(ctx, connID, "AI unavailable")
+		sendError("AI unavailable")
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
@@ -223,11 +235,11 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}
 
 	if g.Campaign.RunEnded() {
-		_ = ws.SendError(ctx, connID, "run_ended")
+		sendError("run_ended")
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
 	if g.Campaign != nil && g.Campaign.ActiveDialogue != nil && g.Campaign.ActiveDialogue.AwaitingChoice {
-		_ = ws.SendError(ctx, connID, "dialogue_choice_required")
+		sendError("dialogue_choice_required")
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
 
@@ -239,19 +251,23 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 				Type:    wsutil.FrameNarrativeChunk,
 				Payload: map[string]string{"content": chunk},
 			}
+			tr.Chunk(string(wsutil.FrameNarrativeChunk))
 			stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
 			for _, s := range stale {
 				_ = dbClient.DeleteConnection(ctx, s)
 			}
 		},
 	)
+	tr.Call(narratorResult.Calls...)
 	if err != nil {
 		log.Printf("ws-chat: narrator error: %v", err)
-		_ = ws.SendError(ctx, connID, "Narrator error — please try again")
+		tr.Errorf("narrator: %v", err)
+		sendError("Narrator error — please try again")
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 	}
 
 	// Step 2: Signal streaming complete — broadcast to all party members.
+	tr.Frame(string(wsutil.FrameNarrativeEnd), "", nil)
 	staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
 	for _, s := range staleEnds {
 		_ = dbClient.DeleteConnection(ctx, s)
@@ -260,10 +276,12 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	// Step 3: Engineer infers world mutations from the narrative and executes them.
 	// Runs after narrative_end so the client never waits on the Engineer for prose.
 	engineerResult, err := aiClient.EngineerScan(ctx, g, narratorResult.Narrative)
+	tr.Call(engineerResult.Calls...)
 	if err != nil {
 		// Non-fatal: log the error but continue — game state may be partially mutated,
 		// but the narrative has already been delivered successfully.
 		log.Printf("ws-chat: engineer scan error: %v", err)
+		tr.Errorf("engineer: %v", err)
 	}
 	authoredDialogueText := ""
 	var sceneEvents []game.WorldEvent
@@ -276,13 +294,18 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			msg.Content,
 			narratorResult.Narrative,
 		)
+		tr.Call(resolverResult.Calls...)
 		if resolveErr != nil {
 			log.Printf("ws-chat: campaign condition resolution error: %v", resolveErr)
+			tr.Errorf("resolver: %v", resolveErr)
 		} else {
+			tr.Resolution = resolverResult.Resolution
 			turnResult, transitionErr := campaigns.OrchestrateTurn(campaignDef, g, resolverResult.Resolution)
 			if transitionErr != nil {
 				log.Printf("ws-chat: campaign transition error: %v", transitionErr)
+				tr.Errorf("transition: %v", transitionErr)
 			} else {
+				tr.Transition = turnResult.Transition
 				authoredDialogueText = turnResult.Transition.DialogueText
 				// Scene changes belong to the new scene's authored text (so the
 				// client shows the title card before it); everything else stays
@@ -319,15 +342,19 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			Type:    wsutil.FrameNarrativeChunk,
 			Payload: map[string]string{"content": authoredDialogueText},
 		}
+		tr.Frame(string(chunkFrame.Type), "", chunkFrame.Payload)
 		stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
 		for _, s := range stale {
 			_ = dbClient.DeleteConnection(ctx, s)
 		}
+		tr.Frame(string(wsutil.FrameNarrativeEnd), "", nil)
 		staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
 		for _, s := range staleEnds {
 			_ = dbClient.DeleteConnection(ctx, s)
 		}
 	}
+
+	tr.Events = append(append([]game.WorldEvent(nil), engineerResult.Events...), sceneEvents...)
 
 	// Step 4: Persist mutation audit log entries (best-effort — failure is non-fatal).
 	putMutations(ctx, dbClient, engineerResult.Mutations)
@@ -342,8 +369,9 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	for attempt := 0; attempt < 3; attempt++ {
 		if err := dbClient.PutGame(ctx, saved); err != nil {
 			log.Printf("ws-chat: put game attempt %d: %v", attempt+1, err)
+			tr.Errorf("put game attempt %d: %v", attempt+1, err)
 			if attempt == 2 {
-				_ = ws.SendError(ctx, connID, "Failed to save game state")
+				sendError("Failed to save game state")
 				return events.APIGatewayProxyResponse{StatusCode: 500}, nil
 			}
 			// Reload and re-apply on conflict
@@ -388,8 +416,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		if postTurnOwnerLoc != preTurnPlayerLoc || true { // always send current room
 			delta.CurrentRoom = &memberView.CurrentRoom
 		}
+		tr.Frame(string(wsutil.FrameStateDelta), gc.ConnectionID, delta)
 		if sendErr := ws.SendDelta(ctx, gc.ConnectionID, delta); sendErr != nil {
 			log.Printf("ws-chat: send delta to %s: %v", gc.ConnectionID, sendErr)
+			tr.Errorf("send delta to %s: %v", gc.ConnectionID, sendErr)
 			_ = dbClient.DeleteConnection(ctx, gc.ConnectionID)
 		}
 	}

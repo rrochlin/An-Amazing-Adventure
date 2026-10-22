@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -17,10 +16,6 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 	"github.com/rrochlin/an-amazing-adventure/internal/trace"
 )
-
-// ErrTracingDisabled is returned by PutTrace when TRACES_TABLE is not set.
-// Tracing is diagnostic, so a Lambda without the table keeps working.
-var ErrTracingDisabled = errors.New("TRACES_TABLE is not set; turn tracing is disabled")
 
 // traceItem builds the traces-table item for a turn. The full trace is
 // gzipped JSON in `data` (prompts and history are large); the plain
@@ -68,11 +63,11 @@ func decodeTraceItem(item map[string]types.AttributeValue) (*trace.Turn, error) 
 	return t, nil
 }
 
-// PutTrace stores a turn's trace. It returns ErrTracingDisabled when
+// PutTrace stores a turn's trace. It returns trace.ErrDisabled when
 // TRACES_TABLE is not set.
 func (c *Client) PutTrace(ctx context.Context, t *trace.Turn) error {
 	if c.tracesTable == "" {
-		return ErrTracingDisabled
+		return trace.ErrDisabled
 	}
 	item, err := traceItem(t)
 	if err != nil {
@@ -112,7 +107,7 @@ func (c *Client) querySession(ctx context.Context, table, sessionID string) ([]m
 // ListTraces returns a session's turn traces, oldest first.
 func (c *Client) ListTraces(ctx context.Context, sessionID string) ([]*trace.Turn, error) {
 	if c.tracesTable == "" {
-		return nil, ErrTracingDisabled
+		return nil, trace.ErrDisabled
 	}
 	items, err := c.querySession(ctx, c.tracesTable, sessionID)
 	if err != nil {
