@@ -219,6 +219,18 @@ export function DialogueStage({
       const el = scrollRef.current;
       if (el && pinned.current) el.scrollTop = el.scrollHeight;
    }, [transcript.length]);
+   // The dialogue box grows as a line types in, which shrinks the scrollback
+   // from below. Keep its newest lines in view rather than behind the box.
+   const hasTranscript = transcript.length > 0;
+   useEffect(() => {
+      const el = scrollRef.current;
+      if (!el || typeof ResizeObserver !== 'function') return;
+      const observer = new ResizeObserver(() => {
+         if (pinned.current) el.scrollTop = el.scrollHeight;
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+   }, [hasTranscript]);
 
    const showContinue = !!current && lineDone && current.kind === 'line' && (hasNext || !acknowledged) && !showChoices && !showEnding;
 
