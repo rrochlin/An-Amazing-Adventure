@@ -36,7 +36,7 @@ An AI-powered text adventure game. Claude (via AWS Bedrock) acts as the Dungeon 
 
 ```
 An-Amazing-Adventure/
-├── docs/                    # Design notes, one folder per phase (Phase 2 … Phase 7) — source of truth
+├── docs/                    # Design notes by topic + decisions.md; phase-era notes in docs/archive/
 ├── client/                  # React frontend
 │   ├── src/
 │   │   ├── routes/          # TanStack file-based routes
@@ -64,10 +64,16 @@ An-Amazing-Adventure/
 
 ## Design Notes
 
-`docs/Phase N/` holds the per-phase design notes (Obsidian-style `[[wikilinks]]`). Git is the source of
-truth; the Obsidian vault folder `~/Documents/notes/Amazing Adventure` is a symlink to this `docs/` dir.
-Phase 7 decisions are recorded in `docs/Phase 7/Vision and Design Decisions.md`; `docs/PHASE_7_STATUS.md`
-is the short status page.
+Planning happens in the repo's GitHub Project (Kanban). Large outcomes are **epics** (issues labelled
+`epic` with sub-issues); research that needs a decision first is a **spike** (`type:spike`). Labels carry
+`type:*`, `area:*`, `priority:P0–P2` and `size:S/M/L`. Before starting work, find or create the issue, and
+link PRs to it (`Fixes #N`).
+
+`docs/` holds design notes by topic (Obsidian-style `[[wikilinks]]`; git is the source of truth, and the
+Obsidian vault folder `~/Documents/notes/Amazing Adventure` is a symlink to it). `docs/decisions.md` is the
+decision log, newest first — record a decision there when an issue or spike settles one. `docs/README.md`
+explains the layout. Phase-era notes are in `docs/archive/`; its Phase 7 campaign data model and schema
+notes still describe the current runtime.
 
 ## Common Commands
 
@@ -130,13 +136,13 @@ Bare model IDs without prefix are rejected with `ValidationException`.
 
 ## Working Process
 
-### Starting a new phase — MANDATORY first step
+### Starting new work — MANDATORY first step
 **Before creating a feature branch or writing any code, always sync with the remote:**
 
 ```bash
 git fetch origin
 git log --oneline origin/main -5   # confirm any recently merged PRs are visible
-git checkout -b feat/<phase-name> origin/main
+git checkout -b feat/<short-name> origin/main
 ```
 
 ### After merge cleanup — MANDATORY
@@ -145,25 +151,25 @@ git checkout -b feat/<phase-name> origin/main
 ```bash
 git checkout main
 git pull --ff-only origin main
-git branch -d feat/<old-phase-branch>
-git checkout -b feat/<new-phase-branch>
+git branch -d feat/<old-branch>
+git checkout -b feat/<new-branch>
 ```
 
 This avoids stacking work on stale branches and keeps each PR scoped to one section of work.
 
-**Why this matters:** If a previous PR was merged while the last session was running, your local `main` is stale. Starting a branch from stale `main` means your Phase N branch includes Phase N-1 commits. When you later rebase/PR, git sees those commits as divergent (not as the squash-merge from main) and either raises conflicts or duplicates the work.
+**Why this matters:** If a previous PR was merged while the last session was running, your local `main` is stale. Starting a branch from stale `main` means your new branch includes the previous branch's commits. When you later rebase/PR, git sees those commits as divergent (not as the squash-merge from main) and either raises conflicts or duplicates the work.
 
 **If you forgot and already have commits on a stale branch:**
 ```bash
-# Identify your Phase N-only commits (the ones NOT in origin/main)
+# Identify your own commits (the ones NOT in origin/main)
 git log --oneline origin/main..HEAD
 
 # Create a clean branch and cherry-pick only your commits
-git checkout -b feat/<phase-name>-rebased origin/main
-git cherry-pick <sha1> <sha2> ...   # your Phase N commits only
+git checkout -b feat/<short-name>-rebased origin/main
+git cherry-pick <sha1> <sha2> ...   # your commits only
 
 # Push and open a new PR; close the stale one
-git push -u origin feat/<phase-name>-rebased
+git push -u origin feat/<short-name>-rebased
 gh pr close <old-pr-number> --comment "Superseded by rebased branch"
 gh pr create ...
 ```
@@ -171,7 +177,7 @@ gh pr create ...
 ### Commit cadence
 **Commit early and often — do not accumulate a large diff before committing.**
 
-Every logical phase of work should be its own commit before moving to the next:
+Every logical step of work should be its own commit before moving to the next:
 1. Data model changes (Go structs / TS types)
 2. Backend API / Lambda handler changes
 3. Frontend routes / components
