@@ -36,12 +36,21 @@
         "type": "home",
         "description": "A low thatched cottage that smells of bread and woodsmoke.",
         "tags": ["safe", "family"],
+        "points_of_interest": [
+          { "id": "hearth", "name": "Hearth" },
+          { "id": "front_door", "name": "Front door" },
+          { "id": "garden_gate", "name": "Garden gate" }
+        ],
         "connections": { "east": "village_square" }
       },
       "village_square": {
         "name": "Village Square",
         "type": "hub",
         "description": "A stone well, a few market-day benches, and gossiping neighbours.",
+        "points_of_interest": [
+          { "id": "stone_well", "name": "Stone well" },
+          { "id": "market_benches", "name": "Market benches" }
+        ],
         "connections": {
           "west": "family_cottage",
           "north": "market_lane",
@@ -53,18 +62,29 @@
         "name": "Market Lane",
         "type": "shop",
         "description": "Old Garrick's stall of sweets, ribbons, and whittled trinkets.",
+        "points_of_interest": [
+          { "id": "garricks_stall", "name": "Garrick's stall" }
+        ],
         "connections": { "south": "village_square" }
       },
       "old_mill": {
         "name": "Old Mill",
         "type": "landmark",
         "description": "The miller's water wheel, and a barn behind it where people meet who should not.",
+        "points_of_interest": [
+          { "id": "water_wheel", "name": "Water wheel" },
+          { "id": "barn", "name": "Barn" }
+        ],
         "connections": { "west": "village_square" }
       },
       "meadow": {
         "name": "Meadow",
         "type": "outdoors",
         "description": "Long grass where the village children play, and where Dunstan does his bullying.",
+        "points_of_interest": [
+          { "id": "old_fence_post", "name": "Old fence post" },
+          { "id": "long_grass", "name": "Long grass" }
+        ],
         "connections": { "north": "village_square", "south": "woods_edge" }
       },
       "woods_edge": {
@@ -72,6 +92,9 @@
         "type": "outdoors",
         "description": "A hollow under an old oak at the treeline, a good place to hide.",
         "tags": ["hiding_spot"],
+        "points_of_interest": [
+          { "id": "old_oak", "name": "Old oak hollow" }
+        ],
         "connections": { "north": "meadow" }
       }
     },
@@ -84,48 +107,63 @@
       "name": "Tomas",
       "kind": "npc",
       "goal": "Teach his child that a coin earned honestly is worth more than one taken.",
+      "description": "The player's father. A woodcutter, gentle but firm, who wants his child to grow up honest.",
+      "start_location_id": "family_cottage",
       "importance": "primary"
     },
     "mother": {
       "name": "Elin",
       "kind": "npc",
       "goal": "Keep the household warm and the birthday a happy one.",
+      "description": "The player's mother. Warm and practical; she runs the household and bakes for every birthday.",
+      "start_location_id": "family_cottage",
       "importance": "secondary"
     },
     "sister": {
       "name": "Ros",
       "kind": "npc",
       "goal": "Have the best birthday ever.",
+      "description": "The player's little sister, turning seven today. Adores her older sibling.",
+      "start_location_id": "family_cottage",
       "importance": "primary"
     },
     "trader": {
       "name": "Old Garrick",
       "kind": "npc",
       "goal": "Sell a child something nice for a fair coin.",
+      "description": "An old trader who has kept a stall on Market Lane for decades. Kind to children, fair with prices.",
+      "start_location_id": "market_lane",
       "importance": "secondary"
     },
     "bess": {
       "name": "Little Bess",
       "kind": "npc",
       "goal": "Find her lost rag doll.",
+      "description": "A small village girl, younger than Ros, crying because she lost her rag doll.",
+      "start_location_id": "village_square",
       "importance": "minor"
     },
     "miller": {
       "name": "Hob the Miller",
       "kind": "npc",
       "goal": "Keep his wife from learning about his secret meetings behind the barn.",
+      "description": "The village miller, married, who slips away to secret meetings behind his barn.",
+      "start_location_id": "old_mill",
       "importance": "minor"
     },
     "bully": {
       "name": "Dunstan",
       "kind": "npc",
       "goal": "Push the smaller children around.",
+      "description": "A village boy two years older than the player, who bullies the smaller children.",
+      "start_location_id": "meadow",
       "importance": "minor"
     },
     "bandit_leader": {
       "name": "Red Corwin",
       "kind": "antagonist",
       "goal": "Raid Briarwell and carry off anything, or anyone, worth selling.",
+      "description": "Leader of a bandit gang. Ruthless, red-bearded, and careful to leave no witnesses who matter.",
       "importance": "primary",
       "appears_in": ["bandit_raid"],
       "rail": {
@@ -139,6 +177,7 @@
       "name": "Master Holloway",
       "kind": "npc",
       "goal": "Find a child with the spark of a hero, and get them out alive.",
+      "description": "Master of the Heroes' Guild, travel-worn and calm. A stranger to the player until the rescue.",
       "importance": "primary",
       "appears_in": ["rescue", "road_to_guild"],
       "rail": {

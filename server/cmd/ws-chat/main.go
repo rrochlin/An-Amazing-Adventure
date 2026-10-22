@@ -412,6 +412,8 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			Player:   &memberView.Player,
 			Self:     &memberView.Self,
 			Campaign: g.BuildCampaignStateView(),
+			// Every room, so characters moving anywhere show on the map.
+			UpdatedRooms: memberView.Rooms,
 		}
 		if postTurnOwnerLoc != preTurnPlayerLoc || true { // always send current room
 			delta.CurrentRoom = &memberView.CurrentRoom

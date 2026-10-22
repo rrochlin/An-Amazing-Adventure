@@ -36,6 +36,26 @@ func (d *CampaignDefinition) Validate() error {
 	if len(d.StoryNodes) == 0 {
 		return fmt.Errorf("story_nodes must contain at least one node")
 	}
+	for id, actor := range d.Actors {
+		if actor.StartLocationID == "" {
+			continue
+		}
+		if _, ok := d.Map.Rooms[actor.StartLocationID]; !ok {
+			return fmt.Errorf("actor %q start_location_id %q does not exist in map.rooms", id, actor.StartLocationID)
+		}
+	}
+	for roomID, room := range d.Map.Rooms {
+		seen := map[string]bool{}
+		for _, poi := range room.PointsOfInterest {
+			if poi.ID == "" || poi.Name == "" {
+				return fmt.Errorf("room %q has a point of interest without an id or name", roomID)
+			}
+			if seen[poi.ID] {
+				return fmt.Errorf("room %q has duplicate point of interest %q", roomID, poi.ID)
+			}
+			seen[poi.ID] = true
+		}
+	}
 	if d.StartNodeID == "" {
 		return fmt.Errorf("start_node_id is required")
 	}

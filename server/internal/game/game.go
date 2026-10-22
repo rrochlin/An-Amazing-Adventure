@@ -47,6 +47,8 @@ type CampaignRuntimeState struct {
 	CompanionStates  map[string]CompanionState    `json:"companion_states,omitempty" dynamodbav:"companion_states,omitempty"`
 	CampaignClock    int                          `json:"campaign_clock,omitempty" dynamodbav:"campaign_clock,omitempty"`
 	ActiveDialogue   *DialogueRuntimeState        `json:"active_dialogue,omitempty" dynamodbav:"active_dialogue,omitempty"`
+	// DiscoveredRoomIDs are the rooms the player has found, for the map's fog.
+	DiscoveredRoomIDs map[string]bool `json:"discovered_room_ids,omitempty" dynamodbav:"discovered_room_ids,omitempty"`
 
 	// Run end (Phase 7 decision 15). A run ends on reaching a node marked
 	// ends_run or on a party wipe. An ended run is read-only.
@@ -677,6 +679,7 @@ func (g *Game) MoveCharacter(userID, direction string) (Area, error) {
 	g.Rooms[destID] = destRoom
 	player.LocationID = destID
 	g.Players[userID] = player
+	g.Discover(destID)
 	return destRoom, nil
 }
 
@@ -709,7 +712,36 @@ func (g *Game) PlaceCharacter(userID, roomID string) error {
 	g.Rooms[roomID] = room
 	player.LocationID = roomID
 	g.Players[userID] = player
+	g.Discover(roomID)
 	return nil
+}
+
+// Discover marks a room as found by the party, lifting the map's fog over it.
+func (g *Game) Discover(roomID string) {
+	if g.Campaign != nil {
+		if g.Campaign.DiscoveredRoomIDs == nil {
+			g.Campaign.DiscoveredRoomIDs = make(map[string]bool)
+		}
+		g.Campaign.DiscoveredRoomIDs[roomID] = true
+	}
+	if g.DungeonData != nil {
+		if g.DungeonData.RevealedRooms == nil {
+			g.DungeonData.RevealedRooms = make(map[string]bool)
+		}
+		g.DungeonData.RevealedRooms[roomID] = true
+	}
+}
+
+// Discovered reports whether the party has found a room. Games that track
+// no discovery (legacy procedural worlds) treat every room as found.
+func (g *Game) Discovered(roomID string) bool {
+	switch {
+	case g.Campaign != nil:
+		return g.Campaign.DiscoveredRoomIDs[roomID]
+	case g.DungeonData != nil:
+		return g.DungeonData.RevealedRooms[roomID]
+	}
+	return true
 }
 
 // -------------------------------------------------------------------
@@ -1059,6 +1091,9 @@ type RoomView struct {
 	Coordinates Coordinates       `json:"coordinates"`
 	Items       []ItemView        `json:"items"`
 	Occupants   []CharacterView   `json:"occupants"`
+	// Discovered is false for rooms the party hasn't found; the map fogs them.
+	Discovered       bool              `json:"discovered"`
+	PointsOfInterest []PointOfInterest `json:"points_of_interest,omitempty"`
 }
 
 // ItemView is the client-facing representation of an item.
@@ -1229,8 +1264,10 @@ func (g *Game) BuildGameStateView(callerUserID string, history []ChatMessage) Ga
 			ID: a.ID, Name: a.Name, Description: a.Description,
 			Type:        roomType,
 			Connections: a.Connections, Coordinates: a.Coordinates,
-			Items:     g.buildItemViews(a.Items),
-			Occupants: occupantViews,
+			Items:            g.buildItemViews(a.Items),
+			Occupants:        occupantViews,
+			Discovered:       g.Discovered(a.ID),
+			PointsOfInterest: a.PointsOfInterest,
 		}
 	}
 
@@ -1258,6 +1295,10 @@ func (g *Game) BuildGameStateView(callerUserID string, history []ChatMessage) Ga
 	var currentRoom RoomView
 	if r, ok := g.Rooms[caller.LocationID]; ok {
 		currentRoom = toRoomView(r)
+		// Wherever the player stands is known, including in sessions from
+		// before discovery was tracked.
+		currentRoom.Discovered = true
+		roomViews[r.ID] = currentRoom
 	}
 
 	return GameStateView{

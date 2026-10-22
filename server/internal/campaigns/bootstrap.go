@@ -39,13 +39,14 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 	roomIDMap := make(map[string]string, len(def.Map.Rooms))
 	for authoredID, room := range def.Map.Rooms {
 		area := game.Area{
-			ID:          authoredID,
-			Name:        room.Name,
-			Description: room.Description,
-			Connections: make(map[string]string, len(room.Connections)),
-			Coordinates: game.Coordinates{Z: float64(room.Floor)},
-			Items:       []string{},
-			Occupants:   []string{},
+			ID:               authoredID,
+			Name:             room.Name,
+			Description:      room.Description,
+			Connections:      make(map[string]string, len(room.Connections)),
+			Coordinates:      game.Coordinates{Z: float64(room.Floor)},
+			Items:            []string{},
+			Occupants:        []string{},
+			PointsOfInterest: append([]game.PointOfInterest(nil), room.PointsOfInterest...),
 		}
 		g.Rooms[area.ID] = area
 		roomIDMap[authoredID] = area.ID
@@ -73,6 +74,7 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 		_ = room.AddOccupant(player.ID)
 		g.Rooms[startRoomID] = room
 	}
+	g.Discover(startRoomID)
 
 	// Lay the map out from the exits (east is one step right, north one step
 	// up), as procedural worlds do. Without this every room sat at (0, 0) and
@@ -102,6 +104,30 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 			Status:            "active",
 			CurrentLocationID: startRoomID,
 		}
+	}
+
+	// The cast with a starting place exists in the world as real characters,
+	// keyed by actor ID, so the map, the engineer and later agents see them.
+	for actorID, actor := range def.Actors {
+		if actor.Kind == "companion" || actor.StartLocationID == "" {
+			continue
+		}
+		roomID, ok := roomIDMap[actor.StartLocationID]
+		if !ok {
+			return nil, nil, fmt.Errorf("actor %q starts in unknown room %q", actorID, actor.StartLocationID)
+		}
+		description := actor.Description
+		if description == "" {
+			description = actor.Goal
+		}
+		npc := game.NewCharacter(actor.Name, description)
+		npc.ID = actorID
+		npc.LocationID = roomID
+		npc.Friendly = actor.Kind != "antagonist"
+		g.NPCs[npc.ID] = npc
+		room := g.Rooms[roomID]
+		_ = room.AddOccupant(npc.ID)
+		g.Rooms[roomID] = room
 	}
 
 	for actorID, actor := range def.Actors {

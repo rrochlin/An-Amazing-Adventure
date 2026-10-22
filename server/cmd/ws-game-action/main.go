@@ -167,15 +167,8 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	var actionErr error
 	switch msg.SubAction {
 	case "move":
-		dest, moveErr := g.MovePlayer(msg.Payload)
-		if moveErr == nil && g.DungeonData != nil {
-			// Persist fog-of-war: mark the destination room as revealed.
-			if g.DungeonData.RevealedRooms == nil {
-				g.DungeonData.RevealedRooms = make(map[string]bool)
-			}
-			g.DungeonData.RevealedRooms[dest.ID] = true
-		}
-		actionErr = moveErr
+		// MovePlayer also marks the destination discovered (fog of war).
+		_, actionErr = g.MovePlayer(msg.Payload)
 	case "pick_up":
 		item, findErr := g.GetItemByName(msg.Payload)
 		if findErr != nil {
@@ -584,6 +577,8 @@ func handleDialogueChoice(
 			Player:   &memberView.Player,
 			Self:     &memberView.Self,
 			Campaign: g.BuildCampaignStateView(),
+			// Every room, so characters moving anywhere show on the map.
+			UpdatedRooms: memberView.Rooms,
 		}
 		if sendErr := ws.SendDelta(ctx, gc.ConnectionID, delta); sendErr != nil {
 			log.Printf("ws-game-action: dialogue_choice: send delta to %s: %v", gc.ConnectionID, sendErr)

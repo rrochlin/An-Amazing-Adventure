@@ -605,3 +605,24 @@ func TestBuildGameStateView(t *testing.T) {
 		t.Error("expected 1 chat message in view")
 	}
 }
+
+func TestDiscoveredByWorldKind(t *testing.T) {
+	legacy := game.NewGame("s", "u")
+	if !legacy.Discovered("any") {
+		t.Fatal("worlds that track no discovery show every room")
+	}
+
+	dungeon := game.NewGame("s", "u")
+	dungeon.DungeonData = &game.DungeonData{}
+	dungeon.Discover("r1")
+	if !dungeon.Discovered("r1") || dungeon.Discovered("r2") {
+		t.Fatalf("dungeon discovery uses RevealedRooms, got %v", dungeon.DungeonData.RevealedRooms)
+	}
+
+	campaign := game.NewGame("s", "u")
+	campaign.Campaign = &game.CampaignRuntimeState{}
+	campaign.Discover("r1")
+	if !campaign.Discovered("r1") || campaign.Discovered("r2") {
+		t.Fatalf("campaign discovery uses DiscoveredRoomIDs, got %v", campaign.Campaign.DiscoveredRoomIDs)
+	}
+}

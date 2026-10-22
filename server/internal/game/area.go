@@ -24,6 +24,16 @@ type Area struct {
 	Coordinates Coordinates       `json:"coordinates" dynamodbav:"coordinates"`
 	Items       []string          `json:"items" dynamodbav:"items"`         // item IDs
 	Occupants   []string          `json:"occupants" dynamodbav:"occupants"` // character IDs
+	// PointsOfInterest are the notable spots inside the room (a well, a
+	// stall), from authored campaign data.
+	PointsOfInterest []PointOfInterest `json:"points_of_interest,omitempty" dynamodbav:"points_of_interest,omitempty"`
+}
+
+// PointOfInterest is a notable spot inside a room.
+type PointOfInterest struct {
+	ID          string `json:"id" dynamodbav:"id"`
+	Name        string `json:"name" dynamodbav:"name"`
+	Description string `json:"description,omitempty" dynamodbav:"description,omitempty"`
 }
 
 // NewArea creates a new Area with a server-generated UUID.

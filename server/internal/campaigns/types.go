@@ -1,6 +1,10 @@
 package campaigns
 
-import "io/fs"
+import (
+	"io/fs"
+
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
+)
 
 // CampaignDefinition is the top-level authored campaign file loaded from JSON.
 // It is intentionally broader than dialogue because it owns the overall
@@ -78,6 +82,8 @@ type CampaignRoom struct {
 	Description string            `json:"description,omitempty"`
 	Tags        []string          `json:"tags,omitempty"`
 	Connections map[string]string `json:"connections,omitempty"`
+	// PointsOfInterest are notable spots inside the room, shown on the map.
+	PointsOfInterest []game.PointOfInterest `json:"points_of_interest,omitempty"`
 }
 
 type EntranceOption struct {
@@ -97,6 +103,13 @@ type ActorTemplate struct {
 	// actor exists, so later characters aren't foreshadowed early. Empty
 	// means every node.
 	AppearsIn []string `json:"appears_in,omitempty"`
+	// StartLocationID places the character in a room when the run begins, as a
+	// real character the map and agents can see. Empty means the character
+	// isn't in the world at the start (for example, bandits who arrive later).
+	StartLocationID string `json:"start_location_id,omitempty"`
+	// Description says who the character is (role, relationships); it is
+	// what an agent playing them needs to know.
+	Description string `json:"description,omitempty"`
 }
 
 type ActorRail struct {
