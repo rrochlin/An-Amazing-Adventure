@@ -97,10 +97,16 @@ describe('buildTranscript', () => {
       expect(items[items.length - 1]).toMatchObject({ kind: 'player', text: 'I help Bess' });
    });
 
-   it('keeps only the most recent lines', () => {
-      expect(buildTranscript(msgs, '2-L1', 2).map((i) => i.text)).toEqual([
+   it('includes every line when nothing is current', () => {
+      const withReply = [...msgs, { type: 'player' as const, content: 'I help Bess' }];
+      expect(buildTranscript(withReply, null).map((i) => i.text)).toEqual([
+         'Sunlight spills in.',
+         'Off you go.',
+         'I head to the square',
          'Good Turns and Bad',
          'The square bustles.',
+         'Bess is crying by the well.',
+         'I help Bess',
       ]);
    });
 });

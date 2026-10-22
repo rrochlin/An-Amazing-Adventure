@@ -9,6 +9,24 @@ const panelHover = {
    },
 };
 
+// The header is a Toolbar inside an AppBar, which is a Paper and so has a
+// 1px border top and bottom. Fill the rest of the window at each of the
+// Toolbar's breakpoint heights, so the page itself never scrolls.
+const HEADER_BORDER_PX = 2;
+const fillBelowHeader = (() => {
+   const fill = (h: unknown) => ({
+      height: `calc(100dvh - ${Number(h) + HEADER_BORDER_PX}px)`,
+   });
+   const sx: Record<string, unknown> = {};
+   for (const [key, value] of Object.entries(AppTheme.mixins.toolbar)) {
+      if (key === 'minHeight') Object.assign(sx, fill(value));
+      else if (value && typeof value === 'object' && 'minHeight' in value) {
+         sx[key] = fill(value.minHeight);
+      }
+   }
+   return sx;
+})();
+
 /**
  * The game screen's panels: map, story stage, and player info. Purely
  * presentational so the layout can be rendered and checked on its own.
@@ -32,7 +50,7 @@ export function GameLayout({
    return (
       <Box
          sx={{
-            height: `calc(100vh - ${AppTheme.mixins.toolbar.minHeight}px)`,
+            ...fillBelowHeader,
             display: 'flex',
             flexDirection: 'row',
             overflow: 'hidden',

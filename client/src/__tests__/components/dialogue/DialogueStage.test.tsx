@@ -189,4 +189,50 @@ describe('DialogueStage', () => {
       expect(transcript).not.toHaveTextContent('The door creaks shut.'); // that's the current line
       expect(stageText()).toBe('The door creaks shut.');
    });
+
+   it('puts what the player just said in the dialogue box, after everything before it', () => {
+      const { update } = setup(inProgress);
+      update({ messages: [...inProgress, { type: 'player', content: 'I open the door' }] });
+      expect(screen.getByTestId('stage-player-line')).toHaveTextContent('YouI open the door');
+      const transcript = screen.getByTestId('stage-transcript');
+      // The line that was in the box moves up into the scrollback.
+      expect(transcript).toHaveTextContent('Sunlight spills through the shutters.');
+      expect(transcript).not.toHaveTextContent('I open the door');
+   });
+
+   it('keeps the whole story in the scrollback, with no separate History', () => {
+      const long: ChatMessage[] = Array.from({ length: 60 }, (_, i) => ({
+         type: i % 2 ? 'narrative' : 'player',
+         content: `Line ${i}`,
+      }));
+      setup(long);
+      const transcript = screen.getByTestId('stage-transcript');
+      expect(transcript).toHaveTextContent('You: Line 0');
+      expect(transcript).toHaveTextContent('You: Line 58');
+      expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument();
+   });
+
+   it('does not move on when the player is selecting text', () => {
+      const { update } = setup(inProgress);
+      update({
+         messages: [...inProgress, { type: 'narrative', content: 'One.\nTwo.' }],
+      });
+      tick(5000);
+      const select = vi.spyOn(window, 'getSelection').mockReturnValue({
+         toString: () => 'One',
+      } as Selection);
+      fireEvent.click(stage());
+      expect(stageText()).toBe('One.');
+      select.mockRestore();
+      fireEvent.click(stage());
+      tick(5000);
+      expect(stageText()).toBe('Two.');
+   });
+
+   it('renders the narrator\'s *emphasis* as italics', () => {
+      setup([{ type: 'player', content: 'hi' }, { type: 'narrative', content: 'It is *gone*.' }]);
+      const em = screen.getByTestId('stage-text').querySelector('em');
+      expect(em).toHaveTextContent('gone');
+      expect(stageText()).toBe('It is gone.');
+   });
 });
