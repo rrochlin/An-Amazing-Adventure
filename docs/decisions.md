@@ -9,6 +9,29 @@ force are summarised at the end of this file.
 
 ---
 
+## 2026-10-22 — Story agents: a game master holding a screenplay (blend 3)
+
+Spike #92 (`story-engine/framing.md`). Rob chose blend 3: authored like a screenplay, played like a game
+at a table.
+
+- **Feel:** playing should feel like playing a game, not acting in a film. The dialogue stage presents
+  it, but the runtime is a table.
+- **Scenes have control levels.** Scenes integral to main story beats are **controlled** and unfold as
+  written. Lesser scenes are **bounded**: they carry parameters the scene must not stray outside of, and
+  within them the characters improvise.
+- **Two agent tiers.**
+  - **Actors** have little autonomy. They enact scenes, especially controlled ones, from their part.
+  - **Players** have autonomy within reason. They pursue their own motivations and are expected to
+    present real obstacles.
+  - A character's tier is set by the script, per character and scene.
+- **Dice are at the game master's discretion.** There are moments to roll and moments to dictate. When it
+  rolls, code resolves the roll and the player sees it (#119).
+- **Off-screen life is selective.** Some characters, sometimes. When the player leaves an area (for
+  example, the starting village), its storylines pause. On return, the game master runs a catch-up: it
+  spins up the relevant characters to decide what happened during the time skip, then the scene resumes.
+- **Latency budget: about 10 seconds per turn** to start, refined later. For the very first versions,
+  quality comes first and we measure where latency lands.
+
 ## 2026-10-22 — Map: room data model, illustrated where there's art
 
 - Spike #118 (`map/map-prototypes.md`) compared a room graph with points of interest (A), an
@@ -40,13 +63,10 @@ force are summarised at the end of this file.
 - This keeps Phase 7's principle that the authored script, not the AI, drives the main arc.
 - Epic: game master (#99).
 
-## 2026-10-22 — Characters get only what they need to know (framing still open)
+## 2026-10-22 — Characters get only what they need to know
 
 - Characters receive information **on a need-to-know basis**, never the whole world state by default.
   Facts are recorded once in world state, and the game master shares the relevant ones.
-- **Not decided:** whether characters are framed as **actors** (film: performing a part from a script)
-  or **players** (tabletop: pursuing their own motivations). Rob leans toward players but is still
-  debating. The framing spike (#92) compares them; see `story-engine/framing.md`.
 - Epics: story model (#91), character agents (#103), world state (#109).
 
 ## 2026-10-22 — Scenes decide who acts

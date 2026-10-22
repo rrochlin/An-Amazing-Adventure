@@ -123,7 +123,19 @@ only when needed. This is a lean, not a decision.
 5. **How soon do multiple humans matter?** Soon pushes hard toward players.
 6. **What's the latency budget per turn?** The evaluation harness (#95) can measure each option.
 
-## Next
+## Decision (2026-10-22)
 
-Rob answers the questions (or picks a blend). The decision goes in `docs/decisions.md`, and the script
-format (#93) follows from it.
+**Blend 3**, with Rob's answers to the questions:
+
+1. **Off-screen life:** sometimes, for some characters. Leaving an area pauses its storylines; returning
+   triggers a catch-up where the game master and the relevant characters work out what happened during the
+   time skip.
+2. **Dice:** yes, at the game master's discretion. Some moments call for a roll, others for a ruling.
+3. **Lines or motivations:** mostly improvised, but planned scenes must unfold as planned. Scenes integral
+   to the main story are controlled; lesser scenes are bounded by parameters. Characters come in two tiers:
+   low-autonomy **actors** for enacting scenes, and **players** with autonomy within reason who present
+   real obstacles.
+4. **Feel:** a game, not a film.
+5. **Latency:** about 10 seconds per turn to start, refined later.
+
+Recorded in `docs/decisions.md`. Next: the script format (#93) defines control levels and agent tiers.
