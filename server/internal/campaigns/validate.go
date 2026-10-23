@@ -172,6 +172,14 @@ func (d *CampaignDefinition) Validate() error {
 		}
 	}
 
+	for id, sm := range d.Map.SceneMaps {
+		if sm.Name == "" {
+			return fmt.Errorf("map.scene_maps %q needs a name", id)
+		}
+		if _, ok := d.Map.Rooms[sm.RoomID]; !ok {
+			return fmt.Errorf("map.scene_maps %q room_id %q does not exist in map.rooms", id, sm.RoomID)
+		}
+	}
 	for nodeID, node := range d.StoryNodes {
 		if node.Title == "" {
 			return fmt.Errorf("story node %q title is required", nodeID)
@@ -207,6 +215,15 @@ func (d *CampaignDefinition) Validate() error {
 		if node.LocationID != "" {
 			if _, ok := d.Map.Rooms[node.LocationID]; !ok {
 				return fmt.Errorf("story node %q location_id %q does not exist in map.rooms", nodeID, node.LocationID)
+			}
+		}
+		if node.SceneMap != "" {
+			sm, ok := d.Map.SceneMaps[node.SceneMap]
+			if !ok {
+				return fmt.Errorf("story node %q scene_map %q does not exist in map.scene_maps", nodeID, node.SceneMap)
+			}
+			if node.LocationID != sm.RoomID {
+				return fmt.Errorf("story node %q scene_map %q is inside room %q, but the node's location_id is %q", nodeID, node.SceneMap, sm.RoomID, node.LocationID)
 			}
 		}
 		if err := d.validateScript(nodeID, node); err != nil {

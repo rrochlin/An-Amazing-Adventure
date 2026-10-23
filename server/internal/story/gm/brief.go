@@ -39,6 +39,11 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 		line("\n%s", strings.TrimSpace(campaignBrief))
 	}
 	line("\n%s", strings.TrimSpace(worldSlice(g)))
+	if node != nil && node.SceneMap != "" {
+		if sm, ok := def.Map.SceneMaps[node.SceneMap]; ok && owner.LocationID == sm.RoomID {
+			line("Indoors: %s. %s", sm.Name, sm.Description)
+		}
+	}
 
 	line("\n## Handing in your decision")
 	line("Allowed world changes in this scene: %s. Report only changes the narration made happen, never ones it mentioned or foreshadowed. Money is handled by the story: never create or give coins.", strings.Join(AllowedWorldEvents(node), ", "))

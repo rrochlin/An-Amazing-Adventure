@@ -56,12 +56,21 @@ export interface PresetCharacter {
    selected_skills: string[];
 }
 
+/** An interior: drawn in place of room `room_id` while the player is there. */
+export interface SceneMapView {
+   id: string;
+   room_id: string;
+   name: string;
+}
+
 export interface CampaignStateView {
    campaign_id: string;
    campaign_version: string;
    active_node_id: string;
    /** The current scene's title. */
    active_node_title?: string;
+   /** The interior the current scene is played on, if any. */
+   active_scene_map?: SceneMapView | null;
    current_objective?: string;
    bool_flags?: Record<string, boolean>;
    labels?: Record<string, string>;

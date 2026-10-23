@@ -6,12 +6,15 @@ import { render, screen } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { AppTheme } from '@/theme/theme';
 import { BRIARWELL_ART } from '@/components/map/art/briarwell';
-import { GROUND_TILES, OBJECT_TILES, mapArtFor } from '@/components/map/mapArt';
+import { GROUND_TILES, OBJECT_TILES, mapArtFor, sceneArt } from '@/components/map/mapArt';
 import { WorldMap, cameraOffset, mapScale, placeTokens } from '@/components/map/WorldMap';
 import type { CharacterView, RoomView } from '@/types/types';
 
 interface CampaignJSON {
-   map: { rooms: Record<string, { name: string; points_of_interest?: { id: string }[] }> };
+   map: {
+      rooms: Record<string, { name: string; points_of_interest?: { id: string }[] }>;
+      scene_maps?: Record<string, { room_id: string; name: string }>;
+   };
    actors: Record<string, unknown>;
 }
 const campaign: CampaignJSON = JSON.parse(
@@ -118,6 +121,23 @@ describe('placeTokens', () => {
    it('uses the campaign cast sprites', () => {
       expect(tokens.find((t) => t.id === 'father')?.sprite).toBe(88);
    });
+
+   it('keeps everyone on their tile when someone arrives or leaves', () => {
+      const tile = (ts: typeof tokens, id: string) => {
+         const t = ts.find((x) => x.id === id)!;
+         return `${t.x},${t.y}`;
+      };
+      // Someone whose id sorts first arrives: before, they'd have taken
+      // Bess's tile and pushed her along.
+      const crowd = { ...rooms, village_square: { ...rooms.village_square, occupants: [person('aaron', 'Aaron'), person('bess', 'Little Bess')] } };
+      const after = placeTokens(BRIARWELL_ART, crowd, 'village_square', 'Wren', 1, tokens);
+      expect(tile(after, 'bess')).toBe(tile(tokens, 'bess'));
+      expect(tile(after, 'player')).toBe(tile(tokens, 'player'));
+      expect(new Set(after.map((t) => `${t.x},${t.y}`)).size).toBe(after.length);
+      // And when Bess leaves, the newcomer stays put too.
+      const left = { ...rooms, village_square: { ...rooms.village_square, occupants: [person('aaron', 'Aaron')] } };
+      expect(tile(placeTokens(BRIARWELL_ART, left, 'village_square', 'Wren', 1, after), 'aaron')).toBe(tile(after, 'aaron'));
+   });
 });
 
 describe('WorldMap', () => {
@@ -184,5 +204,58 @@ describe('scene mode', () => {
       expect(screen.getByTestId('map-room-meadow')).toHaveAttribute('data-discovered', 'true');
       expect(screen.getAllByTestId('map-token').map((t) => t.getAttribute('aria-label')).sort()).toEqual(['Little Bess', 'Wren']);
       expect(screen.getByLabelText('Stone well')).toBeInTheDocument();
+   });
+});
+
+describe('nothing flies in', () => {
+   it('hides the map until it has measured its view, and never glides a first placement', () => {
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+      render(
+         <ThemeProvider theme={AppTheme}>
+            <WorldMap art={BRIARWELL_ART} rooms={rooms} currentRoomId="village_square" playerName="Wren" mode="scene" />
+         </ThemeProvider>,
+      );
+      // jsdom measures 0x0: the layout is a guess, so it isn't shown.
+      expect(screen.getByTestId('world-map')).toHaveStyle({ visibility: 'hidden', transition: 'none' });
+      for (const t of screen.getAllByTestId('map-token')) expect(t).toHaveStyle({ transition: 'none' });
+   });
+});
+
+describe('Briarwell interiors', () => {
+   const sceneMaps = campaign.map.scene_maps ?? {};
+
+   it('draws every scene map in the campaign, each over its own room only', () => {
+      expect(Object.keys(BRIARWELL_ART.interiors ?? {}).sort()).toEqual(Object.keys(sceneMaps).sort());
+      for (const [id, inside] of Object.entries(BRIARWELL_ART.interiors ?? {})) {
+         expect(inside.interior, id).toBe(true);
+         expect(Object.keys(inside.rooms), id).toEqual([sceneMaps[id].room_id]);
+         const roomPOIs = (campaign.map.rooms[sceneMaps[id].room_id].points_of_interest ?? []).map((p) => p.id);
+         for (const poi of Object.keys(inside.points_of_interest)) expect(roomPOIs, `${id} ${poi}`).toContain(poi);
+         for (const [layer, legend] of [
+            [inside.ground, GROUND_TILES],
+            [inside.objects, { ...OBJECT_TILES, ' ': 0 }],
+         ] as const) {
+            expect(layer).toHaveLength(inside.height);
+            layer.forEach((row) => {
+               expect(row).toHaveLength(inside.width);
+               for (const ch of row) expect(legend, `unknown tile "${ch}"`).toHaveProperty(ch);
+            });
+         }
+      }
+   });
+
+   it("shows the interior only while the player is in its room, with the campaign's cast", () => {
+      const cottage = { id: 'cottage_interior', room_id: 'family_cottage', name: 'Inside the Cottage' };
+      const inside = sceneArt(BRIARWELL_ART, cottage, 'family_cottage');
+      expect(inside?.interior).toBe(true);
+      expect(inside?.cast.father).toEqual(BRIARWELL_ART.cast.father);
+      expect(sceneArt(BRIARWELL_ART, cottage, 'meadow')).toBe(BRIARWELL_ART);
+      expect(sceneArt(BRIARWELL_ART, null, 'family_cottage')).toBe(BRIARWELL_ART);
+   });
+
+   it('fits an interior whole instead of filling the view', () => {
+      const inside = BRIARWELL_ART.interiors!.cottage_interior;
+      // 12x9 tiles with a tile of margin: 208x160 px at 1x, so 3x fits 900x500.
+      expect(mapScale('scene', { w: 900, h: 500 }, 192, 144, inside, 'family_cottage')).toBe(3);
    });
 });

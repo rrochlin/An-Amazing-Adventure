@@ -4,11 +4,11 @@ import MapIcon from '@mui/icons-material/Map';
 import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import CloseIcon from '@mui/icons-material/Close';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ObjectiveStateView, RoomView } from '@/types/types';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ObjectiveStateView, RoomView, SceneMapView } from '@/types/types';
 import { QuestList } from './QuestList';
 import { WorldMap } from './map/WorldMap';
-import type { MapArt } from './map/mapArt';
+import { sceneArt, type MapArt } from './map/mapArt';
 
 /** Share of the scene's height the story text box is expected to cover. */
 const TEXT_BOX_SHARE = 0.38;
@@ -19,6 +19,8 @@ interface SceneScreenProps {
    fallback?: ReactNode;
    rooms: Record<string, RoomView>;
    currentRoomId?: string;
+   /** The interior the scene is played on, if any (shown while the player is in its room). */
+   sceneMap?: SceneMapView | null;
    playerName?: string;
    playerScale?: number;
    location?: string;
@@ -46,6 +48,7 @@ export function SceneScreen({
    fallback,
    rooms,
    currentRoomId,
+   sceneMap,
    playerName,
    playerScale,
    location,
@@ -57,6 +60,8 @@ export function SceneScreen({
    onDetails,
 }: SceneScreenProps) {
    const [logOpen, setLogOpen] = useState(false);
+   const shown = sceneArt(art, sceneMap, currentRoomId);
+   const indoors = !!shown?.interior;
    const [journalOpen, setJournalOpen] = useState(false);
    const [worldOpen, setWorldOpen] = useState(false);
 
@@ -83,7 +88,28 @@ export function SceneScreen({
       return () => window.removeEventListener('keydown', onKey);
    }, []);
 
+   // The scene is framed above the tallest the text panel has been at this
+   // screen size (up to half the screen): the panel changes height with every
+   // line, and following it slid the whole scene up and down.
+   const sceneRef = useRef<HTMLDivElement>(null);
+   const lastPanel = useRef(0);
    const [panelHeight, setPanelHeight] = useState(0);
+   const onPanelHeight = useCallback((px: number) => {
+      lastPanel.current = px;
+      setPanelHeight((h) => Math.max(h, px));
+   }, []);
+   const [sceneHeight, setSceneHeight] = useState(0);
+   useEffect(() => {
+      const el = sceneRef.current;
+      if (!el || typeof ResizeObserver !== 'function') return;
+      const observer = new ResizeObserver(() => {
+         setSceneHeight(el.clientHeight);
+         setPanelHeight(lastPanel.current);
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+   }, []);
+   const framedPanel = sceneHeight ? Math.min(panelHeight, sceneHeight / 2) : panelHeight;
    // The location sign's height: the scene centres its room below it.
    const chipRef = useRef<HTMLDivElement>(null);
    const [chipHeight, setChipHeight] = useState(0);
@@ -119,19 +145,23 @@ export function SceneScreen({
 
    return (
       <Box
+         ref={sceneRef}
          data-testid="scene-screen"
          sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: '#08050c', display: 'flex' }}
       >
-         {art ? (
+         {shown ? (
             <WorldMap
-               art={art}
+               // A new map (stepping inside or out) starts fresh: no pan
+               // across from where the other map left off.
+               key={indoors ? `inside:${sceneMap?.id}` : 'outside'}
+               art={shown}
                rooms={rooms}
                currentRoomId={currentRoomId}
                playerName={playerName}
                playerScale={playerScale}
                mode="scene"
                insetTop={chipHeight}
-               insetBottom={panelHeight}
+               insetBottom={framedPanel}
             />
          ) : (
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2, pb: `${TEXT_BOX_SHARE * 100}%` }}>
@@ -159,7 +189,7 @@ export function SceneScreen({
             }}
          >
             <Typography sx={{ fontFamily: 'Cinzel, Georgia, serif', color: 'primary.main', fontSize: '1rem' }}>
-               {location ?? 'Unknown place'}
+               {(indoors ? sceneMap?.name : location) ?? 'Unknown place'}
                {sceneTitle && (
                   <Typography component="span" sx={{ color: 'text.secondary', fontSize: '0.85rem', ml: 1 }}>
                      · {sceneTitle}
@@ -244,7 +274,7 @@ export function SceneScreen({
          )}
 
          <Box sx={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', '& > *': { pointerEvents: 'auto' } }}>
-            {renderStage(logOpen, setPanelHeight)}
+            {renderStage(logOpen, onPanelHeight)}
          </Box>
 
          {art && (

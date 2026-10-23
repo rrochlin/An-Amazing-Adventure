@@ -32,6 +32,13 @@
     "starting_room_id": "family_cottage"
   },
   "map": {
+    "scene_maps": {
+      "cottage_interior": {
+        "room_id": "family_cottage",
+        "name": "Inside the Cottage",
+        "description": "One warm room under the thatch with a packed-earth floor: the hearth and its cooking pot in the back wall between two shuttered windows, the family table with its stools in the middle, the parents' straw bed and Ros's cot to the right, a chest, a barrel and a shelf of crockery by the front door."
+      }
+    },
     "rooms": {
       "family_cottage": {
         "name": "Family Cottage",
@@ -274,6 +281,7 @@
       "dialogue_asset_id": "errand",
       "dialogue_start_node": "Errand",
       "location_id": "family_cottage",
+      "scene_map": "cottage_interior",
       "title": "A Birthday Errand",
       "summary": "Father asks the child to earn a few coins by honest work and buy Ros a birthday gift.",
       "objective_text": "Answer Father.",
@@ -412,6 +420,7 @@
       "dialogue_asset_id": "birthday",
       "dialogue_start_node": "Birthday",
       "location_id": "family_cottage",
+      "scene_map": "cottage_interior",
       "title": "Ros's Birthday",
       "summary": "Back home at dusk. The child can give Ros the gift, or keep it. As the evening ends, smoke rises from the woods.",
       "intro_text": "The sun is low and gold by the time you get home, the gift hidden behind your back.",
@@ -453,6 +462,7 @@
     "bandit_raid": {
       "mode": "ai_scene",
       "location_id": "family_cottage",
+      "scene_map": "cottage_interior",
       "title": "Briarwell Burns",
       "summary": "Night. Red Corwin's bandits torch the village. Father falls defending the door; Mother and Ros vanish in the chaos. The child must decide what to do.",
       "intro_text": "You wake to screaming. Orange light flickers through the shutters and the air is thick with smoke. Father is at the door with his woodaxe, shouting for Mother to take Ros out the back. Then the door splinters: Red Corwin's bandits are in Briarwell. You can hide, fight, or go looking for Mother and Ros.",
