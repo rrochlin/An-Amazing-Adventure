@@ -267,3 +267,32 @@ describe('gameStore', () => {
       expect(s.worldGenReady).toBe(false);
    });
 });
+
+describe('deltas wait for the story', () => {
+   // Playtest 5: the map moved and the pack changed while the player was
+   // still reading the lines that explained them.
+   it('holds deltas while narration is arriving and applies them on catch-up, in order', () => {
+      const store = useGameStore.getState();
+      store.setGameState(makeGameState());
+      store.appendStreamChunk('You walk north');
+      store.finalizeStreamingMessage();
+      store.applyDelta({ current_room: { ...makeGameState().current_room, id: 'room-2', name: 'Hall' } } as StateDelta);
+      store.applyDelta({ self: { ...makeGameState().player, health: 90 } } as StateDelta);
+      expect(useGameStore.getState().gameState?.current_room.id).toBe('room-1');
+      expect(useGameStore.getState().pendingDeltas).toHaveLength(2);
+
+      useGameStore.getState().narrationCaughtUp();
+      const after = useGameStore.getState();
+      expect(after.gameState?.current_room.id).toBe('room-2');
+      expect(after.gameState?.self?.health).toBe(90);
+      expect(after.pendingDeltas).toHaveLength(0);
+      expect(after.narrationPlaying).toBe(false);
+   });
+
+   it('applies deltas at once when no narration is playing', () => {
+      const store = useGameStore.getState();
+      store.setGameState(makeGameState());
+      store.applyDelta({ self: { ...makeGameState().player, health: 50 } } as StateDelta);
+      expect(useGameStore.getState().gameState?.self?.health).toBe(50);
+   });
+});

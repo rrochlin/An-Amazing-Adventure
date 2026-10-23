@@ -62,6 +62,8 @@ interface DialogueStageProps {
    logOpen?: boolean;
    /** In overlay mode, reports the docked text panel's height. */
    onPanelHeight?: (px: number) => void;
+   /** Called whenever the stage has shown the last line it has. */
+   onCaughtUp?: () => void;
 }
 
 /**
@@ -91,6 +93,7 @@ export function DialogueStage({
    overlay = false,
    logOpen = false,
    onPanelHeight,
+   onCaughtUp,
 }: DialogueStageProps) {
    const beats = useMemo(
       () => buildBeats(messages, streamingMessage),
@@ -138,6 +141,11 @@ export function DialogueStage({
    );
    const lineDone = !current || current.kind === 'scene' || (!typing && !current.streaming);
    const atEnd = !hasNext && lineDone;
+   // World changes wait for this (see gameStore.narrationPlaying). Beats
+   // already read on reload are at the end straight away.
+   useEffect(() => {
+      if (atEnd) onCaughtUp?.();
+   }, [atEnd, beats.length, onCaughtUp]);
    const hasChoices = !!pendingChoices?.length && !!onChoiceSelected;
    const showChoices = atEnd && hasChoices && !ending;
    const showEnding = atEnd && !!ending;
