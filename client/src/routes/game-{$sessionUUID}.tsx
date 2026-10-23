@@ -13,6 +13,8 @@ import {
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { RoomMap } from '../components/RoomMap';
+import { WorldMap } from '@/components/map/WorldMap';
+import { mapArtFor } from '@/components/map/mapArt';
 import { GameInfo } from '../components/GameInfo';
 import { DialogueStage } from '../components/dialogue/DialogueStage';
 import { GameLayout } from '../components/GameLayout';
@@ -528,6 +530,8 @@ function GamePage() {
    // The in-flight streamingMessage is passed separately to Chat so it can
    // render a dedicated StreamingChatMessage bubble rather than a plain entry.
    const displayMessages = chatMessages;
+   // Campaigns with pixel-art maps get the world map; others the room graph.
+   const mapArt = mapArtFor(campaignState?.campaign_id);
 
    return (
       <GameLayout
@@ -582,12 +586,23 @@ function GamePage() {
                   flexDirection: 'column',
                }}
             >
-               <RoomMap
-                  gameState={gameState}
-                  onRoomFocus={setFocusedRoom}
-                  onExpand={() => setMapExpanded((v) => !v)}
-                  expanded={mapExpanded}
-               />
+               {mapArt ? (
+                  <WorldMap
+                     art={mapArt}
+                     rooms={gameState?.rooms ?? {}}
+                     currentRoomId={gameState?.current_room?.id}
+                     playerName={gameState?.self?.name}
+                     onExpand={() => setMapExpanded((v) => !v)}
+                     expanded={mapExpanded}
+                  />
+               ) : (
+                  <RoomMap
+                     gameState={gameState}
+                     onRoomFocus={setFocusedRoom}
+                     onExpand={() => setMapExpanded((v) => !v)}
+                     expanded={mapExpanded}
+                  />
+               )}
             </Box>
             </>
          }
