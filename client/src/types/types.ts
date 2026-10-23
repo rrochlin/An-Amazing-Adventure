@@ -165,6 +165,15 @@ export interface RoomView {
    coordinates: Coordinates;
    items: ItemView[];
    occupants: CharacterView[];
+   /** False for rooms the party hasn't found; the map fogs them. */
+   discovered?: boolean;
+   points_of_interest?: PointOfInterest[];
+}
+
+export interface PointOfInterest {
+   id: string;
+   name: string;
+   description?: string;
 }
 
 export interface GameStateView {
