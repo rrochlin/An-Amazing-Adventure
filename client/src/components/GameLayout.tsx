@@ -68,10 +68,10 @@ export function GameLayout({
             boxSizing: 'border-box',
          }}
       >
-         {/* Left — Map (25% normal → 75% expanded, covering the stage) */}
+         {/* Left — Map (a third, as Roadwarden's illustration pane → 75% expanded, covering the stage) */}
          <Box
             sx={{
-               flex: mapExpanded ? '0 0 75%' : '0 0 25%',
+               flex: mapExpanded ? '0 0 75%' : '0 0 33%',
                minWidth: 0,
                display: 'flex',
                flexDirection: 'column',
@@ -92,10 +92,10 @@ export function GameLayout({
                {map}
             </Paper>
          </Box>
-         {/* Center — Stage (50% normal → hidden when the map is expanded) */}
+         {/* Center — Stage (42% normal → hidden when the map is expanded) */}
          <Box
             sx={{
-               flex: mapExpanded ? '0 0 0%' : '0 0 50%',
+               flex: mapExpanded ? '0 0 0%' : '0 0 42%',
                minWidth: 0,
                display: 'flex',
                flexDirection: 'column',

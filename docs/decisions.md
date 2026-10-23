@@ -32,6 +32,18 @@ at a table.
 - **Latency budget: about 10 seconds per turn** to start, refined later. For the very first versions,
   quality comes first and we measure where latency lands.
 
+## 2026-10-23 — Map: Roadwarden-style, CC0 pixel art
+
+- The map is modelled on **Roadwarden**: the left pane shows the area the player is in, beside the text.
+  The three-column layout stays; the map column widens to a third of the screen. This settles #129.
+- **Art:** open-licence pixel art, Kenney's CC0 Tiny Town (terrain, buildings) and Tiny Dungeon
+  (character sprites). A campaign's map is ASCII tile layers plus room areas, point-of-interest
+  positions and a sprite per cast member (`client/src/components/map/`).
+- In the panel the map follows the player at a crisp zoom; expanded, it shows the whole map. Fog covers
+  undiscovered rooms, and every character in a discovered room has a token that moves live.
+- Games without art (procedural dungeons) keep the room graph.
+- Why now: the world is getting more detailed, and the map is how we see the agents acting in it.
+
 ## 2026-10-22 — Map: room data model, illustrated where there's art
 
 - Spike #118 (`map/map-prototypes.md`) compared a room graph with points of interest (A), an

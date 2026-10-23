@@ -1,0 +1,12 @@
+Tiny Town (1.1) and Tiny Dungeon (1.0)
+Created/distributed by Kenney (www.kenney.nl)
+
+License: Creative Commons Zero, CC0
+http://creativecommons.org/publicdomain/zero/1.0/
+
+"This content is free to use in personal, educational and commercial projects.
+Support us by crediting Kenney or www.kenney.nl (this is not mandatory)"
+
+Files: tiny-town.png and tiny-dungeon.png are the packed tilemaps
+(16x16 tiles, 12 columns, no spacing) from https://kenney.nl/assets/tiny-town
+and https://kenney.nl/assets/tiny-dungeon.
