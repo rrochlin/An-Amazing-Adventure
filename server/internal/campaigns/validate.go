@@ -3,6 +3,8 @@ package campaigns
 import (
 	"fmt"
 	"io/fs"
+
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
 var validNodeModes = map[string]bool{
@@ -23,6 +25,9 @@ func (d *CampaignDefinition) Validate() error {
 	}
 	if d.Premise == "" {
 		return fmt.Errorf("premise is required")
+	}
+	if !game.ValidScale(d.PlayerRole.Scale) {
+		return fmt.Errorf("player_role.scale %v must be between 0 and %v", d.PlayerRole.Scale, game.MaxScale)
 	}
 	if len(d.Map.Rooms) == 0 {
 		return fmt.Errorf("map.rooms must contain at least one room")

@@ -1131,15 +1131,17 @@ type DnDStatsView struct {
 
 // CharacterView is the client-facing representation of a character.
 type CharacterView struct {
-	ID          string        `json:"id"`
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Alive       bool          `json:"alive"`
-	Health      int           `json:"health"`
-	MaxHealth   int           `json:"max_health"` // always populated; falls back to 100 for legacy characters
-	Friendly    bool          `json:"friendly"`
-	Inventory   []ItemView    `json:"inventory"`
-	Equipment   EquipmentView `json:"equipment"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Alive       bool   `json:"alive"`
+	Health      int    `json:"health"`
+	MaxHealth   int    `json:"max_health"` // always populated; falls back to 100 for legacy characters
+	Friendly    bool   `json:"friendly"`
+	// Scale is height relative to an adult; 0 means 1.
+	Scale     float64       `json:"scale,omitempty"`
+	Inventory []ItemView    `json:"inventory"`
+	Equipment EquipmentView `json:"equipment"`
 	// D&D 5e stats — populated when character was created via CharacterCreationData
 	DnD *DnDStatsView `json:"dnd,omitempty"`
 }
@@ -1203,6 +1205,7 @@ func (g *Game) buildCharacterViewWithDnD(c Character, dnd *dnd5echar.Character) 
 		Health:      c.Health,
 		MaxHealth:   100, // legacy default; overwritten below when DnD character is present
 		Friendly:    c.Friendly,
+		Scale:       c.Scale,
 		Inventory:   resolveItems(c.Inventory),
 		Equipment: EquipmentView{
 			Head:  resolveSlot(c.Equipment.Head),

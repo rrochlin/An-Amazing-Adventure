@@ -578,6 +578,7 @@ function GamePage() {
                      rooms={gameState?.rooms ?? {}}
                      currentRoomId={gameState?.current_room?.id}
                      playerName={gameState?.self?.name}
+                     playerScale={gameState?.self?.scale || 1}
                      onExpand={() => setMapExpanded((v) => !v)}
                      expanded={mapExpanded}
                   />

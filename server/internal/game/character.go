@@ -20,6 +20,18 @@ type Character struct {
 	Friendly    bool      `json:"friendly" dynamodbav:"friendly"`
 	Inventory   []string  `json:"inventory" dynamodbav:"inventory"` // item IDs
 	Equipment   Equipment `json:"equipment" dynamodbav:"equipment"`
+	// Scale is the character's height relative to an adult (1): about 0.8
+	// for an older child, 0.6 for a small child, 2 for a giant. Zero means
+	// 1. The map draws sprites at this size; spells and story can change it.
+	Scale float64 `json:"scale,omitempty" dynamodbav:"scale,omitempty"`
+}
+
+// MaxScale bounds character scale (a gargantuan creature is about 4).
+const MaxScale = 4.0
+
+// ValidScale reports whether s is a usable character scale (0 means default).
+func ValidScale(s float64) bool {
+	return s >= 0 && s <= MaxScale
 }
 
 // NewCharacter creates a new Character with a server-generated UUID.

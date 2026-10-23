@@ -3,6 +3,8 @@ package campaigns
 import (
 	"fmt"
 	"sort"
+
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
 func errorf(format string, args ...any) error { return fmt.Errorf(format, args...) }
@@ -179,6 +181,9 @@ func (d *CampaignDefinition) validateScript(nodeID string, node StoryNode) error
 
 // validateSheet checks an actor's character sheet.
 func (d *CampaignDefinition) validateSheet(actorID string, a ActorTemplate) error {
+	if !game.ValidScale(a.Scale) {
+		return errorf("actor %q scale %v must be between 0 and %v", actorID, a.Scale, game.MaxScale)
+	}
 	if a.DefaultTier != "" && !validTiers[a.DefaultTier] {
 		return errorf("actor %q default_tier %q must be %q or %q", actorID, a.DefaultTier, TierActor, TierPlayer)
 	}

@@ -59,8 +59,17 @@ func NarratorTools() []types.Tool {
 				req("room_name", "string", "Name of room to place them in"),
 				opt("friendly", "boolean", "Whether the character is friendly (default true)"),
 				opt("health", "integer", "Starting health 1-100 (default 100)"),
+				opt("scale", "number", "Height relative to an adult: 1 adult (default), about 0.8 an older child, 0.6 a small child, 0.3 a tiny creature, 2 or more a giant"),
 			),
 			[]string{"name", "description", "backstory", "room_name"},
+		),
+		tool("set_character_scale",
+			"Change a character's size when the narrative does: a shrinking or enlarging spell, a curse, a growth spurt. Scale is height relative to an adult (1).",
+			props(
+				req("character_name", "string", "Character name, or 'player' for the current player"),
+				req("scale", "number", "New height relative to an adult, between 0.1 and 4"),
+			),
+			[]string{"character_name", "scale"},
 		),
 		tool("move_player",
 			"Move the player to a room when the narrative shows them arriving there (walking to the meadow, ducking into the mill). Only for rooms listed in Current Game State; never for rooms the player merely looks at or talks about.",
@@ -180,6 +189,8 @@ func DispatchTool(ctx context.Context, g *game.Game, name string, input map[stri
 		result, event, err = execHealCharacter(g, input)
 	case "set_character_alive":
 		result, event, err = execSetCharacterAlive(g, input)
+	case "set_character_scale":
+		result, event, err = execSetCharacterScale(g, input)
 	case "give_item_to_player":
 		result, event, err = execGiveItemToPlayer(g, input)
 	case "take_item_from_player":
@@ -292,6 +303,13 @@ func execCreateCharacter(g *game.Game, in map[string]any) (string, *game.WorldEv
 	}
 	if health, ok := in["health"].(float64); ok {
 		c.Health = int(health)
+	}
+	if _, ok := in["scale"]; ok {
+		scale := numArg(in, "scale")
+		if scale <= 0 || !game.ValidScale(scale) {
+			return "", nil, fmt.Errorf("scale must be between 0.1 and %v", game.MaxScale)
+		}
+		c.Scale = scale
 	}
 	if err := g.AddNPC(c); err != nil {
 		return "", nil, err
@@ -432,6 +450,41 @@ func execHealCharacter(g *game.Game, in map[string]any) (string, *game.WorldEven
 		return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. ❤ %d/100", amount, character.Health)}, nil
 	}
 	return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("%s recovers %d health. ❤ %d/100", character.Name, amount, character.Health)}, nil
+}
+
+func execSetCharacterScale(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	scale := numArg(in, "scale")
+	if scale < 0.1 || !game.ValidScale(scale) {
+		return "", nil, fmt.Errorf("scale must be between 0.1 and %v", game.MaxScale)
+	}
+	character, isPlayer, ownerID, err := resolveCharacterByName(g, strArg(in, "character_name"))
+	if err != nil {
+		return "", nil, err
+	}
+	before := character.Scale
+	if before == 0 {
+		before = 1
+	}
+	character.Scale = scale
+	if isPlayer {
+		g.SetPlayerCharacter(ownerID, character)
+	} else {
+		g.NPCs[character.ID] = character
+	}
+	owner, _ := g.OwnerCharacter()
+	if !isPlayer && character.LocationID != owner.LocationID {
+		return fmt.Sprintf("Set %q scale to %v", character.Name, scale), nil, nil
+	}
+	change := "grows"
+	if scale < before {
+		change = "shrinks"
+	}
+	message := fmt.Sprintf("%s %s.", character.Name, change)
+	if isPlayer {
+		message = "You " + strings.TrimSuffix(change, "s") + "."
+	}
+	return fmt.Sprintf("Set %q scale to %v", character.Name, scale),
+		&game.WorldEvent{Type: "character_resized", Message: message}, nil
 }
 
 func execSetCharacterAlive(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
@@ -651,8 +704,15 @@ func strArg(in map[string]any, key string) string {
 }
 
 func numArg(in map[string]any, key string) float64 {
-	v, _ := in[key].(float64)
-	return v
+	switch v := in[key].(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	}
+	return 0
 }
 
 func resolveRoomByName(g *game.Game, name string) (game.Area, error) {

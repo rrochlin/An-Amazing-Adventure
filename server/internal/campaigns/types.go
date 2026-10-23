@@ -62,6 +62,9 @@ type PlayerRoleTemplate struct {
 	Name        string `json:"name,omitempty"`
 	Premise     string `json:"premise,omitempty"`
 	RoleSummary string `json:"role_summary,omitempty"`
+	// Scale is the player character's height relative to an adult (see
+	// game.Character.Scale); 0 means 1.
+	Scale float64 `json:"scale,omitempty"`
 }
 
 type PartyTemplate struct {
@@ -122,6 +125,9 @@ type ActorTemplate struct {
 	// DefaultTier is the agent tier when a scene doesn't say: "actor"
 	// (default) or "player".
 	DefaultTier string `json:"default_tier,omitempty"`
+	// Scale is height relative to an adult (see game.Character.Scale); 0
+	// means 1. Older child ~0.8, small child ~0.6, giant 2+.
+	Scale float64 `json:"scale,omitempty"`
 }
 
 type ActorRail struct {

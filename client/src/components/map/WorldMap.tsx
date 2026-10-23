@@ -20,6 +20,8 @@ interface WorldMapProps {
    rooms: Record<string, RoomView>;
    currentRoomId?: string;
    playerName?: string;
+   /** The player's height relative to an adult. */
+   playerScale?: number;
    expanded?: boolean;
    onExpand?: () => void;
 }
@@ -31,6 +33,8 @@ export interface Token {
    x: number;
    y: number;
    sprite: number;
+   /** Height relative to an adult: sprites are drawn at this size. */
+   scale: number;
    isPlayer: boolean;
 }
 
@@ -49,6 +53,7 @@ export function WorldMap({
    rooms,
    currentRoomId,
    playerName = 'You',
+   playerScale = 1,
    expanded = false,
    onExpand,
 }: WorldMapProps) {
@@ -87,8 +92,8 @@ export function WorldMap({
    }, [art, nativeW, nativeH]);
 
    const tokens = useMemo(
-      () => placeTokens(art, rooms, currentRoomId, playerName),
-      [art, rooms, currentRoomId, playerName],
+      () => placeTokens(art, rooms, currentRoomId, playerName, playerScale),
+      [art, rooms, currentRoomId, playerName, playerScale],
    );
 
    const px = (tiles: number) => tiles * TILE * scale;
@@ -212,8 +217,9 @@ export function WorldMap({
 }
 
 function MapToken({ token, scale }: { token: Token; scale: number }) {
-   // Everyone is drawn at the same size, as in pixel-art RPGs.
-   const size = TILE * scale;
+   // A character's own scale: an adult fills the tile, a child is smaller,
+   // a giant towers over it (standing on its tile, growing upward).
+   const size = TILE * scale * token.scale;
    const [sx, sy] = sheetOffset(token.sprite);
    const k = size / TILE;
    return (
@@ -311,19 +317,20 @@ export function placeTokens(
    rooms: Record<string, RoomView>,
    currentRoomId: string | undefined,
    playerName: string,
+   playerScale = 1,
 ): Token[] {
    const tokens: Token[] = [];
    for (const [roomId, rect] of Object.entries(art.rooms)) {
       const room = rooms[roomId];
       if (!room?.discovered && roomId !== currentRoomId) continue;
-      const people: { id: string; name: string; isPlayer: boolean; friendly: boolean }[] = [];
+      const people: { id: string; name: string; isPlayer: boolean; friendly: boolean; scale: number }[] = [];
       if (roomId === currentRoomId) {
-         people.push({ id: 'player', name: playerName, isPlayer: true, friendly: true });
+         people.push({ id: 'player', name: playerName, isPlayer: true, friendly: true, scale: playerScale });
       }
       [...(room?.occupants ?? [])]
          .sort((a, b) => a.id.localeCompare(b.id))
          .forEach((c: CharacterView) =>
-            people.push({ id: c.id, name: c.name, isPlayer: false, friendly: c.friendly }),
+            people.push({ id: c.id, name: c.name, isPlayer: false, friendly: c.friendly, scale: c.scale || 1 }),
          );
       const slots = freeTiles(art, rect);
       people.forEach((p, i) => {
@@ -342,6 +349,7 @@ export function placeTokens(
                   : p.friendly
                     ? DEFAULT_SPRITES.friendly
                     : DEFAULT_SPRITES.hostile),
+            scale: p.scale || 1,
             isPlayer: p.isPlayer,
          });
       });
