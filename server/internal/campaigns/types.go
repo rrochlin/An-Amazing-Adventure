@@ -150,6 +150,10 @@ type ObjectiveTemplate struct {
 	SuccessWhen []Condition `json:"success_when,omitempty"`
 	FailWhen    []Condition `json:"fail_when,omitempty"`
 	Optional    bool        `json:"optional,omitempty"`
+	// OnSuccess runs when the objective completes: the deterministic side
+	// of a deed (the coin it pays, the doll handed back), so it doesn't
+	// depend on the narration being read correctly.
+	OnSuccess []Action `json:"on_success,omitempty"`
 }
 
 type DialogueAsset struct {

@@ -24,8 +24,13 @@ func TestNarratorSystemPrompt_CampaignAddsBriefAndDirection(t *testing.T) {
 	if !strings.Contains(prompt, "Authored campaign: The Burning of Briarwell") {
 		t.Error("expected the campaign brief in the narrator prompt")
 	}
-	if strings.Contains(prompt, "Never list options") {
-		t.Error("campaign prompts should ask for a concrete hook, not forbid direction")
+	// Playtest 5: menus of choices and coin tallies crept back in, and one
+	// turn raced through several errands. Campaign prompts forbid all of
+	// that and still ask for a hook.
+	for _, want := range []string{"Never list options", "never a menu of choices", "never a tally", "Stop at the next decision point"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("campaign prompt should say %q", want)
+		}
 	}
 
 	plain := narratorSystemPrompt(g, nil)

@@ -1,6 +1,7 @@
 package campaigns_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
@@ -39,8 +40,7 @@ func TestBriarwell_GiftIsAnItemAndScenesMoveThePlayer(t *testing.T) {
 	if err := g.PlaceCharacter(g.OwnerID, "meadow"); err != nil {
 		t.Fatal(err)
 	}
-	giveCoin(t, g, "copper coin")
-	giveCoin(t, g, "Hob's silver coin")
+	// Coins come from the deeds themselves (see DeedsPayAndTakeTheirItems).
 	giveCoin(t, g, "smooth stone")
 
 	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{
@@ -87,4 +87,53 @@ func TestTakeItemIsHarmlessWhenTheItemIsMissing(t *testing.T) {
 func loc(g *game.Game) string {
 	owner, _ := g.OwnerCharacter()
 	return owner.LocationID
+}
+
+// Playtest 5: the engineer handed over a coin twice for one deed, kept the
+// returned doll in the pack, and the rescue teleported a hidden child to
+// the woods. Deeds now pay and take things themselves.
+func TestBriarwell_DeedsPayAndTakeTheirItems(t *testing.T) {
+	def, g, _ := bootstrapBriarwell(t)
+	chooseOption(t, def, g, "I'll do it", "village_deeds")
+	doll := game.NewItem("rag doll", "Bess's doll")
+	if err := g.AddItem(doll); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.GiveItemToPlayer(doll.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_bully": "stopped"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := inventoryNames(g); len(got) != 2 || got[1] != "copper coin" {
+		t.Fatalf("stopping Dunstan pays one coin, got %v", got)
+	}
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_doll": "returned"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := inventoryNames(g); len(got) != 2 || got[0] != "copper coin" || got[1] != "copper coin" {
+		t.Fatalf("returning the doll hands it over and pays a coin, got %v", got)
+	}
+	// Two deeds done: on to the stall, where both coins are spent.
+	if g.Campaign.ActiveNodeID != "gift_stall" {
+		t.Fatalf("expected gift_stall, got %q", g.Campaign.ActiveNodeID)
+	}
+	chooseOption(t, def, g, "sweets", "birthday")
+	if got := inventoryNames(g); len(got) != 1 || got[0] != "honey sweets" {
+		t.Fatalf("the stall takes both coins, got %v", got)
+	}
+}
+
+func TestBriarwell_RescueHappensWhereYouAre(t *testing.T) {
+	reg, _ := campaigns.LoadEmbeddedRegistry()
+	def, _ := reg.Get("briarwell")
+	for _, id := range []string{"rescue", "road_to_guild"} {
+		if loc := def.StoryNodes[id].LocationID; loc != "" {
+			t.Errorf("%s should not move the player (it did, to %q): a child hiding under the bed is rescued there", id, loc)
+		}
+	}
+	if !strings.Contains(def.StoryNodes["rescue"].IntroText, "what is left of Briarwell") {
+		t.Error("the rescue intro should not name a place")
+	}
 }

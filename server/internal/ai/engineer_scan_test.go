@@ -157,3 +157,16 @@ func TestPlainNumbersConvertsDocumentNumber(t *testing.T) {
 		t.Fatalf("document.Number not converted: %#v", got)
 	}
 }
+
+func TestExtractJSONObjectTakesTheLastObject(t *testing.T) {
+	// Playtest 5, turn 4: the resolver reasoned, wrote a wrong object, then a
+	// corrected one. The old parser took the span from the first "{" to the
+	// last "}" and choked on the prose between them.
+	raw := "```json\n{ \"labels\": { \"deed_doll\": \"kept\" } }\n```\n**Correction**: not yet.\n```json\n{ \"labels\": { \"deed_bully\": \"stopped\" } }\n```"
+	if got := extractJSONObject(raw); got != `{ "labels": { "deed_bully": "stopped" } }` {
+		t.Fatalf("got %q", got)
+	}
+	if got := extractJSONObject("no json here"); got != "" {
+		t.Fatalf("expected nothing, got %q", got)
+	}
+}

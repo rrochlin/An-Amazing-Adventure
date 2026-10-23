@@ -278,6 +278,9 @@ func EvaluateObjectives(def *CampaignDefinition, g *game.Game) ([]game.WorldEven
 			if matched {
 				o.Status = "completed"
 				events = append(events, game.WorldEvent{Type: "objective_completed", Message: "Objective complete: " + title})
+				if err := applyActions(def, g, tmpl.OnSuccess); err != nil {
+					return nil, fmt.Errorf("objective %q on_success: %w", o.ID, err)
+				}
 				continue
 			}
 		}

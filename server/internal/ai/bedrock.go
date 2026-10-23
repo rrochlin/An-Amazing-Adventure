@@ -536,20 +536,36 @@ Only include keys that appear in the allowed condition specs.
 For boolean flags, set true only when the turn clearly establishes that authored condition.
 For labels, only emit one of the allowed values.
 For counters, emit integers only when the turn clearly advances a tracked quantity.
-Do not invent keys, branches, dialogue, or explanations.`
+Do not invent keys, branches, dialogue, or explanations.
+Output the JSON object only: no reasoning, no code fences, nothing before or after it.`
 
+// extractJSONObject returns the last top-level JSON object in raw. Models
+// sometimes reason first and correct themselves, writing a second object;
+// the last one is the verdict.
 func extractJSONObject(raw string) string {
-	start := strings.Index(raw, "{")
 	end := strings.LastIndex(raw, "}")
-	if start == -1 || end == -1 || end < start {
+	if end == -1 {
 		return ""
 	}
-	return raw[start : end+1]
+	depth := 0
+	for i := end; i >= 0; i-- {
+		switch raw[i] {
+		case '}':
+			depth++
+		case '{':
+			depth--
+			if depth == 0 {
+				return raw[i : end+1]
+			}
+		}
+	}
+	return ""
 }
 
 // engineerSystemPrompt returns the system instructions for the Engineer.
 func engineerSystemPrompt() string {
-	return `You are a game world engineer. Your job is to read a narrator's text and execute the world mutations it implies using the provided tools.
+	return `Money is handled by the story engine: never create, give, or place coins or payment of any kind, even when the narrative mentions them.
+You are a game world engineer. Your job is to read a narrator's text and execute the world mutations it implies using the provided tools.
 
 Rules:
 - Call tools ONLY for mutations clearly and unambiguously implied by the narrative text.
@@ -974,10 +990,11 @@ func narratorSystemPrompt(g *game.Game, campaignDef *campaigns.CampaignDefinitio
 		g.PendingCombatContext = ""
 	}
 
-	nextSteps := "- Never list options — narrate the world and let the player decide what to do."
+	nextSteps := "- Never list options — narrate the world and let the player decide what to do.\n" +
+		"- Narrate only what the player's action achieves this turn, where they are. Stop at the next decision point and leave the next step to them: never carry them through a second errand or on to a second place in one turn."
 	campaignBrief := campaigns.NarratorBrief(campaignDef, g)
 	if campaignBrief != "" {
-		nextSteps = "- Never leave the player without a direction: close on a concrete in-world hook toward their objective."
+		nextSteps += "\n- End on a concrete in-world hook toward their objective: never a menu of choices, and never a tally of coins or progress."
 		campaignBrief = "\n\n" + campaignBrief
 	}
 
