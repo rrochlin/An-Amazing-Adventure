@@ -32,6 +32,8 @@ interface WorldMapProps {
    mode?: MapMode;
    /** Pixels at the bottom covered by an overlay (the story text box). */
    insetBottom?: number;
+   /** Pixels at the top covered by an overlay (the location sign). */
+   insetTop?: number;
 }
 
 export type MapMode = 'scene' | 'world' | 'panel';
@@ -74,6 +76,7 @@ export function WorldMap({
    onExpand,
    mode = expanded ? 'world' : 'panel',
    insetBottom = 0,
+   insetTop = 0,
 }: WorldMapProps) {
    const nativeW = art.width * TILE;
    const nativeH = art.height * TILE;
@@ -93,10 +96,11 @@ export function WorldMap({
       return () => observer.disconnect();
    }, []);
 
-   // The visible area: everything above an overlay at the bottom.
-   const area = { w: view.w, h: Math.max(0, view.h - insetBottom) };
+   // The visible area: between the overlays at the top and the bottom.
+   const area = { w: view.w, h: Math.max(0, view.h - insetTop - insetBottom) };
    const scale = mapScale(mode, area, nativeW, nativeH, art, currentRoomId);
-   const offset = cameraOffset(art, currentRoomId, scale, area, mode);
+   const centred = cameraOffset(art, currentRoomId, scale, area, mode);
+   const offset = { x: centred.x, y: centred.y + insetTop };
    const inScene = (roomId: string) => mode !== 'scene' || roomId === currentRoomId;
 
    // Draw terrain and objects once per art (padded in a scene).
@@ -179,7 +183,10 @@ export function WorldMap({
                {Object.entries(art.rooms).map(([id, [x, y, w, h]]) => {
                   const room = rooms[id];
                   const current = id === currentRoomId;
-                  const discovered = room?.discovered ?? false;
+                  // In a scene the shade outside the room does the work; fog
+                  // on top of it turned undiscovered rooms black beside plain
+                  // dimmed field. The world map still shows what's unfound.
+                  const discovered = mode === 'scene' || (room?.discovered ?? false);
                   return (
                      <Box
                         key={id}

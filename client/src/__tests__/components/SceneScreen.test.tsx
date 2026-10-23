@@ -69,6 +69,18 @@ describe('SceneScreen', () => {
       expect(screen.queryByRole('dialog', { name: 'Journal' })).not.toBeInTheDocument();
    });
 
+   it('opens the adventure details from the button bar', () => {
+      const onDetails = vi.fn();
+      render(
+         <ThemeProvider theme={AppTheme}>
+            <SceneScreen art={BRIARWELL_ART} rooms={rooms} currentRoomId="village_square" objectives={quests}
+               renderStage={() => null} onDetails={onDetails} />
+         </ThemeProvider>,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Adventure details' }));
+      expect(onDetails).toHaveBeenCalledTimes(1);
+   });
+
    it('marks the journal when quests change while it is closed', () => {
       const { rerender, renderStage } = setup();
       const dot = () => screen.getByRole('button', { name: 'Journal' }).querySelector('.MuiBadge-dot');

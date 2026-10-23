@@ -179,8 +179,9 @@ describe('scene mode', () => {
          </ThemeProvider>,
       );
       expect(screen.getByTestId('scene-window')).toBeInTheDocument();
-      // Discovery still shows through the dimming; the cottage is discovered.
-      expect(screen.getByTestId('map-room-family_cottage')).toHaveAttribute('data-discovered', 'true');
+      // No fog in a scene: the shade outside the room does the work, and fog on
+      // top of it turned unfound rooms black beside plain dimmed field.
+      expect(screen.getByTestId('map-room-meadow')).toHaveAttribute('data-discovered', 'true');
       expect(screen.getAllByTestId('map-token').map((t) => t.getAttribute('aria-label')).sort()).toEqual(['Little Bess', 'Wren']);
       expect(screen.getByLabelText('Stone well')).toBeInTheDocument();
    });

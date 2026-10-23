@@ -269,7 +269,7 @@ export function DialogueStage({
             flexDirection: 'column',
             overflow: 'hidden',
             position: 'relative',
-            ...(overlay && { bgcolor: 'transparent', backgroundImage: 'none', border: 'none', boxShadow: 'none' }),
+            ...(overlay && { bgcolor: 'transparent', backgroundImage: 'none', border: 'none', boxShadow: 'none', pointerEvents: 'none' }),
          }}
       >
          {!overlay && (
@@ -603,7 +603,7 @@ export function DialogueStage({
                setToasts((t) => t.slice(1));
             }}
             anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-            sx={{ position: 'absolute' }}
+            sx={{ position: 'absolute', pointerEvents: 'auto' }}
          >
             <Alert
                severity={toasts[0]?.type === 'objective_failed' ? 'warning' : 'success'}
