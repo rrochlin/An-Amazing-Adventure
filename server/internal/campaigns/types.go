@@ -80,6 +80,16 @@ type PartyTemplate struct {
 type CampaignMap struct {
 	Rooms     map[string]CampaignRoom `json:"rooms"`
 	Entrances []EntranceOption        `json:"entrances,omitempty"`
+	// SceneMaps are maps of their own for scenes inside a room (an
+	// interior), keyed by ID; the client draws them in place of the room.
+	SceneMaps map[string]SceneMap `json:"scene_maps,omitempty"`
+}
+
+// SceneMap is an interior: a place inside one room with its own map.
+type SceneMap struct {
+	RoomID      string `json:"room_id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 type CampaignRoom struct {
@@ -203,6 +213,9 @@ type StoryNode struct {
 	// LocationID is where the scene takes place: entering the node moves
 	// the player there (and discovers it).
 	LocationID string `json:"location_id,omitempty"`
+	// SceneMap names the map in map.scene_maps the scene is played on (an
+	// interior of its location), instead of the room's own.
+	SceneMap string `json:"scene_map,omitempty"`
 }
 
 // Ending is an authored conclusion to a run (Phase 7 decision 15).

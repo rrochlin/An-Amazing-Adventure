@@ -36,7 +36,9 @@ type CampaignRuntimeState struct {
 	CampaignVersion string `json:"campaign_version" dynamodbav:"campaign_version"`
 	ActiveNodeID    string `json:"active_node_id" dynamodbav:"active_node_id"`
 	// ActiveNodeTitle is the current scene's authored title, for the client.
-	ActiveNodeTitle  string                       `json:"active_node_title,omitempty" dynamodbav:"active_node_title,omitempty"`
+	ActiveNodeTitle string `json:"active_node_title,omitempty" dynamodbav:"active_node_title,omitempty"`
+	// ActiveSceneMap is the interior the current scene is played on, if any.
+	ActiveSceneMap   *SceneMapView                `json:"active_scene_map,omitempty" dynamodbav:"active_scene_map,omitempty"`
 	CurrentObjective string                       `json:"current_objective,omitempty" dynamodbav:"current_objective,omitempty"`
 	PreviousNodeIDs  []string                     `json:"previous_node_ids,omitempty" dynamodbav:"previous_node_ids,omitempty"`
 	BoolFlags        map[string]bool              `json:"bool_flags,omitempty" dynamodbav:"bool_flags,omitempty"`
@@ -111,11 +113,20 @@ type DialogueStateView struct {
 	PendingChoices []DialogueChoice `json:"pending_choices,omitempty"`
 }
 
+// SceneMapView names the interior a scene is played on: the client draws
+// map ID in place of room RoomID while the player is there.
+type SceneMapView struct {
+	ID     string `json:"id" dynamodbav:"id"`
+	RoomID string `json:"room_id" dynamodbav:"room_id"`
+	Name   string `json:"name" dynamodbav:"name"`
+}
+
 type CampaignStateView struct {
 	CampaignID       string             `json:"campaign_id"`
 	CampaignVersion  string             `json:"campaign_version"`
 	ActiveNodeID     string             `json:"active_node_id"`
 	ActiveNodeTitle  string             `json:"active_node_title,omitempty"`
+	ActiveSceneMap   *SceneMapView      `json:"active_scene_map,omitempty"`
 	CurrentObjective string             `json:"current_objective,omitempty"`
 	BoolFlags        map[string]bool    `json:"bool_flags,omitempty"`
 	Labels           map[string]string  `json:"labels,omitempty"`
@@ -980,6 +991,7 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 		CampaignVersion:  g.Campaign.CampaignVersion,
 		ActiveNodeID:     g.Campaign.ActiveNodeID,
 		ActiveNodeTitle:  g.Campaign.ActiveNodeTitle,
+		ActiveSceneMap:   g.Campaign.ActiveSceneMap,
 		CurrentObjective: g.Campaign.CurrentObjective,
 		BoolFlags:        copyBoolMap(g.Campaign.BoolFlags),
 		Labels:           copyStringMap(g.Campaign.Labels),

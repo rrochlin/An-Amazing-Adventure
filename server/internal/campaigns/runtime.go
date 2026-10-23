@@ -155,6 +155,10 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 	}
 	g.Campaign.CurrentObjective = node.ObjectiveText
 	g.Campaign.ActiveNodeTitle = node.Title
+	g.Campaign.ActiveSceneMap = nil
+	if sm, ok := def.Map.SceneMaps[node.SceneMap]; ok && node.SceneMap != "" {
+		g.Campaign.ActiveSceneMap = &game.SceneMapView{ID: node.SceneMap, RoomID: sm.RoomID, Name: sm.Name}
+	}
 	if node.LocationID != "" {
 		// The scene happens somewhere: the player is there.
 		if err := g.PlaceCharacter(g.OwnerID, node.LocationID); err != nil {

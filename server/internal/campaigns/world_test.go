@@ -136,3 +136,60 @@ func TestBriarwell_CharactersHaveTheirSizes(t *testing.T) {
 		t.Fatalf("an out-of-range scale should fail validation, got %v", err)
 	}
 }
+
+func TestBriarwell_CottageScenesArePlayedIndoors(t *testing.T) {
+	def, g, _ := bootstrapBriarwell(t)
+	sm := g.Campaign.ActiveSceneMap
+	if sm == nil || sm.ID != "cottage_interior" || sm.RoomID != "family_cottage" || sm.Name == "" {
+		t.Fatalf("the morning errand should be played inside the cottage, got %+v", sm)
+	}
+	if view := g.BuildCampaignStateView(); view.ActiveSceneMap == nil || view.ActiveSceneMap.ID != "cottage_interior" {
+		t.Fatalf("the client should be told the scene map, got %+v", view.ActiveSceneMap)
+	}
+
+	// Out of the door: the deeds are played on the village map.
+	if _, err := campaigns.ResumeDialogueWithChoice(def, g, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
+		t.Fatal(err)
+	}
+	if g.Campaign.ActiveNodeID != "village_deeds" || g.Campaign.ActiveSceneMap != nil {
+		t.Fatalf("node %q should have no scene map, got %+v", g.Campaign.ActiveNodeID, g.Campaign.ActiveSceneMap)
+	}
+}
+
+func TestValidateTiesSceneMapsToRooms(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	def, _ := reg.Get("briarwell")
+	withMaps := func(maps map[string]campaigns.SceneMap, nodeID, sceneMap, location string) campaigns.CampaignDefinition {
+		d := *def
+		d.Map.SceneMaps = maps
+		d.StoryNodes = map[string]campaigns.StoryNode{}
+		for id, n := range def.StoryNodes {
+			d.StoryNodes[id] = n
+		}
+		n := d.StoryNodes[nodeID]
+		n.SceneMap, n.LocationID = sceneMap, location
+		d.StoryNodes[nodeID] = n
+		return d
+	}
+	cottage := map[string]campaigns.SceneMap{"cottage_interior": {RoomID: "family_cottage", Name: "Inside"}}
+	cases := map[string]struct {
+		def  campaigns.CampaignDefinition
+		want string
+	}{
+		"unknown scene map":   {withMaps(cottage, "gift_stall", "stall_tent", "market_lane"), `"stall_tent" does not exist`},
+		"scene map elsewhere": {withMaps(cottage, "gift_stall", "cottage_interior", "market_lane"), `inside room "family_cottage"`},
+		"scene map, no room":  {withMaps(map[string]campaigns.SceneMap{"cellar": {RoomID: "nowhere", Name: "Cellar"}}, "morning_errand", "", "family_cottage"), `"nowhere" does not exist`},
+		"scene map, no name":  {withMaps(map[string]campaigns.SceneMap{"cellar": {RoomID: "family_cottage"}}, "morning_errand", "", "family_cottage"), "needs a name"},
+	}
+	for name, tc := range cases {
+		if err := tc.def.Validate(); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: expected error containing %q, got %v", name, tc.want, err)
+		}
+	}
+}
