@@ -155,6 +155,12 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 	}
 	g.Campaign.CurrentObjective = node.ObjectiveText
 	g.Campaign.ActiveNodeTitle = node.Title
+	if node.LocationID != "" {
+		// The scene happens somewhere: the player is there.
+		if err := g.PlaceCharacter(g.OwnerID, node.LocationID); err != nil {
+			return "", fmt.Errorf("move player to scene location %q: %w", node.LocationID, err)
+		}
+	}
 	if err := applyActions(def, g, node.OnEnter); err != nil {
 		return "", err
 	}
@@ -513,6 +519,16 @@ func parseDialogueCommand(command string) (Action, error) {
 		return Action{Type: "start_dialogue", AssetID: parts[1], StartNode: parts[2]}, nil
 	case "end_dialogue":
 		return Action{Type: "end_dialogue"}, nil
+	case "give_item", "take_item":
+		if len(parts) < 2 {
+			return Action{}, fmt.Errorf("%s requires an item name", parts[0])
+		}
+		return Action{Type: parts[0], Item: strings.Join(parts[1:], " ")}, nil
+	case "move_player":
+		if len(parts) != 2 {
+			return Action{}, fmt.Errorf("move_player requires a room ID")
+		}
+		return Action{Type: "move_player", RoomID: parts[1]}, nil
 	default:
 		return Action{}, fmt.Errorf("unsupported dialogue command %q", parts[0])
 	}
@@ -672,6 +688,21 @@ func applyActions(def *CampaignDefinition, g *game.Game, actions []Action) error
 			}
 		case "end_dialogue":
 			state.ActiveDialogue = nil
+		case "give_item":
+			item := game.NewItem(action.Item, action.Description)
+			item.Weight = 0.1
+			if err := g.AddItem(item); err != nil {
+				return err
+			}
+			if err := g.GiveItemToPlayer(item.ID); err != nil {
+				return err
+			}
+		case "take_item":
+			takeItemFromPlayer(g, action.Item)
+		case "move_player":
+			if err := g.PlaceCharacter(g.OwnerID, action.RoomID); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unsupported action type %q", action.Type)
 		}
@@ -904,4 +935,32 @@ func joinText(parts ...string) string {
 // a title card before the scene's text.
 func SceneStartedEvent(node StoryNode) game.WorldEvent {
 	return game.WorldEvent{Type: "scene_started", Message: node.Title}
+}
+
+// takeItemFromPlayer removes one item from the player's inventory: the first
+// of the "|"-separated names that matches exactly (ignoring case), else the
+// first item whose name contains it. Nothing happens when none match; the
+// story doesn't fail because the player lost something.
+func takeItemFromPlayer(g *game.Game, names string) {
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return
+	}
+	for _, want := range strings.Split(names, "|") {
+		want = strings.ToLower(strings.TrimSpace(want))
+		if want == "" {
+			continue
+		}
+		for _, exact := range []bool{true, false} {
+			for _, id := range owner.Inventory {
+				name := strings.ToLower(g.Items[id].Name)
+				if (exact && name == want) || (!exact && strings.Contains(name, want)) {
+					_ = owner.RemoveItemID(id)
+					g.Players[g.OwnerID] = owner
+					delete(g.Items, id)
+					return
+				}
+			}
+		}
+	}
 }

@@ -4,6 +4,7 @@ The cottage glows with candlelight. Mother has baked a honey cake, and Ros is bo
 Ros: Did you get me something? Did you, did you? #line:bday_002
 -> Give Ros her gift. #line:bday_opt_give
     <<set_flag gift_given>>
+    <<take_item honey sweets|cornflower ribbon|carved wooden bird>>
     Ros squeals and throws her arms around you. #line:bday_ack_give_0
     Ros: It's perfect! You're the best! #line:bday_ack_give
 -> Keep the gift for yourself. #line:bday_opt_keep

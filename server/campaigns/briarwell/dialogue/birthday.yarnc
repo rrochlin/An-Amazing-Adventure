@@ -35,6 +35,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "take_item honey sweets|cornflower ribbon|carved wooden bird" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:bday_ack_give_0" }
       operands: { float_value: 0 }
@@ -121,7 +126,7 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 13
+      value: 14
     }
     labels: {
       key: "L2shortcutoption_Birthday_1"
@@ -129,19 +134,19 @@ nodes: {
     }
     labels: {
       key: "L3shortcutoption_Birthday_2"
-      value: 10
+      value: 11
     }
     labels: {
       key: "L4group_end"
-      value: 26
+      value: 27
     }
     labels: {
       key: "L5shortcutoption_Birthday_1"
-      value: 21
+      value: 22
     }
     labels: {
       key: "L6shortcutoption_Birthday_2"
-      value: 23
+      value: 24
     }
     headers: {
       key: "title"

@@ -42,6 +42,21 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "take_item coin" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "take_item coin" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "give_item honey sweets" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:gift_ack_sweets" }
       operands: { float_value: 0 }
@@ -58,6 +73,21 @@ nodes: {
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label gift ribbon" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "take_item coin" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "take_item coin" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "give_item cornflower ribbon" }
       operands: { float_value: 0 }
     }
     instructions: {
@@ -80,6 +110,21 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "take_item coin" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "take_item coin" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "give_item carved wooden bird" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:gift_ack_bird" }
       operands: { float_value: 0 }
@@ -92,7 +137,7 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 18
+      value: 27
     }
     labels: {
       key: "L2shortcutoption_GiftStall_1"
@@ -100,11 +145,11 @@ nodes: {
     }
     labels: {
       key: "L3shortcutoption_GiftStall_2"
-      value: 11
+      value: 14
     }
     labels: {
       key: "L4shortcutoption_GiftStall_3"
-      value: 15
+      value: 21
     }
     headers: {
       key: "title"

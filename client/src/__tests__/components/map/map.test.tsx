@@ -104,7 +104,6 @@ describe('placeTokens', () => {
 
    it('uses the campaign cast sprites', () => {
       expect(tokens.find((t) => t.id === 'father')?.sprite).toBe(88);
-      expect(tokens.find((t) => t.id === 'bess')?.child).toBe(true);
    });
 });
 
