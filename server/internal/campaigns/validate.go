@@ -26,6 +26,11 @@ func (d *CampaignDefinition) Validate() error {
 	if d.Premise == "" {
 		return fmt.Errorf("premise is required")
 	}
+	switch d.StoryPipeline {
+	case "", StoryPipelineCurrent, StoryPipelineGameMaster:
+	default:
+		return fmt.Errorf("story_pipeline %q must be %q or %q", d.StoryPipeline, StoryPipelineCurrent, StoryPipelineGameMaster)
+	}
 	if !game.ValidScale(d.PlayerRole.Scale) {
 		return fmt.Errorf("player_role.scale %v must be between 0 and %v", d.PlayerRole.Scale, game.MaxScale)
 	}
