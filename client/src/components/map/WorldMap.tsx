@@ -98,10 +98,17 @@ export function WorldMap({
 
    // The visible area: between the overlays at the top and the bottom.
    const area = { w: view.w, h: Math.max(0, view.h - insetTop - insetBottom) };
+   // Nothing is shown until the view has been measured, so the map and its
+   // characters first appear where they belong instead of flying in from a
+   // guessed layout.
+   const ready = view.w > 0 && view.h > 0;
    const scale = mapScale(mode, area, nativeW, nativeH, art, currentRoomId);
    const centred = cameraOffset(art, currentRoomId, scale, area, mode);
    const offset = { x: centred.x, y: centred.y + insetTop };
    const inScene = (roomId: string) => mode !== 'scene' || roomId === currentRoomId;
+   // The camera glides only when the player changes room; a resize, a new
+   // zoom or the text panel changing size moves it at once.
+   const gliding = useGlide(ready ? currentRoomId : undefined);
 
    // Draw terrain and objects once per art (padded in a scene).
    const pad = mode === 'scene' ? SCENE_PAD : 0;
@@ -117,12 +124,13 @@ export function WorldMap({
       sheet.src = TOWN_SHEET;
    }, [art, pad]);
 
-   const tokens = useMemo(
-      () =>
-         placeTokens(art, rooms, currentRoomId, playerName, playerScale).filter((t) => inScene(t.roomId)),
+   // Characters keep their tiles from one update to the next.
+   const placed = useRef<Token[]>([]);
+   const tokens = useMemo(() => {
+      placed.current = placeTokens(art, rooms, currentRoomId, playerName, playerScale, placed.current);
+      return placed.current.filter((t) => inScene(t.roomId));
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      [art, rooms, currentRoomId, playerName, playerScale, mode],
-   );
+   }, [art, rooms, currentRoomId, playerName, playerScale, mode]);
 
    const px = (tiles: number) => tiles * TILE * scale;
 
@@ -161,8 +169,9 @@ export function WorldMap({
                   top: offset.y,
                   width: nativeW * scale,
                   height: nativeH * scale,
+                  visibility: ready ? 'visible' : 'hidden',
                   // Pan smoothly when the player moves.
-                  transition: 'left 0.8s ease, top 0.8s ease',
+                  transition: gliding ? 'left 0.8s ease, top 0.8s ease' : 'none',
                }}
             >
                <canvas
@@ -285,7 +294,27 @@ export function WorldMap({
    );
 }
 
+/** How long a camera pan or a character's walk takes. */
+const GLIDE_MS = 800;
+
+/**
+ * True while `key` has just changed (for GLIDE_MS): the change animates, and
+ * every other change to the same element lands at once. Its first value
+ * never glides.
+ */
+function useGlide(key: string | undefined): boolean {
+   const last = useRef(key);
+   const until = useRef(0);
+   if (key !== last.current) {
+      if (last.current !== undefined && key !== undefined) until.current = Date.now() + GLIDE_MS;
+      last.current = key;
+   }
+   return Date.now() < until.current;
+}
+
 function MapToken({ token, scale }: { token: Token; scale: number }) {
+   // A character walks when their tile changes, never when the view zooms.
+   const gliding = useGlide(`${token.x},${token.y}`);
    // A character's own scale: an adult fills the tile, a child is smaller,
    // a giant towers over it (standing on its tile, growing upward).
    const size = TILE * scale * token.scale;
@@ -310,7 +339,7 @@ function MapToken({ token, scale }: { token: Token; scale: number }) {
                filter: token.isPlayer
                   ? 'drop-shadow(0 0 2px #f5d77a) drop-shadow(0 0 2px #f5d77a)'
                   : 'drop-shadow(0 1px 1px #000)',
-               transition: 'left 0.8s ease, top 0.8s ease',
+               transition: gliding ? 'left 0.8s ease, top 0.8s ease' : 'none',
                zIndex: 2,
             }}
          />
@@ -409,8 +438,9 @@ function drawLayer(
 
 /**
  * Where each character stands: the player and everyone in discovered rooms,
- * on free tiles (no building or tree) nearest the room's centre. Placement is
- * stable for a given set of occupants.
+ * on free tiles (no building or tree) nearest the room's centre. Someone who
+ * was already in the room (in `previous`) keeps their tile; newcomers take
+ * the best free ones, so an arrival never shuffles the others.
  */
 export function placeTokens(
    art: MapArt,
@@ -418,6 +448,7 @@ export function placeTokens(
    currentRoomId: string | undefined,
    playerName: string,
    playerScale = 1,
+   previous: Token[] = [],
 ): Token[] {
    const tokens: Token[] = [];
    for (const [roomId, rect] of Object.entries(art.rooms)) {
@@ -433,8 +464,23 @@ export function placeTokens(
             people.push({ id: c.id, name: c.name, isPlayer: false, friendly: c.friendly, scale: c.scale || 1 }),
          );
       const slots = freeTiles(art, rect);
+      const key = ([x, y]: [number, number]) => `${x},${y}`;
+      const open = new Set(slots.map(key));
+      const tile = new Map<string, [number, number]>();
+      for (const p of people) {
+         const was = previous.find((t) => t.id === p.id && t.roomId === roomId);
+         if (was && open.has(key([was.x, was.y]))) {
+            tile.set(p.id, [was.x, was.y]);
+            open.delete(key([was.x, was.y]));
+         }
+      }
       people.forEach((p, i) => {
-         const [x, y] = slots[i % Math.max(slots.length, 1)] ?? [rect[0], rect[1]];
+         let spot = tile.get(p.id);
+         if (!spot) {
+            spot = slots.find((s) => open.has(key(s))) ?? slots[i % Math.max(slots.length, 1)];
+            if (spot) open.delete(key(spot));
+         }
+         const [x, y] = spot ?? [rect[0], rect[1]];
          const cast = art.cast[p.id];
          tokens.push({
             id: p.id,

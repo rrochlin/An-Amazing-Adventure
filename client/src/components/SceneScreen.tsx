@@ -4,7 +4,7 @@ import MapIcon from '@mui/icons-material/Map';
 import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import CloseIcon from '@mui/icons-material/Close';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ObjectiveStateView, RoomView } from '@/types/types';
 import { QuestList } from './QuestList';
 import { WorldMap } from './map/WorldMap';
@@ -83,7 +83,28 @@ export function SceneScreen({
       return () => window.removeEventListener('keydown', onKey);
    }, []);
 
+   // The scene is framed above the tallest the text panel has been at this
+   // screen size (up to half the screen): the panel changes height with every
+   // line, and following it slid the whole scene up and down.
+   const sceneRef = useRef<HTMLDivElement>(null);
+   const lastPanel = useRef(0);
    const [panelHeight, setPanelHeight] = useState(0);
+   const onPanelHeight = useCallback((px: number) => {
+      lastPanel.current = px;
+      setPanelHeight((h) => Math.max(h, px));
+   }, []);
+   const [sceneHeight, setSceneHeight] = useState(0);
+   useEffect(() => {
+      const el = sceneRef.current;
+      if (!el || typeof ResizeObserver !== 'function') return;
+      const observer = new ResizeObserver(() => {
+         setSceneHeight(el.clientHeight);
+         setPanelHeight(lastPanel.current);
+      });
+      observer.observe(el);
+      return () => observer.disconnect();
+   }, []);
+   const framedPanel = sceneHeight ? Math.min(panelHeight, sceneHeight / 2) : panelHeight;
    // The location sign's height: the scene centres its room below it.
    const chipRef = useRef<HTMLDivElement>(null);
    const [chipHeight, setChipHeight] = useState(0);
@@ -119,6 +140,7 @@ export function SceneScreen({
 
    return (
       <Box
+         ref={sceneRef}
          data-testid="scene-screen"
          sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: '#08050c', display: 'flex' }}
       >
@@ -131,7 +153,7 @@ export function SceneScreen({
                playerScale={playerScale}
                mode="scene"
                insetTop={chipHeight}
-               insetBottom={panelHeight}
+               insetBottom={framedPanel}
             />
          ) : (
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2, pb: `${TEXT_BOX_SHARE * 100}%` }}>
@@ -244,7 +266,7 @@ export function SceneScreen({
          )}
 
          <Box sx={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', '& > *': { pointerEvents: 'auto' } }}>
-            {renderStage(logOpen, setPanelHeight)}
+            {renderStage(logOpen, onPanelHeight)}
          </Box>
 
          {art && (

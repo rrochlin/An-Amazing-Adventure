@@ -118,6 +118,23 @@ describe('placeTokens', () => {
    it('uses the campaign cast sprites', () => {
       expect(tokens.find((t) => t.id === 'father')?.sprite).toBe(88);
    });
+
+   it('keeps everyone on their tile when someone arrives or leaves', () => {
+      const tile = (ts: typeof tokens, id: string) => {
+         const t = ts.find((x) => x.id === id)!;
+         return `${t.x},${t.y}`;
+      };
+      // Someone whose id sorts first arrives: before, they'd have taken
+      // Bess's tile and pushed her along.
+      const crowd = { ...rooms, village_square: { ...rooms.village_square, occupants: [person('aaron', 'Aaron'), person('bess', 'Little Bess')] } };
+      const after = placeTokens(BRIARWELL_ART, crowd, 'village_square', 'Wren', 1, tokens);
+      expect(tile(after, 'bess')).toBe(tile(tokens, 'bess'));
+      expect(tile(after, 'player')).toBe(tile(tokens, 'player'));
+      expect(new Set(after.map((t) => `${t.x},${t.y}`)).size).toBe(after.length);
+      // And when Bess leaves, the newcomer stays put too.
+      const left = { ...rooms, village_square: { ...rooms.village_square, occupants: [person('aaron', 'Aaron')] } };
+      expect(tile(placeTokens(BRIARWELL_ART, left, 'village_square', 'Wren', 1, after), 'aaron')).toBe(tile(after, 'aaron'));
+   });
 });
 
 describe('WorldMap', () => {
@@ -184,5 +201,19 @@ describe('scene mode', () => {
       expect(screen.getByTestId('map-room-meadow')).toHaveAttribute('data-discovered', 'true');
       expect(screen.getAllByTestId('map-token').map((t) => t.getAttribute('aria-label')).sort()).toEqual(['Little Bess', 'Wren']);
       expect(screen.getByLabelText('Stone well')).toBeInTheDocument();
+   });
+});
+
+describe('nothing flies in', () => {
+   it('hides the map until it has measured its view, and never glides a first placement', () => {
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+      render(
+         <ThemeProvider theme={AppTheme}>
+            <WorldMap art={BRIARWELL_ART} rooms={rooms} currentRoomId="village_square" playerName="Wren" mode="scene" />
+         </ThemeProvider>,
+      );
+      // jsdom measures 0x0: the layout is a guess, so it isn't shown.
+      expect(screen.getByTestId('world-map')).toHaveStyle({ visibility: 'hidden', transition: 'none' });
+      for (const t of screen.getAllByTestId('map-token')) expect(t).toHaveStyle({ transition: 'none' });
    });
 });
