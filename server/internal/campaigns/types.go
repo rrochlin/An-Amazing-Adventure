@@ -160,11 +160,11 @@ type StoryNode struct {
 	Summary           string `json:"summary,omitempty"`
 	// IntroText is authored narration shown to the player when the node is
 	// entered, before any dialogue. It orients them in the new scene.
-	IntroText         string                 `json:"intro_text,omitempty"`
-	ObjectiveText     string                 `json:"objective_text,omitempty"`
-	OnEnter           []Action               `json:"on_enter,omitempty"`
-	CompletionRules   []TransitionRule       `json:"completion_rules,omitempty"`
-	FailureRules      []TransitionRule       `json:"failure_rules,omitempty"`
+	IntroText       string           `json:"intro_text,omitempty"`
+	ObjectiveText   string           `json:"objective_text,omitempty"`
+	OnEnter         []Action         `json:"on_enter,omitempty"`
+	CompletionRules []TransitionRule `json:"completion_rules,omitempty"`
+	FailureRules    []TransitionRule `json:"failure_rules,omitempty"`
 	// NarratorContract is the older name for StageDirections; the loader
 	// copies it over when stage_directions is absent.
 	NarratorContract  NodeNarratorContract   `json:"narrator_contract,omitempty"`
@@ -186,6 +186,9 @@ type StoryNode struct {
 	Beats []Beat `json:"beats,omitempty"`
 	// EndsRun ends the run when this node is entered.
 	EndsRun bool `json:"ends_run,omitempty"`
+	// LocationID is where the scene takes place: entering the node moves
+	// the player there (and discovers it).
+	LocationID string `json:"location_id,omitempty"`
 }
 
 // Ending is an authored conclusion to a run (Phase 7 decision 15).
@@ -319,6 +322,10 @@ type Action struct {
 	ObjectiveID string `json:"objective_id,omitempty"`
 	AssetID     string `json:"asset_id,omitempty"`
 	StartNode   string `json:"start_node,omitempty"`
+	// Item names an item for give_item (created and handed to the player)
+	// and take_item (the first match taken from the player; "a|b" tries each).
+	Item        string `json:"item,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 type Manifest struct {

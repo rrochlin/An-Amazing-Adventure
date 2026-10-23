@@ -258,6 +258,7 @@
       "mode": "yarn_dialogue",
       "dialogue_asset_id": "errand",
       "dialogue_start_node": "Errand",
+      "location_id": "family_cottage",
       "title": "A Birthday Errand",
       "summary": "Father asks the child to earn a few coins by honest work and buy Ros a birthday gift.",
       "objective_text": "Answer Father.",
@@ -293,6 +294,29 @@
     "village_deeds": {
       "mode": "ai_scene",
       "title": "Good Turns and Bad",
+      "beats": [
+        {
+          "key": "deed_doll", "kind": "label", "description": "Little Bess's lost rag doll",
+          "outcomes": [
+            { "value": "returned", "meaning": "The player has the doll in hand and gives it back to Bess. Talking to Bess, learning where the doll might be, or going to look for it is not enough." },
+            { "value": "kept", "meaning": "The player has found the doll and keeps it, sells it, or refuses to give it back. Not finding it yet is not enough." }
+          ]
+        },
+        {
+          "key": "deed_miller", "kind": "label", "description": "Hob the Miller's secret meetings behind the barn",
+          "outcomes": [
+            { "value": "told_wife", "meaning": "The player tells the miller's wife what Hob has been doing." },
+            { "value": "took_bribe", "meaning": "The player accepts Hob's coin to keep his secret." }
+          ]
+        },
+        {
+          "key": "deed_bully", "kind": "label", "description": "Dunstan bullying the smaller children in the meadow",
+          "outcomes": [
+            { "value": "stopped", "meaning": "The player makes Dunstan stop: faces him down, outwits him, or drives him off. Watching or planning is not enough." },
+            { "value": "joined", "meaning": "The player joins Dunstan in picking on the smaller children." }
+          ]
+        }
+      ],
       "summary": "The child roams Briarwell. Three villagers need something; each can be helped or exploited for a coin.",
       "intro_text": "Outside the cottage door, Briarwell is waking up, and your pockets are empty. Little Bess is crying by the well in the Village Square: her rag doll is gone. East at the Old Mill, Hob the Miller keeps glancing over his shoulder before slipping behind the barn. And from the Meadow to the south comes Dunstan's jeering, and a smaller child's sobbing. Kind or cruel, any two good turns should earn enough coin for Ros's gift.",
       "objective_text": "Earn two coins: find Little Bess's doll (Village Square), deal with the miller's secret (Old Mill), or handle Dunstan the bully (Meadow). Kind or cruel, each deed pays a coin.",
@@ -338,6 +362,7 @@
       "mode": "hybrid",
       "dialogue_asset_id": "gift_stall",
       "dialogue_start_node": "GiftStall",
+      "location_id": "market_lane",
       "title": "Old Garrick's Stall",
       "summary": "The child spends their coin on a birthday gift.",
       "intro_text": "Two coins clink in your pocket as you hurry up Market Lane to Old Garrick's stall.",
@@ -371,6 +396,7 @@
       "mode": "hybrid",
       "dialogue_asset_id": "birthday",
       "dialogue_start_node": "Birthday",
+      "location_id": "family_cottage",
       "title": "Ros's Birthday",
       "summary": "Back home at dusk. The child can give Ros the gift, or keep it. As the evening ends, smoke rises from the woods.",
       "intro_text": "The sun is low and gold by the time you get home, the gift hidden behind your back.",
@@ -411,6 +437,7 @@
     },
     "bandit_raid": {
       "mode": "ai_scene",
+      "location_id": "family_cottage",
       "title": "Briarwell Burns",
       "summary": "Night. Red Corwin's bandits torch the village. Father falls defending the door; Mother and Ros vanish in the chaos. The child must decide what to do.",
       "intro_text": "You wake to screaming. Orange light flickers through the shutters and the air is thick with smoke. Father is at the door with his woodaxe, shouting for Mother to take Ros out the back. Then the door splinters: Red Corwin's bandits are in Briarwell. You can hide, fight, or go looking for Mother and Ros.",
@@ -458,6 +485,7 @@
       "mode": "yarn_dialogue",
       "dialogue_asset_id": "rescue",
       "dialogue_start_node": "Rescue",
+      "location_id": "woods_edge",
       "title": "The Stranger in the Ashes",
       "summary": "Master Holloway of the Heroes' Guild finds the child at the woods' edge and offers to take them away.",
       "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over the Woods' Edge like snow.",
@@ -484,6 +512,7 @@
     },
     "road_to_guild": {
       "mode": "ai_scene",
+      "location_id": "woods_edge",
       "title": "The Road to the Guild",
       "summary": "Briarwell burns behind them as Master Holloway carries the child toward the Guild. The opening ends here.",
       "intro_text": "Dawn finds you on the back of Master Holloway's horse, wrapped in his cloak. Behind you, a thin thread of smoke is all that is left of Briarwell.",

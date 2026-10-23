@@ -191,6 +191,11 @@ func (d *CampaignDefinition) Validate() error {
 		if err := d.validateTransitionRules(node.FailureRules, fmt.Sprintf("story node %q failure_rules", nodeID)); err != nil {
 			return err
 		}
+		if node.LocationID != "" {
+			if _, ok := d.Map.Rooms[node.LocationID]; !ok {
+				return fmt.Errorf("story node %q location_id %q does not exist in map.rooms", nodeID, node.LocationID)
+			}
+		}
 		if err := d.validateScript(nodeID, node); err != nil {
 			return err
 		}
@@ -294,6 +299,14 @@ func (d *CampaignDefinition) validateActions(actions []Action, context string) e
 		case "set_flag", "set_label", "inc_counter", "set_counter":
 			if action.Key == "" {
 				return fmt.Errorf("%s[%d] key is required for type %q", context, i, action.Type)
+			}
+		case "give_item", "take_item":
+			if action.Item == "" {
+				return fmt.Errorf("%s[%d] item is required for type %q", context, i, action.Type)
+			}
+		case "move_player":
+			if _, ok := d.Map.Rooms[action.RoomID]; !ok {
+				return fmt.Errorf("%s[%d] room_id %q does not exist", context, i, action.RoomID)
 			}
 		case "activate_objective", "complete_objective", "fail_objective":
 			if action.ObjectiveID == "" {
