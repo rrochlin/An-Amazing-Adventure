@@ -5,15 +5,12 @@ import {
    Box,
    Button,
    CircularProgress,
-   IconButton,
    Paper,
    Snackbar,
-   Tooltip,
    Typography,
 } from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { RoomMap } from '../components/RoomMap';
-import { WorldMap } from '@/components/map/WorldMap';
+import { SceneScreen } from '@/components/SceneScreen';
 import { mapArtFor } from '@/components/map/mapArt';
 import { GameInfo } from '../components/GameInfo';
 import { DialogueStage } from '../components/dialogue/DialogueStage';
@@ -24,7 +21,6 @@ import { useGameStore } from '../store/gameStore';
 import { useChoiceSubmit } from '@/hooks/useChoiceSubmit';
 import { useGameSocket } from '../hooks/useGameSocket';
 import { WorldGenTerminal } from '../components/WorldGenTerminal';
-import { AppTheme } from '@/theme/theme';
 import type { RoomView } from '../types/types';
 
 function GameErrorFallback() {
@@ -79,7 +75,6 @@ function GamePage() {
    // UI-FUT-4: room focused via map hover/click; null = show current room
    const [focusedRoom, setFocusedRoom] = useState<RoomView | null>(null);
    // UI-FUT-1: map expanded — slides over chat column
-   const [mapExpanded, setMapExpanded] = useState(false);
    // UI-FUT-8: reconnection toast — show when WS reconnects after a drop
    const [reconnectToast, setReconnectToast] = useState(false);
    const [ownerID, setOwnerID] = useState<string | null>(null);
@@ -521,103 +516,62 @@ function GamePage() {
 
    return (
       <GameLayout
-         mapExpanded={mapExpanded}
-         map={
-            <>
-            <Box
-               sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  mb: 2,
-                  borderBottom: `2px solid ${AppTheme.palette.primary.main}`,
-                  pb: 1,
-               }}
-            >
-               <Typography
-                  variant="h6"
-                  sx={{
-                     flex: 1,
-                     textAlign: 'center',
-                     textTransform: 'uppercase',
-                     letterSpacing: '0.1em',
-                  }}
-               >
-                  World Map
-               </Typography>
-               <Tooltip title="Adventure details">
-                  <IconButton
-                     size="small"
-                     onClick={() =>
-                        navigate({
-                           to: '/game-{$sessionUUID}/details',
-                           params: { sessionUUID },
-                        })
-                     }
-                     sx={{
-                        color: 'primary.main',
-                        opacity: 0.7,
-                        '&:hover': { opacity: 1 },
-                     }}
-                  >
-                     <InfoOutlinedIcon fontSize="small" />
-                  </IconButton>
-               </Tooltip>
-            </Box>
-            {/* Map fills all remaining vertical space inside the Paper */}
-            <Box
-               sx={{
-                  flex: 1,
-                  minHeight: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-               }}
-            >
-               {mapArt ? (
-                  <WorldMap
-                     art={mapArt}
-                     rooms={gameState?.rooms ?? {}}
-                     currentRoomId={gameState?.current_room?.id}
-                     playerName={gameState?.self?.name}
-                     playerScale={gameState?.self?.scale || 1}
-                     onExpand={() => setMapExpanded((v) => !v)}
-                     expanded={mapExpanded}
-                  />
-               ) : (
+         scene={
+            <SceneScreen
+               art={mapArt}
+               fallback={
                   <RoomMap
                      gameState={gameState}
                      onRoomFocus={setFocusedRoom}
-                     onExpand={() => setMapExpanded((v) => !v)}
-                     expanded={mapExpanded}
+                     onExpand={() => {}}
+                     expanded={false}
                   />
-               )}
-            </Box>
-            </>
-         }
-         stage={
-            <DialogueStage
-               messages={displayMessages}
-               streamingMessage={streamingMessage || undefined}
-               isLoading={isStreaming}
-               pendingChoices={pendingChoices}
-               onChoiceSelected={handleChoiceSelected}
-               isSubmittingChoice={isSubmittingChoice}
-               command={command}
-               setCommand={setCommand}
-               handleCommand={handleCommand}
-               inputDisabled={
-                  wsError === 'ai_access_not_enabled' ||
-                  wsError === 'quota_exceeded'
                }
-               ending={
-                  campaignState?.run_status === 'ended'
-                     ? (campaignState.ending ?? {})
-                     : undefined
-               }
-               onStartNewRun={() => navigate({ to: '/create' })}
-               error={wsError}
+               rooms={gameState?.rooms ?? {}}
+               currentRoomId={gameState?.current_room?.id}
+               playerName={gameState?.self?.name}
+               playerScale={gameState?.self?.scale || 1}
                location={gameState?.current_room?.name}
                sceneTitle={campaignState?.active_node_title}
                objective={campaignState?.current_objective}
+               journalTitle={adventureTitle ?? undefined}
+               onDetails={() =>
+                  navigate({
+                     to: '/game-{$sessionUUID}/details',
+                     params: { sessionUUID },
+                  })
+               }
+               objectives={campaignState?.active_objectives ?? []}
+               renderStage={(logOpen, onPanelHeight) => (
+               <DialogueStage
+                  messages={displayMessages}
+                  streamingMessage={streamingMessage || undefined}
+                  isLoading={isStreaming}
+                  pendingChoices={pendingChoices}
+                  onChoiceSelected={handleChoiceSelected}
+                  isSubmittingChoice={isSubmittingChoice}
+                  command={command}
+                  setCommand={setCommand}
+                  handleCommand={handleCommand}
+                  inputDisabled={
+                     wsError === 'ai_access_not_enabled' ||
+                     wsError === 'quota_exceeded'
+                  }
+                  ending={
+                     campaignState?.run_status === 'ended'
+                        ? (campaignState.ending ?? {})
+                        : undefined
+                  }
+                  onStartNewRun={() => navigate({ to: '/create' })}
+                  error={wsError}
+                  location={gameState?.current_room?.name}
+                  sceneTitle={campaignState?.active_node_title}
+                  objective={campaignState?.current_objective}
+                  overlay
+                  logOpen={logOpen}
+                  onPanelHeight={onPanelHeight}
+               />
+               )}
             />
          }
          alerts={
@@ -647,11 +601,9 @@ function GamePage() {
          info={
              <GameInfo
                 gameState={gameState}
-                campaignState={campaignState}
                 sendAction={sendAction}
                 focusedRoom={focusedRoom}
                 sessionId={sessionUUID}
-                adventureTitle={adventureTitle ?? undefined}
                 isOwner={
                   ownerID != null
                      ? ownerID === currentUserID

@@ -14,10 +14,8 @@ import {
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
-   type CampaignStateView,
    type GameStateView,
    type ItemView,
-   type ObjectiveStateView,
    type RoomView,
 } from '../types/types';
 import type { CreateInviteResponse } from '../types/types';
@@ -58,25 +56,20 @@ const SLOT_ORDER = ['head', 'chest', 'legs', 'hands', 'feet', 'back'] as const;
 
 interface GameInfoProps {
    gameState: GameStateView | null;
-   campaignState?: CampaignStateView | null;
    sendAction: (subAction: string, payload: string) => void;
    /** When non-null, the Location tab displays this room instead of the current room (UI-FUT-4). */
    focusedRoom?: RoomView | null;
    /** Session UUID — used for invite generation */
    sessionId?: string;
-   /** Adventure title — shown in the campaign summary panel when present. */
-   adventureTitle?: string;
    /** Whether the current user is the session owner */
    isOwner?: boolean;
 }
 
 export const GameInfo = ({
    gameState,
-   campaignState,
    sendAction,
    focusedRoom,
    sessionId,
-   adventureTitle,
    isOwner,
 }: GameInfoProps) => {
    // UI-FUT-4: show focusedRoom when hovering/clicking map, otherwise fall back to current room
@@ -256,32 +249,6 @@ export const GameInfo = ({
                },
             }}
          >
-            {campaignState && (
-               <Paper
-                  variant="outlined"
-                  data-testid="quest-log"
-                  sx={{
-                     mt: 1.5,
-                     mb: 1.5,
-                     p: 1.5,
-                     background: 'rgba(106, 78, 157, 0.08)',
-                     borderColor: 'rgba(201,169,98,0.25)',
-                  }}
-               >
-                  <Typography
-                     variant="subtitle2"
-                     sx={{
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        color: 'primary.main',
-                        mb: 0.75,
-                     }}
-                  >
-                     {adventureTitle ?? campaignState.campaign_id}
-                  </Typography>
-                  <QuestList objectives={campaignState.active_objectives ?? []} />
-               </Paper>
-            )}
 
             {/* Location Tab */}
             <TabPanel value={tabValue} index={0}>
@@ -988,49 +955,3 @@ export const GameInfo = ({
       </Box>
    );
 };
-
-// Quests: active first, then completed and missed, each with a status mark.
-const QUEST_ORDER: Record<string, number> = { active: 0, completed: 1, failed: 2 };
-const QUEST_MARK: Record<string, string> = { active: '◆', completed: '✓', failed: '✗' };
-
-function QuestList({ objectives }: { objectives: ObjectiveStateView[] }) {
-   if (!objectives.length) {
-      return (
-         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            No quests yet.
-         </Typography>
-      );
-   }
-   const sorted = [...objectives].sort(
-      (a, b) => (QUEST_ORDER[a.status] ?? 3) - (QUEST_ORDER[b.status] ?? 3),
-   );
-   return (
-      <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
-         {sorted.map((o) => (
-            <Box
-               component="li"
-               key={o.id}
-               aria-label={`${o.visible_text ?? o.id} (${o.status})`}
-               sx={{
-                  display: 'flex',
-                  gap: 1,
-                  py: 0.25,
-                  fontSize: '0.95rem',
-                  color:
-                     o.status === 'active'
-                        ? 'text.primary'
-                        : o.status === 'completed'
-                          ? 'success.main'
-                          : 'text.disabled',
-                  textDecoration: o.status === 'failed' ? 'line-through' : 'none',
-               }}
-            >
-               <Box component="span" sx={{ color: o.status === 'active' ? 'primary.main' : 'inherit' }}>
-                  {QUEST_MARK[o.status] ?? '•'}
-               </Box>
-               {o.visible_text ?? o.id}
-            </Box>
-         ))}
-      </Box>
-   );
-}
