@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -46,11 +47,8 @@ func saveReference(dir string, save game.SaveState, all []*trace.Turn, turns []i
 		if t.Before == nil || len(t.Before.World) == 0 {
 			return written, fmt.Errorf("turn %d has no starting world; it predates world snapshots and can't be saved", n)
 		}
-		// The repo is public: keep the turn, not who played it or on which socket.
-		scrubbed := *t
-		scrubbed.UserID, scrubbed.ConnectionID, scrubbed.RequestID = "", "", ""
-		r := referenceTurn{SessionID: save.SessionID, SessionTitle: save.Title, Turn: n, Note: note, Trace: &scrubbed}
-		data, err := json.MarshalIndent(r, "", " ")
+		r := referenceTurn{SessionID: save.SessionID, SessionTitle: save.Title, Turn: n, Note: note, Trace: t}
+		data, err := scrub(r)
 		if err != nil {
 			return written, err
 		}
@@ -100,4 +98,35 @@ func loadReference(dir string) ([]referenceTurn, error) {
 // the starting world lives in the trace.
 func (r referenceTurn) saveFor() game.SaveState {
 	return game.SaveState{SessionID: r.SessionID, Title: r.SessionTitle}
+}
+
+// scrub serialises a reference turn without who played it or on which
+// socket. The repo is public. The player's id also names the owner and keys
+// the players map inside the starting world, so it is replaced everywhere,
+// consistently, by "player"; the turn then rebuilds exactly as before.
+func scrub(r referenceTurn) ([]byte, error) {
+	raw, err := json.Marshal(r)
+	if err != nil {
+		return nil, err
+	}
+	if uid := r.Trace.UserID; uid != "" {
+		raw = bytes.ReplaceAll(raw, []byte(uid), []byte("player"))
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, err
+	}
+	if tr, ok := doc["trace"].(map[string]any); ok {
+		for _, k := range []string{"user_id", "connection_id", "request_id"} {
+			delete(tr, k)
+		}
+		if frames, ok := tr["frames"].([]any); ok {
+			for _, f := range frames {
+				if fm, ok := f.(map[string]any); ok {
+					delete(fm, "to")
+				}
+			}
+		}
+	}
+	return json.MarshalIndent(doc, "", " ")
 }
