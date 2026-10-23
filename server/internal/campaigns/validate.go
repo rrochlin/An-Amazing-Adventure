@@ -142,6 +142,9 @@ func (d *CampaignDefinition) Validate() error {
 				return err
 			}
 		}
+		if err := d.validateActions(obj.OnSuccess, fmt.Sprintf("objective %q on_success", objectiveID)); err != nil {
+			return err
+		}
 	}
 
 	for assetID, asset := range d.DialogueAssets {

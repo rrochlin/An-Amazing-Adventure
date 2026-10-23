@@ -202,6 +202,10 @@
       "description": "Do good turns (or bad ones) around Briarwell to earn coin for Ros's gift. Two will do."
     },
     "return_doll": {
+      "on_success": [
+        { "type": "take_item", "item": "rag doll|doll" },
+        { "type": "give_item", "item": "copper coin", "description": "A warm copper coin, honestly earned." }
+      ],
       "title": "Bess's Lost Doll",
       "description": "Little Bess has lost her rag doll somewhere in the village.",
       "optional": true,
@@ -209,6 +213,9 @@
       "fail_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
     },
     "miller_secret": {
+      "on_success": [
+        { "type": "give_item", "item": "copper coin", "description": "A warm copper coin, honestly earned." }
+      ],
       "title": "The Miller's Secret",
       "description": "Hob the Miller is up to something behind the barn.",
       "optional": true,
@@ -216,6 +223,9 @@
       "fail_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
     },
     "meadow_bully": {
+      "on_success": [
+        { "type": "give_item", "item": "copper coin", "description": "A warm copper coin, honestly earned." }
+      ],
       "title": "Trouble in the Meadow",
       "description": "Dunstan is picking on the smaller children again.",
       "optional": true,
@@ -489,10 +499,9 @@
       "mode": "yarn_dialogue",
       "dialogue_asset_id": "rescue",
       "dialogue_start_node": "Rescue",
-      "location_id": "woods_edge",
       "title": "The Stranger in the Ashes",
       "summary": "Master Holloway of the Heroes' Guild finds the child at the woods' edge and offers to take them away.",
-      "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over the Woods' Edge like snow.",
+      "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over what is left of Briarwell like snow.",
       "objective_text": "Answer the stranger.",
       "on_enter": [
         { "type": "start_dialogue", "asset_id": "rescue", "start_node": "Rescue" }
@@ -516,7 +525,6 @@
     },
     "road_to_guild": {
       "mode": "ai_scene",
-      "location_id": "woods_edge",
       "title": "The Road to the Guild",
       "summary": "Briarwell burns behind them as Master Holloway carries the child toward the Guild. The opening ends here.",
       "intro_text": "Dawn finds you on the back of Master Holloway's horse, wrapped in his cloak. Behind you, a thin thread of smoke is all that is left of Briarwell.",

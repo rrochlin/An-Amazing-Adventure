@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -252,6 +253,9 @@ func execUpdateRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, 
 }
 
 func execCreateItem(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	if isMoney(strArg(in, "name")) {
+		return "", nil, errMoneyIsScripted
+	}
 	name := strArg(in, "name")
 	desc := strArg(in, "description")
 	if name == "" {
@@ -547,6 +551,9 @@ func execSetCharacterAlive(g *game.Game, in map[string]any) (string, *game.World
 }
 
 func execGiveItemToPlayer(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	if isMoney(strArg(in, "item_name")) {
+		return "", nil, errMoneyIsScripted
+	}
 	itemName := strArg(in, "item_name")
 	item, err := resolveItemByName(g, itemName)
 	if err != nil {
@@ -580,6 +587,9 @@ func execTakeItemFromPlayer(g *game.Game, in map[string]any) (string, *game.Worl
 }
 
 func execPlaceItemInRoom(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+	if isMoney(strArg(in, "item_name")) {
+		return "", nil, errMoneyIsScripted
+	}
 	itemName := strArg(in, "item_name")
 	roomName := strArg(in, "room_name")
 	item, err := resolveItemByName(g, itemName)
@@ -923,3 +933,11 @@ func characterNames(g *game.Game) []string {
 	}
 	return names
 }
+
+// errMoneyIsScripted: coins are given and taken by the campaign's own
+// actions (a deed's on_success, a purchase), never conjured from prose.
+var errMoneyIsScripted = fmt.Errorf("money is handled by the story: never create, give or place coins")
+
+var moneyWords = regexp.MustCompile(`(?i)\b(coins?|money|purse)\b`)
+
+func isMoney(name string) bool { return moneyWords.MatchString(name) }

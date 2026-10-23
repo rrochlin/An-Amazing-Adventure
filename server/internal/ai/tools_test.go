@@ -638,3 +638,23 @@ func TestCharacterScale_CreateAndResize(t *testing.T) {
 		t.Fatal("scale 0 should be rejected by the tool")
 	}
 }
+
+func TestEngineerNeverMakesMoney(t *testing.T) {
+	// Playtest 5: the engineer both created a coin and gave one, so one deed
+	// showed two coins while the state held one. Coins come from the story.
+	g, _, _ := newTestGameWithRooms(t)
+	for _, in := range []map[string]any{
+		{"name": "copper coin", "description": "-"},
+		{"name": "a purse of coins", "description": "-", "place_in_room": "Tavern"},
+	} {
+		if _, err := dispatch(g, "create_item", in); err == nil || !strings.Contains(err.Error(), "money is handled by the story") {
+			t.Fatalf("create_item %v should be refused, got %v", in, err)
+		}
+	}
+	if _, err := dispatch(g, "give_item_to_player", map[string]any{"item_name": "Money"}); err == nil {
+		t.Fatal("give_item_to_player of money should be refused")
+	}
+	if len(g.Items) != 0 {
+		t.Fatalf("no items should exist, got %v", g.Items)
+	}
+}
