@@ -39,6 +39,14 @@ interface GameStore {
    chatMessages: ChatMessage[];
    streamingMessage: string; // narrative being streamed, not yet committed
    isStreaming: boolean;
+   /**
+    * True from the moment narration starts arriving until the stage has
+    * shown its last line. State deltas that arrive meanwhile wait in
+    * pendingDeltas, so the map, pack and journal change when the story
+    * reaches that point, not while the player is still reading.
+    */
+   narrationPlaying: boolean;
+   pendingDeltas: StateDelta[];
    wsStatus: WsStatus;
    wsError: string | null;
    // World-gen terminal
@@ -51,6 +59,8 @@ interface GameStore {
    setGameState: (state: GameStateView) => void;
    setCampaignState: (state: CampaignStateView | null) => void;
    applyDelta: (delta: StateDelta) => void;
+   /** The stage has shown the last line: apply what was waiting. */
+   narrationCaughtUp: () => void;
    attachEventsToLastMessage: (events: WorldEvent[]) => void;
    appendStreamChunk: (chunk: string) => void;
    finalizeStreamingMessage: () => void;
@@ -69,6 +79,8 @@ const initialState = {
    chatMessages: [],
    streamingMessage: '',
    isStreaming: false,
+   narrationPlaying: false,
+   pendingDeltas: [] as StateDelta[],
    wsStatus: 'idle' as WsStatus,
    wsError: null,
    worldGenLog: [] as string[],
@@ -119,8 +131,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     setCampaignState: (state) => set({ campaignState: state }),
 
     applyDelta: (delta) => {
-       const { gameState, visitedRooms } = get();
+       const { gameState, visitedRooms, narrationPlaying } = get();
        if (!gameState) return;
+       if (narrationPlaying) {
+          set((s) => ({ pendingDeltas: [...s.pendingDeltas, delta] }));
+          return;
+       }
 
       const updated: GameStateView = { ...gameState };
 
@@ -172,6 +188,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
        set({ gameState: updated, campaignState: delta.campaign ?? get().campaignState });
     },
 
+   narrationCaughtUp: () => {
+      const { pendingDeltas, narrationPlaying } = get();
+      if (!narrationPlaying && !pendingDeltas.length) return;
+      set({ narrationPlaying: false, pendingDeltas: [] });
+      pendingDeltas.forEach((d) => get().applyDelta(d));
+   },
+
    attachEventsToLastMessage: (events) => {
       if (!events.length) return;
       const { chatMessages } = get();
@@ -185,7 +208,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
    },
 
    appendStreamChunk: (chunk) =>
-      set((s) => ({ streamingMessage: s.streamingMessage + chunk })),
+      set((s) => ({ streamingMessage: s.streamingMessage + chunk, narrationPlaying: true })),
 
    finalizeStreamingMessage: () => {
       const { streamingMessage, chatMessages } = get();
@@ -210,6 +233,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             ...s.chatMessages,
             { ...msg, timestamp: new Date().toISOString() },
          ],
+         narrationPlaying: s.narrationPlaying || msg.type === 'narrative',
       })),
 
    setStreaming: (v) => set({ isStreaming: v }),

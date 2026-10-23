@@ -101,6 +101,7 @@ function GamePage() {
       worldGenLog,
       worldGenReady,
       addChatMessage,
+      narrationCaughtUp,
       setCampaignState,
       setGameState,
       appendWorldGenLog,
@@ -570,6 +571,7 @@ function GamePage() {
                   overlay
                   logOpen={logOpen}
                   onPanelHeight={onPanelHeight}
+                  onCaughtUp={narrationCaughtUp}
                />
                )}
             />

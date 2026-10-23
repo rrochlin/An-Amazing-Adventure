@@ -235,4 +235,16 @@ describe('DialogueStage', () => {
       expect(em).toHaveTextContent('gone');
       expect(stageText()).toBe('It is gone.');
    });
+
+   it('reports catching up only once the last line has been shown', () => {
+      const onCaughtUp = vi.fn();
+      const { update } = setup(inProgress, { onCaughtUp });
+      expect(onCaughtUp).toHaveBeenCalledTimes(1); // already-read lines: at the end at once
+      update({ messages: [...inProgress, { type: 'narrative', content: 'One.\nTwo.' }], onCaughtUp });
+      tick(5000); // first line typed, second not yet shown
+      expect(onCaughtUp).toHaveBeenCalledTimes(1);
+      fireEvent.click(stage());
+      tick(5000);
+      expect(onCaughtUp).toHaveBeenCalledTimes(2);
+   });
 });
