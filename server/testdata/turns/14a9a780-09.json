@@ -1,0 +1,1638 @@
+{
+ "session_id": "14a9a780-80b8-456b-8a32-5d43f2cea605",
+ "session_title": "The Burning of Briarwell",
+ "turn": 9,
+ "note": "Hide during the raid: the narrator killed Tomas and the engineer applied it from prose; the rescue then opened at Woods' Edge although the player was under the bed.",
+ "trace": {
+  "session_id": "14a9a780-80b8-456b-8a32-5d43f2cea605",
+  "kind": "chat",
+  "lambda": "ws-chat",
+  "started_at": 1792786231135,
+  "duration_ms": 11335,
+  "turn": 4,
+  "input": "hude",
+  "before": {
+   "player_room_id": "family_cottage",
+   "player_room_name": "Family Cottage",
+   "version": 8,
+   "campaign": {
+    "campaign_id": "briarwell",
+    "campaign_version": "1",
+    "active_node_id": "bandit_raid",
+    "active_node_title": "Briarwell Burns",
+    "current_objective": "Survive the night: hide, fight, or search for Mother and Ros.",
+    "previous_node_ids": [
+     "morning_errand",
+     "village_deeds",
+     "gift_stall",
+     "birthday"
+    ],
+    "bool_flags": {
+     "gift_given": true
+    },
+    "labels": {
+     "attitude": "eager",
+     "deed_bully": "stopped",
+     "deed_doll": "returned",
+     "gift": "ribbon"
+    },
+    "active_objectives": [
+     {
+      "id": "hear_father",
+      "status": "completed",
+      "visible_text": "Listen to Father"
+     },
+     {
+      "id": "earn_coins",
+      "status": "completed",
+      "visible_text": "Earn Some Coin"
+     },
+     {
+      "id": "return_doll",
+      "status": "completed",
+      "visible_text": "Bess's Lost Doll"
+     },
+     {
+      "id": "miller_secret",
+      "status": "failed",
+      "visible_text": "The Miller's Secret"
+     },
+     {
+      "id": "meadow_bully",
+      "status": "completed",
+      "visible_text": "Trouble in the Meadow"
+     },
+     {
+      "id": "buy_gift",
+      "status": "completed",
+      "visible_text": "Buy Ros a Gift"
+     },
+     {
+      "id": "give_gift",
+      "status": "completed",
+      "visible_text": "Happy Birthday, Ros"
+     },
+     {
+      "id": "survive_raid",
+      "status": "active",
+      "visible_text": "Survive the Night"
+     }
+    ],
+    "actor_states": {
+     "bandit_leader": {
+      "actor_id": "bandit_leader",
+      "current_rail_step_id": "raiding",
+      "current_location_id": "village_square",
+      "status": "idle"
+     },
+     "bess": {
+      "actor_id": "bess",
+      "status": "idle"
+     },
+     "bully": {
+      "actor_id": "bully",
+      "status": "idle"
+     },
+     "father": {
+      "actor_id": "father",
+      "status": "idle"
+     },
+     "guild_master": {
+      "actor_id": "guild_master",
+      "current_rail_step_id": "travelling",
+      "status": "idle"
+     },
+     "miller": {
+      "actor_id": "miller",
+      "status": "idle"
+     },
+     "mother": {
+      "actor_id": "mother",
+      "status": "idle"
+     },
+     "sister": {
+      "actor_id": "sister",
+      "status": "idle"
+     },
+     "trader": {
+      "actor_id": "trader",
+      "status": "idle"
+     }
+    },
+    "discovered_room_ids": {
+     "family_cottage": true,
+     "market_lane": true,
+     "meadow": true,
+     "village_square": true
+    }
+   },
+   "world": {
+    "session_id": "14a9a780-80b8-456b-8a32-5d43f2cea605",
+    "owner_id": "88a18380-4021-7055-cb8f-af696db70b4b",
+    "user_id": "88a18380-4021-7055-cb8f-af696db70b4b",
+    "schema_version": 5,
+    "version": 8,
+    "players": {
+     "88a18380-4021-7055-cb8f-af696db70b4b": {
+      "id": "da246c58-0fed-47be-b6b4-7d684ee958c3",
+      "name": "Wren",
+      "description": "You are a child of about ten growing up in the village of Briarwell, with a gruff, loving father, a patient mother, and a younger sister whose birthday is today.",
+      "location_id": "family_cottage",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [
+       "8a059bf8-15d0-427c-900b-211d89fba4fe",
+       "7865b333-db17-45bf-8843-fe6c7e566af8"
+      ],
+      "equipment": {},
+      "scale": 0.8
+     }
+    },
+    "player": {
+     "id": "",
+     "name": "",
+     "description": "",
+     "location_id": "",
+     "alive": false,
+     "health": 0,
+     "friendly": false,
+     "inventory": null,
+     "equipment": {}
+    },
+    "party_size": 4,
+    "rooms": [
+     {
+      "id": "village_square",
+      "name": "Village Square",
+      "description": "A stone well, a few market-day benches, and gossiping neighbours.",
+      "connections": {
+       "east": "old_mill",
+       "north": "market_lane",
+       "south": "meadow",
+       "west": "family_cottage"
+      },
+      "coordinates": {
+       "x": 100,
+       "y": 0,
+       "z": 0
+      },
+      "items": [],
+      "occupants": [
+       "bess"
+      ],
+      "points_of_interest": [
+       {
+        "id": "stone_well",
+        "name": "Stone well"
+       },
+       {
+        "id": "market_benches",
+        "name": "Market benches"
+       }
+      ]
+     },
+     {
+      "id": "market_lane",
+      "name": "Market Lane",
+      "description": "Old Garrick's stall of sweets, ribbons, and whittled trinkets.",
+      "connections": {
+       "south": "village_square"
+      },
+      "coordinates": {
+       "x": 100,
+       "y": -100,
+       "z": 0
+      },
+      "items": [],
+      "occupants": [
+       "trader"
+      ],
+      "points_of_interest": [
+       {
+        "id": "garricks_stall",
+        "name": "Garrick's stall"
+       }
+      ]
+     },
+     {
+      "id": "old_mill",
+      "name": "Old Mill",
+      "description": "The miller's water wheel, and a barn behind it where people meet who should not.",
+      "connections": {
+       "west": "village_square"
+      },
+      "coordinates": {
+       "x": 200,
+       "y": 0,
+       "z": 0
+      },
+      "items": [],
+      "occupants": [
+       "miller"
+      ],
+      "points_of_interest": [
+       {
+        "id": "water_wheel",
+        "name": "Water wheel"
+       },
+       {
+        "id": "barn",
+        "name": "Barn"
+       }
+      ]
+     },
+     {
+      "id": "meadow",
+      "name": "Meadow",
+      "description": "Long grass where the village children play, and where Dunstan does his bullying.",
+      "connections": {
+       "north": "village_square",
+       "south": "woods_edge"
+      },
+      "coordinates": {
+       "x": 100,
+       "y": 100,
+       "z": 0
+      },
+      "items": [],
+      "occupants": [
+       "ff1df283-307c-4832-ae8e-905bc949c60d",
+       "a5e79a68-b048-48d3-a567-e000c7bcd5d6"
+      ],
+      "points_of_interest": [
+       {
+        "id": "old_fence_post",
+        "name": "Old fence post"
+       },
+       {
+        "id": "long_grass",
+        "name": "Long grass"
+       }
+      ]
+     },
+     {
+      "id": "woods_edge",
+      "name": "Woods' Edge",
+      "description": "A hollow under an old oak at the treeline, a good place to hide.",
+      "connections": {
+       "north": "meadow"
+      },
+      "coordinates": {
+       "x": 100,
+       "y": 200,
+       "z": 0
+      },
+      "items": [],
+      "occupants": [
+       "bully"
+      ],
+      "points_of_interest": [
+       {
+        "id": "old_oak",
+        "name": "Old oak hollow"
+       }
+      ]
+     },
+     {
+      "id": "family_cottage",
+      "name": "Family Cottage",
+      "description": "A low thatched cottage that smells of bread and woodsmoke.",
+      "connections": {
+       "east": "village_square"
+      },
+      "coordinates": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "items": [],
+      "occupants": [
+       "father",
+       "mother",
+       "sister",
+       "",
+       "",
+       "da246c58-0fed-47be-b6b4-7d684ee958c3"
+      ],
+      "points_of_interest": [
+       {
+        "id": "hearth",
+        "name": "Hearth"
+       },
+       {
+        "id": "front_door",
+        "name": "Front door"
+       },
+       {
+        "id": "garden_gate",
+        "name": "Garden gate"
+       }
+      ]
+     }
+    ],
+    "items": [
+     {
+      "id": "7865b333-db17-45bf-8843-fe6c7e566af8",
+      "name": "rag doll",
+      "description": "A faded rag doll with a blue dress and yarn hair the colour of straw. It belongs to Little Bess.",
+      "weight": 1,
+      "equippable": false
+     },
+     {
+      "id": "8a059bf8-15d0-427c-900b-211d89fba4fe",
+      "name": "carved wooden horse",
+      "description": "A small, finely carved wooden horse, worn smooth by a child's hands",
+      "weight": 1,
+      "equippable": false
+     }
+    ],
+    "npcs": [
+     {
+      "id": "father",
+      "name": "Tomas",
+      "description": "The player's father. A woodcutter, gentle but firm, who wants his child to grow up honest.",
+      "location_id": "family_cottage",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {}
+     },
+     {
+      "id": "miller",
+      "name": "Hob the Miller",
+      "description": "The village miller, married, who slips away to secret meetings behind his barn.",
+      "location_id": "old_mill",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {}
+     },
+     {
+      "id": "sister",
+      "name": "Ros",
+      "description": "The player's little sister, turning seven today. Adores her older sibling.",
+      "location_id": "family_cottage",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {},
+      "scale": 0.65
+     },
+     {
+      "id": "a5e79a68-b048-48d3-a567-e000c7bcd5d6",
+      "name": "girl",
+      "description": "A small girl, younger than Wren, with wide eyes full of hope as she looks toward Wren",
+      "backstory": "A local child cornered by Dunstan along with her companion",
+      "location_id": "meadow",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {},
+      "scale": 0.6
+     },
+     {
+      "id": "ff1df283-307c-4832-ae8e-905bc949c60d",
+      "name": "boy",
+      "description": "A small boy, younger than Wren, with tear-streaked cheeks and wide hopeful eyes",
+      "backstory": "A local child who had his carved wooden horse taken by Dunstan",
+      "location_id": "meadow",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {},
+      "scale": 0.6
+     },
+     {
+      "id": "bully",
+      "name": "Dunstan",
+      "description": "A village boy two years older than the player, who bullies the smaller children.",
+      "location_id": "woods_edge",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {},
+      "scale": 0.85
+     },
+     {
+      "id": "trader",
+      "name": "Old Garrick",
+      "description": "An old trader who has kept a stall on Market Lane for decades. Kind to children, fair with prices.",
+      "location_id": "market_lane",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {}
+     },
+     {
+      "id": "mother",
+      "name": "Elin",
+      "description": "The player's mother. Warm and practical; she runs the household and bakes for every birthday.",
+      "location_id": "family_cottage",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {}
+     },
+     {
+      "id": "bess",
+      "name": "Little Bess",
+      "description": "A small village girl, younger than Ros, crying because she lost her rag doll.",
+      "location_id": "village_square",
+      "alive": true,
+      "health": 100,
+      "friendly": true,
+      "inventory": [],
+      "equipment": {},
+      "scale": 0.6
+     }
+    ],
+    "narrative": [
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "I'll do it! I'll get her the best present ever."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Father ruffles your hair.\nFather: That's my child. Off you go, then."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Outside the cottage door, Briarwell is waking up, and your pockets are empty. Little Bess is crying by the well in the Village Square: her rag doll is gone. East at the Old Mill, Hob the Miller keeps glancing over his shoulder before slipping behind the barn. And from the Meadow to the south comes Dunstan's jeering, and a smaller child's sobbing. Kind or cruel, any two good turns should earn enough coin for Ros's gift."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "go to the meadow"
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The path south from the square is worn smooth by a hundred bare summer feet, and the long grass of the meadow swishes cool against your shins as you push through it. Clover and crushed mint rise up with every step, and somewhere a lark is singing its heart out overhead \u2014 the kind of morning that makes you feel like nothing bad could ever happen anywhere.\n\nThen you hear it. A sharp, mean laugh, and underneath it, a small voice trying very hard not to cry and failing completely.\n\nDunstan has cornered two children near the old fence post \u2014 a boy and a girl, both younger than you, both smaller than Dunstan by a good head. He's snatched something from the boy's hand \u2014 a little carved wooden horse, by the look of it \u2014 and is holding it high above his head, grinning the grin of someone who knows exactly how tall he is. *\"Jump for it,\"* he says, in that lazy, horrible voice of his. *\"Come on. Jump.\"*\n\nHe hasn't noticed you yet. The two smaller children have, though. The girl's eyes go wide and hopeful over Dunstan's shoulder, like you might be the answer to a prayer she only just thought to make.\n\nYou could call Dunstan out, try to trick him, or something else entirely \u2014 but whatever you do, the two little ones are watching, and so is the meadow, in its quiet way. The carved horse glints in the morning sun, just out of reach."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "confront dunstan"
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "You plant your feet in the grass and call out across the meadow, loud and clear. *\"Oi. Dunstan.\"*\n\nHe turns slowly, the way he always does, like turning fast would mean he was surprised. The wooden horse is still dangling from his fist. He looks you up and down, weighing things, and then that grin comes back \u2014 a little less certain than it was, but working hard to hide it. *\"What do you want?\"* he says. *\"Come to watch?\"*\n\n*\"Give it back,\"* you say. Simple as that.\n\nSomething shifts behind his eyes. He's two years older and half a head taller and he knows it, but you're standing very still and looking straight at him, and that seems to cost him something. The two little ones have gone completely quiet. The lark is still singing. A long moment stretches out between you like pulled taffy.\n\nThen Dunstan drops the horse in the grass \u2014 not handing it over, mind you, dropping it, so it looks like his choice \u2014 and he gives you a look that says this isn't finished before he turns and slouches off toward the far end of the meadow, swatting at the tall grass with one hand.\n\nThe small boy snatches up his horse and clutches it to his chest. The girl tugs your sleeve. Between them they press a warm copper coin into your palm \u2014 apparently they came prepared for the toll. *\"Thank you,\"* the girl whispers, fierce and quiet, like a promise.\n\n**One coin.** One more will buy Ros something worth giving. Little Bess is still crying by the well in the Village Square, and Hob the Miller is still sneaking behind his barn at the Old Mill \u2014 either one could be worth your while."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "go to little beth and help oiut"
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "You cut back north through the meadow, the copper coin warm in your fist, and the village square opens up around you \u2014 the old stone well at its centre, the market-day benches, a pair of neighbours gossiping by the baker's door. The smell of fresh bread drifts across the cobbles and for a moment you think of your mother, and of Ros, and of how much you want today to be perfect.\n\nYou spot Little Bess straight away. She's sitting on the well's edge with her knees pulled up and her face buried in them, her small shoulders hitching with every sob. She's younger than Ros, which means she's very young indeed, and she looks about as miserable as a person can look on a sunny morning.\n\nYou crouch down beside her. *\"Bess. Hey. What's happened?\"*\n\nHer head comes up. Her face is blotchy and her eyes are red and she sniffles enormously before she can speak. *\"Molly,\"* she manages. *\"I left her somewhere and now I can't find her and I've looked everywhere and she's GONE.\"* The last word wobbles dangerously back into crying.\n\nMolly is the rag doll \u2014 you know it without asking. You've seen Bess carrying that doll around the village since before she could walk properly. Faded blue dress, yarn hair the colour of straw.\n\n*\"Where did you go this morning?\"* you ask gently. *\"Before you came to the square?\"*\n\nBess scrubs her nose with her sleeve and thinks very hard. *\"The meadow,\"* she says. *\"I was watching the butterflies.\"*"
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "go to the meadow and look for the doll"
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Back south you go, through the square and down the worn path, the long grass parting around you just as it did before. Dunstan is nowhere to be seen now \u2014 just the lark, the clover smell, and the lazy hum of bees moving between the wildflowers. You slow your steps and start looking properly, the way your father taught you to look for kindling in the undergrowth \u2014 methodically, patch by patch, not rushing.\n\nIt takes a little while. The grass is tall enough to swallow something small without a second thought.\n\nBut then, near the old fence post where Dunstan was doing his bullying, you see a scrap of faded blue caught on a splinter of wood \u2014 and there she is. Molly the rag doll, face-down in the clover, her yarn hair spread out around her like she's sleeping. She must have tumbled from Bess's arms during all the excitement and neither of you noticed in the commotion. You pick her up and dust the grass seeds from her little dress, and she stares up at you with her two button eyes, perfectly patient.\n\nYou carry her back to the square at a trot.\n\nThe moment Bess sees what's in your hands, she lets out a sound that is half shriek and half sob and launches herself off the well's edge. She squeezes Molly so hard you half expect the button eyes to pop. Then she looks up at you, still sniffling, and presses a coin into your hand with enormous solemnity, like she's been saving it for exactly this emergency.\n\n**Two coins.** That's enough. Old Garrick's stall waits on Market Lane to the north, and Ros's birthday is still young."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Two coins clink in your pocket as you hurry up Market Lane to Old Garrick's stall.\n\nOld Garrick leans over his stall, eyes twinkling.\nOld Garrick: A birthday, is it? Well, your coin buys any one of these."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "A ribbon the colour of cornflowers."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Old Garrick: She'll wear that till it's rags.\nHe folds it neatly into your palm."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The sun is low and gold by the time you get home, the gift hidden behind your back.\n\nThe cottage glows with candlelight. Mother has baked a honey cake, and Ros is bouncing on her toes.\nRos: Did you get me something? Did you, did you?"
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "Give Ros her gift."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Ros squeals and throws her arms around you.\nRos: It's perfect! You're the best!\nLater, as the candles gutter, Father goes to the window and goes very still.\nThere is smoke rising from the woods.\nFather: Charcoal burners, most likely. Off to bed, the both of you."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "Go to bed."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "You lie awake a long time, listening to Father's boots creak by the door."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "You wake to screaming. Orange light flickers through the shutters and the air is thick with smoke. Father is at the door with his woodaxe, shouting for Mother to take Ros out the back. Then the door splinters: Red Corwin's bandits are in Briarwell. You can hide, fight, or go looking for Mother and Ros."
+       }
+      ]
+     }
+    ],
+    "chat_history": null,
+    "ready": true,
+    "title": "The Burning of Briarwell",
+    "theme": "warm pastoral turning to dread; fairy-tale cadence, never grimdark",
+    "quest_goal": "A village child spends their sister's birthday earning coin for a gift, until bandits put Briarwell to the torch and a stranger from the Heroes' Guild pulls them from the ashes.",
+    "total_tokens": 44553,
+    "conversation_count": 4,
+    "creation_params": {
+     "name": "Wren",
+     "backstory": "You are a child of about ten growing up in the village of Briarwell, with a gruff, loving father, a patient mother, and a younger sister whose birthday is today.",
+     "race_id": "human",
+     "subrace_id": "",
+     "class_id": "fighter",
+     "ability_scores": {
+      "cha": 8,
+      "con": 14,
+      "dex": 15,
+      "int": 10,
+      "str": 13,
+      "wis": 12
+     },
+     "selected_skills": [
+      "athletics",
+      "perception"
+     ]
+    },
+    "legacy_creation_params": {},
+    "campaign": {
+     "campaign_id": "briarwell",
+     "campaign_version": "1",
+     "active_node_id": "bandit_raid",
+     "active_node_title": "Briarwell Burns",
+     "current_objective": "Survive the night: hide, fight, or search for Mother and Ros.",
+     "previous_node_ids": [
+      "morning_errand",
+      "village_deeds",
+      "gift_stall",
+      "birthday"
+     ],
+     "bool_flags": {
+      "gift_given": true
+     },
+     "labels": {
+      "attitude": "eager",
+      "deed_bully": "stopped",
+      "deed_doll": "returned",
+      "gift": "ribbon"
+     },
+     "active_objectives": [
+      {
+       "id": "hear_father",
+       "status": "completed",
+       "visible_text": "Listen to Father"
+      },
+      {
+       "id": "earn_coins",
+       "status": "completed",
+       "visible_text": "Earn Some Coin"
+      },
+      {
+       "id": "return_doll",
+       "status": "completed",
+       "visible_text": "Bess's Lost Doll"
+      },
+      {
+       "id": "miller_secret",
+       "status": "failed",
+       "visible_text": "The Miller's Secret"
+      },
+      {
+       "id": "meadow_bully",
+       "status": "completed",
+       "visible_text": "Trouble in the Meadow"
+      },
+      {
+       "id": "buy_gift",
+       "status": "completed",
+       "visible_text": "Buy Ros a Gift"
+      },
+      {
+       "id": "give_gift",
+       "status": "completed",
+       "visible_text": "Happy Birthday, Ros"
+      },
+      {
+       "id": "survive_raid",
+       "status": "active",
+       "visible_text": "Survive the Night"
+      }
+     ],
+     "actor_states": {
+      "bandit_leader": {
+       "actor_id": "bandit_leader",
+       "current_rail_step_id": "raiding",
+       "current_location_id": "village_square",
+       "status": "idle"
+      },
+      "bess": {
+       "actor_id": "bess",
+       "status": "idle"
+      },
+      "bully": {
+       "actor_id": "bully",
+       "status": "idle"
+      },
+      "father": {
+       "actor_id": "father",
+       "status": "idle"
+      },
+      "guild_master": {
+       "actor_id": "guild_master",
+       "current_rail_step_id": "travelling",
+       "status": "idle"
+      },
+      "miller": {
+       "actor_id": "miller",
+       "status": "idle"
+      },
+      "mother": {
+       "actor_id": "mother",
+       "status": "idle"
+      },
+      "sister": {
+       "actor_id": "sister",
+       "status": "idle"
+      },
+      "trader": {
+       "actor_id": "trader",
+       "status": "idle"
+      }
+     },
+     "discovered_room_ids": {
+      "family_cottage": true,
+      "market_lane": true,
+      "meadow": true,
+      "village_square": true
+     }
+    }
+   }
+  },
+  "after": {
+   "player_room_id": "woods_edge",
+   "player_room_name": "Woods' Edge",
+   "version": 9,
+   "campaign": {
+    "campaign_id": "briarwell",
+    "campaign_version": "1",
+    "active_node_id": "rescue",
+    "active_node_title": "The Stranger in the Ashes",
+    "current_objective": "Answer the stranger.",
+    "previous_node_ids": [
+     "morning_errand",
+     "village_deeds",
+     "gift_stall",
+     "birthday",
+     "bandit_raid"
+    ],
+    "bool_flags": {
+     "gift_given": true,
+     "stayed_hidden": true
+    },
+    "labels": {
+     "attitude": "eager",
+     "deed_bully": "stopped",
+     "deed_doll": "returned",
+     "gift": "ribbon",
+     "raid_response": "hid"
+    },
+    "active_objectives": [
+     {
+      "id": "hear_father",
+      "status": "completed",
+      "visible_text": "Listen to Father"
+     },
+     {
+      "id": "earn_coins",
+      "status": "completed",
+      "visible_text": "Earn Some Coin"
+     },
+     {
+      "id": "return_doll",
+      "status": "completed",
+      "visible_text": "Bess's Lost Doll"
+     },
+     {
+      "id": "miller_secret",
+      "status": "failed",
+      "visible_text": "The Miller's Secret"
+     },
+     {
+      "id": "meadow_bully",
+      "status": "completed",
+      "visible_text": "Trouble in the Meadow"
+     },
+     {
+      "id": "buy_gift",
+      "status": "completed",
+      "visible_text": "Buy Ros a Gift"
+     },
+     {
+      "id": "give_gift",
+      "status": "completed",
+      "visible_text": "Happy Birthday, Ros"
+     },
+     {
+      "id": "survive_raid",
+      "status": "completed",
+      "visible_text": "Survive the Night"
+     }
+    ],
+    "actor_states": {
+     "bandit_leader": {
+      "actor_id": "bandit_leader",
+      "current_rail_step_id": "raiding",
+      "current_location_id": "village_square",
+      "status": "idle"
+     },
+     "bess": {
+      "actor_id": "bess",
+      "status": "idle"
+     },
+     "bully": {
+      "actor_id": "bully",
+      "status": "idle"
+     },
+     "father": {
+      "actor_id": "father",
+      "status": "idle"
+     },
+     "guild_master": {
+      "actor_id": "guild_master",
+      "current_rail_step_id": "arrived",
+      "current_location_id": "woods_edge",
+      "status": "idle"
+     },
+     "miller": {
+      "actor_id": "miller",
+      "status": "idle"
+     },
+     "mother": {
+      "actor_id": "mother",
+      "status": "idle"
+     },
+     "sister": {
+      "actor_id": "sister",
+      "status": "idle"
+     },
+     "trader": {
+      "actor_id": "trader",
+      "status": "idle"
+     }
+    },
+    "active_dialogue": {
+     "asset_id": "rescue",
+     "current_node": "Rescue",
+     "awaiting_choice": true,
+     "pending_choices": [
+      {
+       "id": 0,
+       "text": "Take his hand."
+      },
+      {
+       "id": 1,
+       "text": "No! I have to find my family!"
+      }
+     ]
+    },
+    "discovered_room_ids": {
+     "family_cottage": true,
+     "market_lane": true,
+     "meadow": true,
+     "village_square": true,
+     "woods_edge": true
+    }
+   }
+  },
+  "calls": [
+   {
+    "role": "narrator",
+    "model": "us.anthropic.claude-sonnet-4-6",
+    "system": "You are an expert Dungeon Master narrating a D&D 5e text adventure game.\nThe player's name is \"Wren\" and they are currently in \"Family Cottage\".\n\nYour ONLY job is to write immersive, engaging narrative prose.\nDo NOT describe what you are about to do or what tools you might call.\nDo NOT say things like \"I will now...\" or \"As the DM, I...\".\nWrite only what the player experiences \u2014 sights, sounds, dialogue, action.\n\nWhen narrating combat or physical feats, respect the character's D&D stats (HP, AC, ability scores).\nA Barbarian with high STR smashes through doors; a Monk with high DEX moves like water.\n\nDM Philosophy:\n- Say Yes or Roll the Dice: if nothing is at stake, say yes and move the story forward.\n- Fail Forward: failed attempts create complications and drama, never dead ends.\n- Pacing: cut to the next interesting scene when things drag; slow for dramatic moments.\n- Never leave the player without a direction: close on a concrete in-world hook toward their objective.\n- Be specific and sensory: name the smells, the sounds, the textures.\n\nWrite 2-4 paragraphs of vivid prose. Do not break the fourth wall.\n\n## Authored campaign: The Burning of Briarwell\nPremise: A village child spends their sister's birthday earning coin for a gift, until bandits put Briarwell to the torch and a stranger from the Heroes' Guild pulls them from the ashes.\nTone: warm pastoral turning to dread; fairy-tale cadence, never grimdark\n\n## The player character\nRole: Child of Briarwell. Curious, small, and free to be kind or cruel while the village is still standing.\nBackground (always true, never contradict it): You are a child of about ten growing up in the village of Briarwell, with a gruff, loving father, a patient mother, and a younger sister whose birthday is today.\n\n## Current scene: Briarwell Burns\nWhat is happening: Night. Red Corwin's bandits torch the village. Father falls defending the door; Mother and Ros vanish in the chaos. The child must decide what to do.\nThe player's current objective: Survive the night: hide, fight, or search for Mother and Ros.\nThis scene is bounded: improvise freely, but stay inside its boundaries.\nScene focus: fire, panic, and a child far too small to stop it\nWork these into the scene: Father falling at the cottage door; the bandits' torches\nNever reveal or hint at: whether Mother and Ros are alive\nTone note: frightening, not gory\nTone note: a child cannot win this fight; fighting ends with the child struck down, not killed\n\n## Active objectives\n- Survive the Night: Bandits are burning Briarwell.\n\n## Cast (the only named characters in this scene)\n- Red Corwin (antagonist): Leader of a bandit gang. Ruthless, red-bearded, and careful to leave no witnesses who matter. Wants: Raid Briarwell and carry off anything, or anyone, worth selling. Currently at: Village Square.\n- Little Bess (npc): A small village girl, younger than Ros, crying because she lost her rag doll. Wants: Find her lost rag doll. Currently at: Village Square.\n- Dunstan (npc): A village boy two years older than the player, who bullies the smaller children. Wants: Push the smaller children around. Currently at: Woods' Edge.\n- Tomas (npc): The player's father. A woodcutter, gentle but firm, who wants his child to grow up honest. Wants: Teach his child that a coin earned honestly is worth more than one taken. Currently at: Family Cottage.\n- Hob the Miller (npc): The village miller, married, who slips away to secret meetings behind his barn. Wants: Keep his wife from learning about his secret meetings behind the barn. Currently at: Old Mill.\n- Elin (npc): The player's mother. Warm and practical; she runs the household and bakes for every birthday. Wants: Keep the household warm and the birthday a happy one. Currently at: Family Cottage.\n- Ros (npc): The player's little sister, turning seven today. Adores her older sibling. Wants: Have the best birthday ever. Currently at: Family Cottage.\n- Old Garrick (npc): An old trader who has kept a stall on Market Lane for decades. Kind to children, fair with prices. Wants: Sell a child something nice for a fair coin. Currently at: Market Lane.\n\n## Places (the only locations that exist)\n- Family Cottage: A low thatched cottage that smells of bread and woodsmoke. Exits: east to Village Square.\n- Market Lane: Old Garrick's stall of sweets, ribbons, and whittled trinkets. Exits: south to Village Square.\n- Meadow: Long grass where the village children play, and where Dunstan does his bullying. Exits: north to Village Square, south to Woods' Edge.\n- Old Mill: The miller's water wheel, and a barn behind it where people meet who should not. Exits: west to Village Square.\n- Village Square: A stone well, a few market-day benches, and gossiping neighbours. Exits: east to Old Mill, north to Market Lane, south to Meadow, west to Family Cottage.\n- Woods' Edge: A hollow under an old oak at the treeline, a good place to hide. Exits: north to Meadow.\n\n## Rules for this authored campaign\n- Stay inside the story above. Do NOT invent new quests, plot threads, rewards, named characters,\n  or places. Unnamed background villagers are fine; new named people or locations are not.\n- If the player wanders off-script, let them, but steer them back toward the current objective\n  through the world (a character calls out, a sound draws them, something they need is elsewhere).\n- Never resolve the current objective on the player's behalf, and never skip ahead to later scenes.\n- End every reply with a clear, concrete hook toward the current objective: who is nearby, what\n  they want, or where the player could go next. Name the specific characters or places involved.\n",
+    "messages": [
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "I'll do it! I'll get her the best present ever."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Father ruffles your hair.\nFather: That's my child. Off you go, then."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Outside the cottage door, Briarwell is waking up, and your pockets are empty. Little Bess is crying by the well in the Village Square: her rag doll is gone. East at the Old Mill, Hob the Miller keeps glancing over his shoulder before slipping behind the barn. And from the Meadow to the south comes Dunstan's jeering, and a smaller child's sobbing. Kind or cruel, any two good turns should earn enough coin for Ros's gift."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "go to the meadow"
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The path south from the square is worn smooth by a hundred bare summer feet, and the long grass of the meadow swishes cool against your shins as you push through it. Clover and crushed mint rise up with every step, and somewhere a lark is singing its heart out overhead \u2014 the kind of morning that makes you feel like nothing bad could ever happen anywhere.\n\nThen you hear it. A sharp, mean laugh, and underneath it, a small voice trying very hard not to cry and failing completely.\n\nDunstan has cornered two children near the old fence post \u2014 a boy and a girl, both younger than you, both smaller than Dunstan by a good head. He's snatched something from the boy's hand \u2014 a little carved wooden horse, by the look of it \u2014 and is holding it high above his head, grinning the grin of someone who knows exactly how tall he is. *\"Jump for it,\"* he says, in that lazy, horrible voice of his. *\"Come on. Jump.\"*\n\nHe hasn't noticed you yet. The two smaller children have, though. The girl's eyes go wide and hopeful over Dunstan's shoulder, like you might be the answer to a prayer she only just thought to make.\n\nYou could call Dunstan out, try to trick him, or something else entirely \u2014 but whatever you do, the two little ones are watching, and so is the meadow, in its quiet way. The carved horse glints in the morning sun, just out of reach."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "confront dunstan"
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "You plant your feet in the grass and call out across the meadow, loud and clear. *\"Oi. Dunstan.\"*\n\nHe turns slowly, the way he always does, like turning fast would mean he was surprised. The wooden horse is still dangling from his fist. He looks you up and down, weighing things, and then that grin comes back \u2014 a little less certain than it was, but working hard to hide it. *\"What do you want?\"* he says. *\"Come to watch?\"*\n\n*\"Give it back,\"* you say. Simple as that.\n\nSomething shifts behind his eyes. He's two years older and half a head taller and he knows it, but you're standing very still and looking straight at him, and that seems to cost him something. The two little ones have gone completely quiet. The lark is still singing. A long moment stretches out between you like pulled taffy.\n\nThen Dunstan drops the horse in the grass \u2014 not handing it over, mind you, dropping it, so it looks like his choice \u2014 and he gives you a look that says this isn't finished before he turns and slouches off toward the far end of the meadow, swatting at the tall grass with one hand.\n\nThe small boy snatches up his horse and clutches it to his chest. The girl tugs your sleeve. Between them they press a warm copper coin into your palm \u2014 apparently they came prepared for the toll. *\"Thank you,\"* the girl whispers, fierce and quiet, like a promise.\n\n**One coin.** One more will buy Ros something worth giving. Little Bess is still crying by the well in the Village Square, and Hob the Miller is still sneaking behind his barn at the Old Mill \u2014 either one could be worth your while."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "go to little beth and help oiut"
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "You cut back north through the meadow, the copper coin warm in your fist, and the village square opens up around you \u2014 the old stone well at its centre, the market-day benches, a pair of neighbours gossiping by the baker's door. The smell of fresh bread drifts across the cobbles and for a moment you think of your mother, and of Ros, and of how much you want today to be perfect.\n\nYou spot Little Bess straight away. She's sitting on the well's edge with her knees pulled up and her face buried in them, her small shoulders hitching with every sob. She's younger than Ros, which means she's very young indeed, and she looks about as miserable as a person can look on a sunny morning.\n\nYou crouch down beside her. *\"Bess. Hey. What's happened?\"*\n\nHer head comes up. Her face is blotchy and her eyes are red and she sniffles enormously before she can speak. *\"Molly,\"* she manages. *\"I left her somewhere and now I can't find her and I've looked everywhere and she's GONE.\"* The last word wobbles dangerously back into crying.\n\nMolly is the rag doll \u2014 you know it without asking. You've seen Bess carrying that doll around the village since before she could walk properly. Faded blue dress, yarn hair the colour of straw.\n\n*\"Where did you go this morning?\"* you ask gently. *\"Before you came to the square?\"*\n\nBess scrubs her nose with her sleeve and thinks very hard. *\"The meadow,\"* she says. *\"I was watching the butterflies.\"*"
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "go to the meadow and look for the doll"
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Back south you go, through the square and down the worn path, the long grass parting around you just as it did before. Dunstan is nowhere to be seen now \u2014 just the lark, the clover smell, and the lazy hum of bees moving between the wildflowers. You slow your steps and start looking properly, the way your father taught you to look for kindling in the undergrowth \u2014 methodically, patch by patch, not rushing.\n\nIt takes a little while. The grass is tall enough to swallow something small without a second thought.\n\nBut then, near the old fence post where Dunstan was doing his bullying, you see a scrap of faded blue caught on a splinter of wood \u2014 and there she is. Molly the rag doll, face-down in the clover, her yarn hair spread out around her like she's sleeping. She must have tumbled from Bess's arms during all the excitement and neither of you noticed in the commotion. You pick her up and dust the grass seeds from her little dress, and she stares up at you with her two button eyes, perfectly patient.\n\nYou carry her back to the square at a trot.\n\nThe moment Bess sees what's in your hands, she lets out a sound that is half shriek and half sob and launches herself off the well's edge. She squeezes Molly so hard you half expect the button eyes to pop. Then she looks up at you, still sniffling, and presses a coin into your hand with enormous solemnity, like she's been saving it for exactly this emergency.\n\n**Two coins.** That's enough. Old Garrick's stall waits on Market Lane to the north, and Ros's birthday is still young."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Two coins clink in your pocket as you hurry up Market Lane to Old Garrick's stall.\n\nOld Garrick leans over his stall, eyes twinkling.\nOld Garrick: A birthday, is it? Well, your coin buys any one of these."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "A ribbon the colour of cornflowers."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Old Garrick: She'll wear that till it's rags.\nHe folds it neatly into your palm."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "The sun is low and gold by the time you get home, the gift hidden behind your back.\n\nThe cottage glows with candlelight. Mother has baked a honey cake, and Ros is bouncing on her toes.\nRos: Did you get me something? Did you, did you?"
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "Give Ros her gift."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "Ros squeals and throws her arms around you.\nRos: It's perfect! You're the best!\nLater, as the candles gutter, Father goes to the window and goes very still.\nThere is smoke rising from the woods.\nFather: Charcoal burners, most likely. Off to bed, the both of you."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "Go to bed."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "You lie awake a long time, listening to Father's boots creak by the door."
+       }
+      ]
+     },
+     {
+      "role": "assistant",
+      "content": [
+       {
+        "type": "text",
+        "text": "You wake to screaming. Orange light flickers through the shutters and the air is thick with smoke. Father is at the door with his woodaxe, shouting for Mother to take Ros out the back. Then the door splinters: Red Corwin's bandits are in Briarwell. You can hide, fight, or go looking for Mother and Ros."
+       }
+      ]
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "hude"
+       }
+      ]
+     }
+    ],
+    "output": "You throw yourself under the bed, pressing flat against the cold earthen floor, pulling the hanging blanket down to cover the gap. Dust and woodsmoke fill your nose. You clamp both hands over your mouth and breathe in tiny, careful sips.\n\nThrough the crack beneath the blanket you can see the cottage in flickering orange slices. Mother is gone. Ros is gone. The back door swings open on its leather hinge, creaking softly \u2014 they got out, they must have got out, you tell yourself, you tell yourself again.\n\nThen the front door bursts inward with a sound like a thunderclap.\n\nFather fills the doorway with his axe raised, a dark shape against the roaring orange outside. He looks enormous. He looks like he could stop anything. There are voices \u2014 rough, laughing voices \u2014 and a scuffle that shakes the whole cottage, and then a sound you will never forget, and then silence, and then Father is on the floor and he is not moving and the boots of two bandits are stepping over him like he is a piece of furniture.\n\nYou do not scream. You do not know how you do not scream.\n\nThe boots move through the cottage, kicking things over, and then they leave, and the orange light grows brighter, and you realise with a cold, creeping horror that the thatch above you has begun to catch.\n\nThe back door is still open. Cool night air breathes through it, and somewhere beyond it \u2014 in the square, in the dark \u2014 you can hear voices crying out. Mother and Ros are out there somewhere.",
+    "stop_reason": "end_turn",
+    "input_tokens": 3512,
+    "output_tokens": 352,
+    "duration_ms": 6443
+   },
+   {
+    "role": "engineer",
+    "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "system": "You are a game world engineer. Your job is to read a narrator's text and execute the world mutations it implies using the provided tools.\n\nRules:\n- Call tools ONLY for mutations clearly and unambiguously implied by the narrative text.\n- Do NOT invent mutations not supported by the text.\n- Do NOT output any narrative text \u2014 only tool calls.\n- If the narrative implies no world changes, call no tools.\n- Prefer precision over completeness: it is better to miss a subtle mutation than to invent one.\n- Use only canonical entity names exactly as listed in the Current Game State section.\n- If a mutation references a room/entity that is uncertain, call get_room_info first, then mutate.\n\nExamples of what to look for:\n- \"The lever grinds and a hidden passage opens to the east\" \u2192 create_room(name, description, connect_to_room_name, direction)\n- \"You find a rusty key on the floor\" \u2192 give_item_to_player(rusty key) or place_item_in_room\n- \"The merchant gives you a healing potion\" \u2192 give_item_to_player(healing potion)\n- \"A warded chest materializes beside the altar\" \u2192 create_item + place_item_in_room\n- \"The bridge collapses, blocking the northern passage\" \u2192 update_room(current room, updated description)\n- \"A cloaked figure emerges from the shadows\" \u2192 move_character or create_character if not yet present\n- \"You cut across the square and out into the meadow\" \u2192 move_player(Meadow)",
+    "input": "## Narrative\n\nYou throw yourself under the bed, pressing flat against the cold earthen floor, pulling the hanging blanket down to cover the gap. Dust and woodsmoke fill your nose. You clamp both hands over your mouth and breathe in tiny, careful sips.\n\nThrough the crack beneath the blanket you can see the cottage in flickering orange slices. Mother is gone. Ros is gone. The back door swings open on its leather hinge, creaking softly \u2014 they got out, they must have got out, you tell yourself, you tell yourself again.\n\nThen the front door bursts inward with a sound like a thunderclap.\n\nFather fills the doorway with his axe raised, a dark shape against the roaring orange outside. He looks enormous. He looks like he could stop anything. There are voices \u2014 rough, laughing voices \u2014 and a scuffle that shakes the whole cottage, and then a sound you will never forget, and then silence, and then Father is on the floor and he is not moving and the boots of two bandits are stepping over him like he is a piece of furniture.\n\nYou do not scream. You do not know how you do not scream.\n\nThe boots move through the cottage, kicking things over, and then they leave, and the orange light grows brighter, and you realise with a cold, creeping horror that the thatch above you has begun to catch.\n\nThe back door is still open. Cool night air breathes through it, and somewhere beyond it \u2014 in the square, in the dark \u2014 you can hear voices crying out. Mother and Ros are out there somewhere.\n\n## Current Game State\n\nPlayer: Wren (health 100/100, alive true)\nPlayer inventory: carved wooden horse, rag doll\nCurrent room: Family Cottage\nCurrent room exits: east -> Village Square\nRoom items: none\nRoom occupants: Tomas (health 100, alive true); Elin (health 100, alive true); Ros (health 100, alive true)\nKnown rooms (use these exact names):\n- Family Cottage (exits: east -> Village Square)\n- Market Lane (exits: south -> Village Square)\n- Meadow (exits: north -> Village Square, south -> Woods' Edge)\n- Old Mill (exits: west -> Village Square)\n- Village Square (exits: east -> Old Mill, north -> Market Lane, south -> Meadow, west -> Family Cottage)\n- Woods' Edge (exits: north -> Meadow)\nKnown items (use these exact names): carved wooden horse, rag doll\nAll NPCs (use these exact names): Tomas (health 100, alive true, location: Family Cottage); Hob the Miller (health 100, alive true, location: Old Mill); girl (health 100, alive true, location: Meadow); boy (health 100, alive true, location: Meadow); Elin (health 100, alive true, location: Family Cottage); Ros (health 100, alive true, location: Family Cottage); Dunstan (health 100, alive true, location: Woods' Edge); Old Garrick (health 100, alive true, location: Market Lane); Little Bess (health 100, alive true, location: Village Square)\n\nExecute all world mutations clearly implied by the narrative above.",
+    "output": "[round 0] I need to analyze this narrative carefully for world mutations.\n\nThe narrative describes:\n1. The player hiding under a bed in the Family Cottage\n2. Father (Tomas) fighting bandits and being killed\n3. The cottage catching fire\n4. The back door being open, with the player able to escape\n\nKey mutations implied:\n- **Tomas dies** in the fight with the bandits\n- **The cottage is on fire** (should update the room description)\n- **The player can escape through the back door** - but this is narrative description of the situation, not a player action yet\n\nLet me execute the clear mutations:\n[round 0] tool_use set_character_alive {\"alive\":false,\"character_name\":\"Tomas\"}\n[round 0] tool_use update_room {\"description\":\"The thatch roof is ablaze with orange flames, filling the cottage with heat and choking smoke. The front door hangs open, revealing the inferno outside. The back door also stands open, offering a path to the cool night air and the Village Square beyond. Tomas lies motionless on the floor, overcome by the bandits. Dust, woodsmoke, and the acrid smell of burning thatch fill the air.\",\"room_name\":\"Family Cottage\"}\n",
+    "stop_reason": "end_turn",
+    "input_tokens": 7581,
+    "output_tokens": 364,
+    "duration_ms": 4029
+   },
+   {
+    "role": "resolver",
+    "model": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "system": "You are a deterministic campaign condition resolver.\nUse only the latest player input and latest assistant narrative to decide whether authored campaign conditions were satisfied this turn.\nReturn strict JSON with exactly these top-level keys: bool_flags, labels, counters.\nOnly include keys that appear in the allowed condition specs.\nFor boolean flags, set true only when the turn clearly establishes that authored condition.\nFor labels, only emit one of the allowed values.\nFor counters, emit integers only when the turn clearly advances a tracked quantity.\nDo not invent keys, branches, dialogue, or explanations.",
+    "input": "Campaign: briarwell\nNode ID: bandit_raid\nNode title: Briarwell Burns\nNode summary: Night. Red Corwin's bandits torch the village. Father falls defending the door; Mother and Ros vanish in the chaos. The child must decide what to do.\nCurrent objective: Survive the night: hide, fight, or search for Mother and Ros.\nAllowed condition specs: [{\"type\":\"label_equals\",\"key\":\"raid_response\",\"allowed_values\":[\"fought\",\"hid\",\"searched_family\"]}]\nCurrent campaign state: {\"bool_flags\":{\"gift_given\":true},\"counters\":{},\"labels\":{\"attitude\":\"eager\",\"deed_bully\":\"stopped\",\"deed_doll\":\"returned\",\"gift\":\"ribbon\"}}\nLatest player input: \"hude\"\nLatest assistant narrative: \"You throw yourself under the bed, pressing flat against the cold earthen floor, pulling the hanging blanket down to cover the gap. Dust and woodsmoke fill your nose. You clamp both hands over your mouth and breathe in tiny, careful sips.\\n\\nThrough the crack beneath the blanket you can see the cottage in flickering orange slices. Mother is gone. Ros is gone. The back door swings open on its leather hinge, creaking softly \u2014 they got out, they must have got out, you tell yourself, you tell yourself again.\\n\\nThen the front door bursts inward with a sound like a thunderclap.\\n\\nFather fills the doorway with his axe raised, a dark shape against the roaring orange outside. He looks enormous. He looks like he could stop anything. There are voices \u2014 rough, laughing voices \u2014 and a scuffle that shakes the whole cottage, and then a sound you will never forget, and then silence, and then Father is on the floor and he is not moving and the boots of two bandits are stepping over him like he is a piece of furniture.\\n\\nYou do not scream. You do not know how you do not scream.\\n\\nThe boots move through the cottage, kicking things over, and then they leave, and the orange light grows brighter, and you realise with a cold, creeping horror that the thatch above you has begun to catch.\\n\\nThe back door is still open. Cool night air breathes through it, and somewhere beyond it \u2014 in the square, in the dark \u2014 you can hear voices crying out. Mother and Ros are out there somewhere.\"",
+    "output": "```json\n{\n  \"labels\": {\n    \"raid_response\": \"hid\"\n  }\n}\n```",
+    "stop_reason": "end_turn",
+    "input_tokens": 682,
+    "output_tokens": 31,
+    "duration_ms": 726
+   }
+  ],
+  "resolution": {
+   "labels": {
+    "raid_response": "hid"
+   }
+  },
+  "transition": {
+   "DialogueText": "When the shouting finally stops, the silence is worse. Grey ash drifts down over the Woods' Edge like snow.\n\nA tall figure in a travel-stained cloak kneels beside you in the ashes.\nStranger: Easy, little one. The bandits are gone.\nStranger: My name is Holloway. I keep the Heroes' Guild. There is nothing left for you here, but there could be something for you there.",
+   "FromNodeID": "bandit_raid",
+   "ObjectiveEvents": null,
+   "RunEnded": false,
+   "ToNodeID": "rescue",
+   "Transitioned": true
+  },
+  "events": [
+   {
+    "type": "death",
+    "message": "Tomas has been slain."
+   },
+   {
+    "type": "scene_started",
+    "message": "The Stranger in the Ashes"
+   },
+   {
+    "type": "campaign_progress",
+    "message": "Objective updated: Answer the stranger."
+   }
+  ],
+  "frames": [
+   {
+    "type": "narrative_chunk",
+    "count": 191
+   },
+   {
+    "type": "narrative_end"
+   },
+   {
+    "type": "narrative_chunk",
+    "payload": {
+     "content": "When the shouting finally stops, the silence is worse. Grey ash drifts down over the Woods' Edge like snow.\n\nA tall figure in a travel-stained cloak kneels beside you in the ashes.\nStranger: Easy, little one. The bandits are gone.\nStranger: My name is Holloway. I keep the Heroes' Guild. There is nothing left for you here, but there could be something for you there."
+    }
+   },
+   {
+    "type": "narrative_end"
+   },
+   {
+    "type": "state_delta",
+    "payload": {
+     "campaign": {
+      "active_dialogue": {
+       "asset_id": "rescue",
+       "awaiting_choice": true,
+       "current_node": "Rescue",
+       "pending_choices": [
+        {
+         "id": 0,
+         "text": "Take his hand."
+        },
+        {
+         "id": 1,
+         "text": "No! I have to find my family!"
+        }
+       ]
+      },
+      "active_node_id": "rescue",
+      "active_node_title": "The Stranger in the Ashes",
+      "active_objectives": [
+       {
+        "id": "hear_father",
+        "status": "completed",
+        "visible_text": "Listen to Father"
+       },
+       {
+        "id": "earn_coins",
+        "status": "completed",
+        "visible_text": "Earn Some Coin"
+       },
+       {
+        "id": "return_doll",
+        "status": "completed",
+        "visible_text": "Bess's Lost Doll"
+       },
+       {
+        "id": "miller_secret",
+        "status": "failed",
+        "visible_text": "The Miller's Secret"
+       },
+       {
+        "id": "meadow_bully",
+        "status": "completed",
+        "visible_text": "Trouble in the Meadow"
+       },
+       {
+        "id": "buy_gift",
+        "status": "completed",
+        "visible_text": "Buy Ros a Gift"
+       },
+       {
+        "id": "give_gift",
+        "status": "completed",
+        "visible_text": "Happy Birthday, Ros"
+       },
+       {
+        "id": "survive_raid",
+        "status": "completed",
+        "visible_text": "Survive the Night"
+       }
+      ],
+      "bool_flags": {
+       "gift_given": true,
+       "stayed_hidden": true
+      },
+      "campaign_id": "briarwell",
+      "campaign_version": "1",
+      "current_objective": "Answer the stranger.",
+      "labels": {
+       "attitude": "eager",
+       "deed_bully": "stopped",
+       "deed_doll": "returned",
+       "gift": "ribbon",
+       "raid_response": "hid"
+      }
+     },
+     "current_room": {
+      "connections": {
+       "north": "meadow"
+      },
+      "coordinates": {
+       "x": 100,
+       "y": 200,
+       "z": 0
+      },
+      "description": "A hollow under an old oak at the treeline, a good place to hide.",
+      "discovered": true,
+      "id": "woods_edge",
+      "items": [],
+      "name": "Woods' Edge",
+      "occupants": [
+       {
+        "alive": true,
+        "description": "A village boy two years older than the player, who bullies the smaller children.",
+        "equipment": {},
+        "friendly": true,
+        "health": 100,
+        "id": "bully",
+        "inventory": [],
+        "max_health": 100,
+        "name": "Dunstan",
+        "scale": 0.85
+       }
+      ],
+      "points_of_interest": [
+       {
+        "id": "old_oak",
+        "name": "Old oak hollow"
+       }
+      ]
+     },
+     "events": [
+      {
+       "message": "Tomas has been slain.",
+       "type": "death"
+      },
+      {
+       "message": "The Stranger in the Ashes",
+       "type": "scene_started"
+      },
+      {
+       "message": "Objective updated: Answer the stranger.",
+       "type": "campaign_progress"
+      }
+     ],
+     "player": {
+      "alive": true,
+      "description": "You are a child of about ten growing up in the village of Briarwell, with a gruff, loving father, a patient mother, and a younger sister whose birthday is today.",
+      "equipment": {},
+      "friendly": true,
+      "health": 100,
+      "id": "da246c58-0fed-47be-b6b4-7d684ee958c3",
+      "inventory": [
+       {
+        "description": "A small, finely carved wooden horse, worn smooth by a child's hands",
+        "equippable": false,
+        "id": "8a059bf8-15d0-427c-900b-211d89fba4fe",
+        "name": "carved wooden horse",
+        "weight": 1
+       },
+       {
+        "description": "A faded rag doll with a blue dress and yarn hair the colour of straw. It belongs to Little Bess.",
+        "equippable": false,
+        "id": "7865b333-db17-45bf-8843-fe6c7e566af8",
+        "name": "rag doll",
+        "weight": 1
+       }
+      ],
+      "max_health": 100,
+      "name": "Wren",
+      "scale": 0.8
+     },
+     "self": {
+      "alive": true,
+      "description": "You are a child of about ten growing up in the village of Briarwell, with a gruff, loving father, a patient mother, and a younger sister whose birthday is today.",
+      "equipment": {},
+      "friendly": true,
+      "health": 100,
+      "id": "da246c58-0fed-47be-b6b4-7d684ee958c3",
+      "inventory": [
+       {
+        "description": "A small, finely carved wooden horse, worn smooth by a child's hands",
+        "equippable": false,
+        "id": "8a059bf8-15d0-427c-900b-211d89fba4fe",
+        "name": "carved wooden horse",
+        "weight": 1
+       },
+       {
+        "description": "A faded rag doll with a blue dress and yarn hair the colour of straw. It belongs to Little Bess.",
+        "equippable": false,
+        "id": "7865b333-db17-45bf-8843-fe6c7e566af8",
+        "name": "rag doll",
+        "weight": 1
+       }
+      ],
+      "max_health": 100,
+      "name": "Wren",
+      "scale": 0.8
+     },
+     "updated_rooms": {
+      "family_cottage": {
+       "connections": {
+        "east": "village_square"
+       },
+       "coordinates": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+       },
+       "description": "The thatch roof is ablaze with orange flames, filling the cottage with heat and choking smoke. The front door hangs open, revealing the inferno outside. The back door also stands open, offering a path to the cool night air and the Village Square beyond. Tomas lies motionless on the floor, overcome by the bandits. Dust, woodsmoke, and the acrid smell of burning thatch fill the air.",
+       "discovered": true,
+       "id": "family_cottage",
+       "items": [],
+       "name": "Family Cottage",
+       "occupants": [
+        {
+         "alive": false,
+         "description": "The player's father. A woodcutter, gentle but firm, who wants his child to grow up honest.",
+         "equipment": {},
+         "friendly": true,
+         "health": 0,
+         "id": "father",
+         "inventory": [],
+         "max_health": 100,
+         "name": "Tomas"
+        },
+        {
+         "alive": true,
+         "description": "The player's mother. Warm and practical; she runs the household and bakes for every birthday.",
+         "equipment": {},
+         "friendly": true,
+         "health": 100,
+         "id": "mother",
+         "inventory": [],
+         "max_health": 100,
+         "name": "Elin"
+        },
+        {
+         "alive": true,
+         "description": "The player's little sister, turning seven today. Adores her older sibling.",
+         "equipment": {},
+         "friendly": true,
+         "health": 100,
+         "id": "sister",
+         "inventory": [],
+         "max_health": 100,
+         "name": "Ros",
+         "scale": 0.65
+        }
+       ],
+       "points_of_interest": [
+        {
+         "id": "hearth",
+         "name": "Hearth"
+        },
+        {
+         "id": "front_door",
+         "name": "Front door"
+        },
+        {
+         "id": "garden_gate",
+         "name": "Garden gate"
+        }
+       ]
+      },
+      "market_lane": {
+       "connections": {
+        "south": "village_square"
+       },
+       "coordinates": {
+        "x": 100,
+        "y": -100,
+        "z": 0
+       },
+       "description": "Old Garrick's stall of sweets, ribbons, and whittled trinkets.",
+       "discovered": true,
+       "id": "market_lane",
+       "items": [],
+       "name": "Market Lane",
+       "occupants": [
+        {
+         "alive": true,
+         "description": "An old trader who has kept a stall on Market Lane for decades. Kind to children, fair with prices.",
+         "equipment": {},
+         "friendly": true,
+         "health": 100,
+         "id": "trader",
+         "inventory": [],
+         "max_health": 100,
+         "name": "Old Garrick"
+        }
+       ],
+       "points_of_interest": [
+        {
+         "id": "garricks_stall",
+         "name": "Garrick's stall"
+        }
+       ]
+      },
+      "meadow": {
+       "connections": {
+        "north": "village_square",
+        "south": "woods_edge"
+       },
+       "coordinates": {
+        "x": 100,
+        "y": 100,
+        "z": 0
+       },
+       "description": "Long grass where the village children play, and where Dunstan does his bullying.",
+       "discovered": true,
+       "id": "meadow",
+       "items": [],
+       "name": "Meadow",
+       "occupants": [
+        {
+         "alive": true,
+         "description": "A small boy, younger than Wren, with tear-streaked cheeks and wide hopeful eyes",
+         "equipment": {},
+         "friendly": true,
+         "health": 100,
+         "id": "ff1df283-307c-4832-ae8e-905bc949c60d",
+         "inventory": [],
+         "max_health": 100,
+         "name": "boy",
+         "scale": 0.6
+        },
+        {
+         "alive": true,
+         "description": "A small girl, younger than Wren, with wide eyes full of hope as she looks toward Wren",
+         "equipment": {},
+         "friendly": true,
+         "health": 100,
+         "id": "a5e79a68-b048-48d3-a567-e000c7bcd5d6",
+         "inventory": [],
+         "max_health": 100,
+         "name": "girl",
+         "scale": 0.6
+        }
+       ],
+       "points_of_interest": [
+        {
+         "id": "old_fence_post",
+         "name": "Old fence post"
+        },
+        {
+         "id": "long_grass",
+         "name": "Long grass"
+        }
+       ]
+      },
+      "old_mill": {
+       "connections": {
+        "west": "village_square"
+       },
+       "coordinates": {
+        "x": 200,
+        "y": 0,
+        "z": 0
+       },
+       "description": "The miller's water wheel, and a barn behind it where people meet who should not.",
+       "discovered": false,
+       "id": "old_mill",
+       "items": [],
+       "name": "Old Mill",
+       "occupants": [
+        {
+         "alive": true,
+         "description": "The village miller, married, who slips away to secret meetings behind his barn.",
+         "equipment": {},
+         "friendly": true,
+         "health": 100,
+         "id": "miller",
+         "inventory": [],
+         "max_health": 100,
+         "name": "Hob the Miller"
+        }
+       ],
+       "points_of_interest": [
+        {
+         "id": "water_wheel",
+         "name": "Water wheel"
+        },
+        {
+         "id": "barn",
+         "name": "Barn"
+        }
+       ]
+      },
+      "village_square": {
+       "connections": {
+        "east": "old_mill",
+        "north": "market_lane",
+        "south": "meadow",
+        "west": "family_cottage"
+       },
+       "coordinates": {
+        "x": 100,
+        "y": 0,
+        "z": 0
+       },
+       "description": "A stone well, a few market-day benches, and gossiping neighbours.",
+       "discovered": true,
+       "id": "village_square",
+       "items": [],
+       "name": "Village Square",
+       "occupants": [
+        {
+         "alive": true,
+         "description": "A small village girl, younger than Ros, crying because she lost her rag doll.",
+         "equipment": {},
+         "friendly": true,
+         "health": 100,
+         "id": "bess",
+         "inventory": [],
+         "max_health": 100,
+         "name": "Little Bess",
+         "scale": 0.6
+        }
+       ],
+       "points_of_interest": [
+        {
+         "id": "stone_well",
+         "name": "Stone well"
+        },
+        {
+         "id": "market_benches",
+         "name": "Market benches"
+        }
+       ]
+      },
+      "woods_edge": {
+       "connections": {
+        "north": "meadow"
+       },
+       "coordinates": {
+        "x": 100,
+        "y": 200,
+        "z": 0
+       },
+       "description": "A hollow under an old oak at the treeline, a good place to hide.",
+       "discovered": true,
+       "id": "woods_edge",
+       "items": [],
+       "name": "Woods' Edge",
+       "occupants": [
+        {
+         "alive": true,
+         "description": "A village boy two years older than the player, who bullies the smaller children.",
+         "equipment": {},
+         "friendly": true,
+         "health": 100,
+         "id": "bully",
+         "inventory": [],
+         "max_health": 100,
+         "name": "Dunstan",
+         "scale": 0.85
+        }
+       ],
+       "points_of_interest": [
+        {
+         "id": "old_oak",
+         "name": "Old oak hollow"
+        }
+       ]
+      }
+     }
+    }
+   }
+  ]
+ }
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -167,5 +168,43 @@ func TestRecordedPipelineRepeatsTheOriginal(t *testing.T) {
 		replay(context.Background(), save, []*trace.Turn{tr})
 	if results[0].Output.Narrative != "You burst from the grass." || results[0].Err != nil {
 		t.Fatalf("recorded pipeline should return the original narration, got %+v", results[0])
+	}
+}
+
+func TestReferenceTurnsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	world, _ := json.Marshal(game.SaveState{SessionID: "abcdef12-session", Title: "T"})
+	chat := &trace.Turn{SessionID: "abcdef12-session", Kind: trace.KindChat, Input: "look", UserID: "cognito-sub", ConnectionID: "conn", Before: &trace.Snapshot{World: world}}
+	choice := &trace.Turn{SessionID: "abcdef12-session", Kind: trace.KindDialogueChoice, Before: &trace.Snapshot{World: world}}
+	bare := &trace.Turn{SessionID: "abcdef12-session", Kind: trace.KindChat, Before: &trace.Snapshot{}}
+	save := game.SaveState{SessionID: "abcdef12-session", Title: "T"}
+
+	written, err := saveReference(dir, save, []*trace.Turn{chat, choice, bare}, []int{1}, "baseline")
+	if err != nil || len(written) != 1 || !strings.HasSuffix(written[0], "abcdef12-01.json") {
+		t.Fatalf("save: %v %v", written, err)
+	}
+	if _, err := saveReference(dir, save, []*trace.Turn{chat, choice, bare}, []int{2}, ""); err == nil {
+		t.Fatal("a dialogue_choice turn has nothing to replay and should be refused")
+	}
+	if _, err := saveReference(dir, save, []*trace.Turn{chat, choice, bare}, []int{3}, ""); err == nil {
+		t.Fatal("a turn without a starting world should be refused")
+	}
+
+	refs, err := loadReference(dir)
+	if err != nil || len(refs) != 1 {
+		t.Fatalf("load: %v %v", refs, err)
+	}
+	r := refs[0]
+	if r.Note != "baseline" || r.Turn != 1 || r.Trace.Input != "look" || r.saveFor().Title != "T" {
+		t.Fatalf("round trip lost data: %+v", r)
+	}
+	if r.Trace.UserID != "" || r.Trace.ConnectionID != "" {
+		t.Fatalf("saved turns must not carry who played or on which socket: %+v", r.Trace)
+	}
+	if got, err := parseTurns("2, 3,5", 9); err != nil || len(got) != 3 || got[2] != 5 {
+		t.Fatalf("parseTurns: %v %v", got, err)
+	}
+	if _, err := parseTurns("7", 3); err == nil {
+		t.Fatal("out-of-range turn should fail")
 	}
 }

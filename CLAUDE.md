@@ -247,6 +247,11 @@ Read a session with `go run ./tools/sessiondump [-full] [-json] SESSION_ID` from
 the sessions, mutations and traces tables). See `.github/agents/game-session-debugger.agent.md` for the
 full protocol.
 
+`go run ./tools/replay` reruns traced turns through a story pipeline and reports original vs candidate.
+`server/testdata/turns/` is the saved **reference turn set** (real failure cases, see its README): run it
+with `-from testdata/turns -pipeline recorded` offline, or `-pipeline current` against Bedrock; add turns
+from a session with `-save`.
+
 ## Testing Notes
 
 - `db.New()` requires `SESSIONS_TABLE` env var — set with `t.Setenv()` in handler tests
