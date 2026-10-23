@@ -24,7 +24,17 @@ interface WorldMapProps {
    playerScale?: number;
    expanded?: boolean;
    onExpand?: () => void;
+   /**
+    * "scene" fills the view with the current room only (the main game
+    * screen); "world" fits the whole map; "panel" follows the player at a
+    * crisp zoom. Defaults to world when expanded, else panel.
+    */
+   mode?: MapMode;
+   /** Pixels at the bottom covered by an overlay (the story text box). */
+   insetBottom?: number;
 }
+
+export type MapMode = 'scene' | 'world' | 'panel';
 
 export interface Token {
    id: string;
@@ -56,6 +66,8 @@ export function WorldMap({
    playerScale = 1,
    expanded = false,
    onExpand,
+   mode = expanded ? 'world' : 'panel',
+   insetBottom = 0,
 }: WorldMapProps) {
    const nativeW = art.width * TILE;
    const nativeH = art.height * TILE;
@@ -75,8 +87,11 @@ export function WorldMap({
       return () => observer.disconnect();
    }, []);
 
-   const scale = mapScale(expanded, view, nativeW, nativeH);
-   const offset = cameraOffset(art, currentRoomId, scale, view, expanded);
+   // The visible area: everything above an overlay at the bottom.
+   const area = { w: view.w, h: Math.max(0, view.h - insetBottom) };
+   const scale = mapScale(mode, area, nativeW, nativeH, art, currentRoomId);
+   const offset = cameraOffset(art, currentRoomId, scale, area, mode);
+   const inScene = (roomId: string) => mode !== 'scene' || roomId === currentRoomId;
 
    // Draw terrain and objects once per art.
    useEffect(() => {
@@ -92,8 +107,10 @@ export function WorldMap({
    }, [art, nativeW, nativeH]);
 
    const tokens = useMemo(
-      () => placeTokens(art, rooms, currentRoomId, playerName, playerScale),
-      [art, rooms, currentRoomId, playerName, playerScale],
+      () =>
+         placeTokens(art, rooms, currentRoomId, playerName, playerScale).filter((t) => inScene(t.roomId)),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [art, rooms, currentRoomId, playerName, playerScale, mode],
    );
 
    const px = (tiles: number) => tiles * TILE * scale;
@@ -114,7 +131,9 @@ export function WorldMap({
          )}
          <Box
             ref={containerRef}
-            sx={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', bgcolor: '#0c0810' }}
+            // Its own stacking context, so tokens and fog stay under overlays
+            // (the story text box, the log) drawn over the map.
+            sx={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', bgcolor: '#0c0810', isolation: 'isolate' }}
          >
             <Box
                data-testid="world-map"
@@ -137,8 +156,8 @@ export function WorldMap({
 
                {Object.entries(art.rooms).map(([id, [x, y, w, h]]) => {
                   const room = rooms[id];
-                  const discovered = room?.discovered ?? false;
                   const current = id === currentRoomId;
+                  const discovered = room?.discovered ?? false;
                   return (
                      <Box
                         key={id}
@@ -153,13 +172,14 @@ export function WorldMap({
                            boxSizing: 'border-box',
                            bgcolor: discovered ? 'transparent' : 'rgba(12, 8, 16, 0.88)',
                            // The current room: a gold outline with a soft glow.
-                           boxShadow: current
+                           boxShadow: current && mode !== 'scene'
                               ? `inset 0 0 0 ${Math.max(2, scale)}px #f5d77a, inset 0 0 ${8 * scale}px rgba(201,169,98,0.45)`
                               : 'none',
                            transition: 'background-color 0.6s ease',
                            pointerEvents: 'none',
                         }}
                      >
+                        {mode !== 'scene' && (
                         <Typography
                            sx={{
                               position: 'absolute',
@@ -177,15 +197,34 @@ export function WorldMap({
                         >
                            {discovered ? (room?.name ?? id) : '?'}
                         </Typography>
+                        )}
                      </Box>
                   );
                })}
+
+               {mode === 'scene' && currentRoomId && art.rooms[currentRoomId] && (
+                  // The scene stands out: a window cut out for the current room,
+                  // its shadow dimming the rest of the world around it.
+                  <Box
+                     data-testid="scene-window"
+                     sx={{
+                        position: 'absolute',
+                        left: px(art.rooms[currentRoomId][0]),
+                        top: px(art.rooms[currentRoomId][1]),
+                        width: px(art.rooms[currentRoomId][2]),
+                        height: px(art.rooms[currentRoomId][3]),
+                        boxShadow: '0 0 0 100vmax rgba(8, 5, 12, 0.62)',
+                        pointerEvents: 'none',
+                        zIndex: 1,
+                     }}
+                  />
+               )}
 
                {Object.entries(art.points_of_interest).map(([poiId, [x, y]]) => {
                   const room = Object.values(rooms).find((r) =>
                      r.points_of_interest?.some((p) => p.id === poiId),
                   );
-                  if (!room?.discovered) return null;
+                  if (!room?.discovered || !inScene(room.id)) return null;
                   const poi = room.points_of_interest!.find((p) => p.id === poiId)!;
                   return (
                      <Tooltip key={poiId} title={poi.name}>
@@ -254,13 +293,24 @@ function MapToken({ token, scale }: { token: Token; scale: number }) {
  * across) so pixels stay crisp; expanded, the scale that fits the map.
  */
 export function mapScale(
-   expanded: boolean,
+   mode: MapMode,
    view: { w: number; h: number },
    nativeW: number,
    nativeH: number,
+   art?: MapArt,
+   currentRoomId?: string,
 ): number {
    if (!view.w || !view.h) return 2;
-   if (expanded) return Math.max(0.5, Math.min(view.w / nativeW, view.h / nativeH));
+   if (mode === 'world') return Math.max(0.5, Math.min(view.w / nativeW, view.h / nativeH));
+   const rect = currentRoomId ? art?.rooms[currentRoomId] : undefined;
+   if (mode === 'scene' && rect) {
+      // The biggest whole-number zoom that fits the room with a tile of
+      // margin, but never so small that the map can't fill the view: a wide
+      // room then overflows the view at the sides, like a camera pan.
+      const fit = Math.min(view.w / ((rect[2] + 1) * TILE), view.h / ((rect[3] + 1) * TILE));
+      const fill = Math.max(view.w / (art!.width * TILE), view.h / (art!.height * TILE));
+      return Math.max(2, Math.ceil(fill), Math.floor(fit));
+   }
    return Math.max(2, Math.round(view.w / (FOLLOW_TILES * TILE)));
 }
 
@@ -274,13 +324,13 @@ export function cameraOffset(
    currentRoomId: string | undefined,
    scale: number,
    view: { w: number; h: number },
-   expanded: boolean,
+   mode: MapMode,
 ): { x: number; y: number } {
    const mapW = art.width * TILE * scale;
    const mapH = art.height * TILE * scale;
    const rect = currentRoomId ? art.rooms[currentRoomId] : undefined;
    const axis = (viewLen: number, mapLen: number, focus: number) => {
-      if (expanded || mapLen <= viewLen || !rect) return (viewLen - mapLen) / 2;
+      if (mode === 'world' || mapLen <= viewLen || !rect) return (viewLen - mapLen) / 2;
       const ideal = viewLen / 2 - focus;
       return Math.min(0, Math.max(viewLen - mapLen, ideal));
    };

@@ -28,22 +28,18 @@ const fillBelowHeader = (() => {
 })();
 
 /**
- * The game screen's panels: map, story stage, and player info. Purely
- * presentational so the layout can be rendered and checked on its own.
+ * The game screen: the scene (map, with the story over it) as the main view,
+ * and player info on the right. Purely presentational.
  */
 export function GameLayout({
-   map,
-   stage,
+   scene,
    alerts,
    info,
-   mapExpanded,
    children,
 }: {
-   map: ReactNode;
-   stage: ReactNode;
+   scene: ReactNode;
    alerts?: ReactNode;
    info: ReactNode;
-   mapExpanded: boolean;
    /** Overlays such as toasts. */
    children?: ReactNode;
 }) {
@@ -68,48 +64,12 @@ export function GameLayout({
             boxSizing: 'border-box',
          }}
       >
-         {/* Left — Map (a third, as Roadwarden's illustration pane → 75% expanded, covering the stage) */}
-         <Box
-            sx={{
-               flex: mapExpanded ? '0 0 75%' : '0 0 33%',
-               minWidth: 0,
-               display: 'flex',
-               flexDirection: 'column',
-               gap: 2,
-               transition: 'flex-basis 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-         >
-            <Paper
-               sx={{
-                  flex: 1,
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                  ...panelHover,
-               }}
-            >
-               {map}
-            </Paper>
-         </Box>
-         {/* Center — Stage (42% normal → hidden when the map is expanded) */}
-         <Box
-            sx={{
-               flex: mapExpanded ? '0 0 0%' : '0 0 42%',
-               minWidth: 0,
-               display: 'flex',
-               flexDirection: 'column',
-               overflow: 'hidden',
-               opacity: mapExpanded ? 0 : 1,
-               pointerEvents: mapExpanded ? 'none' : 'auto',
-               transition:
-                  'flex-basis 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease',
-            }}
-         >
-            <Paper sx={{ flex: 1, overflow: 'hidden', ...panelHover }}>{stage}</Paper>
+         {/* Main — the scene, with the story text box over it */}
+         <Box sx={{ flex: '1 1 75%', minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <Paper sx={{ flex: 1, overflow: 'hidden', p: 0, ...panelHover }}>{scene}</Paper>
             {alerts}
          </Box>
-         {/* Right — Game Info (25%, always visible) */}
+         {/* Right — Game Info */}
          <Box sx={{ flex: '0 0 25%', minWidth: 0, display: 'flex', gap: 2 }}>
             <Paper
                sx={{
@@ -122,14 +82,6 @@ export function GameLayout({
             >
                {info}
             </Paper>
-            <Box
-               sx={{
-                  width: '4px',
-                  backgroundColor: '#000',
-                  opacity: 0.5,
-                  borderRadius: '2px',
-               }}
-            />
          </Box>
          {children}
       </Box>

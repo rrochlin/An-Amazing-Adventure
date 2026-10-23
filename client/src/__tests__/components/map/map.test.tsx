@@ -144,20 +144,44 @@ describe('camera', () => {
    const art = BRIARWELL_ART; // 26x30 tiles = 416x480 px at 1x
 
    it('zooms the panel in whole steps, at least 2x; expanded fits the map', () => {
-      expect(mapScale(false, { w: 375, h: 680 }, 416, 480)).toBe(2);
-      expect(mapScale(false, { w: 600, h: 900 }, 416, 480)).toBe(3);
-      expect(mapScale(true, { w: 900, h: 668 }, 416, 480)).toBeCloseTo(668 / 480);
+      expect(mapScale('panel', { w: 375, h: 680 }, 416, 480)).toBe(2);
+      expect(mapScale('panel', { w: 600, h: 900 }, 416, 480)).toBe(3);
+      expect(mapScale('world', { w: 900, h: 668 }, 416, 480)).toBeCloseTo(668 / 480);
    });
 
    it("centres the current room, but never shows past the map's edges", () => {
       const view = { w: 375, h: 680 };
       // Village square: [8, 9, 10, 8] → centre (13, 13) tiles → 416 px at 2x.
-      const square = cameraOffset(art, 'village_square', 2, view, false);
+      const square = cameraOffset(art, 'village_square', 2, view, 'panel');
       expect(square.x).toBe(375 / 2 - 13 * 16 * 2);
       // Woods' Edge sits at the bottom: the camera stops at the map's bottom edge.
-      const woods = cameraOffset(art, 'woods_edge', 2, view, false);
+      const woods = cameraOffset(art, 'woods_edge', 2, view, 'panel');
       expect(woods.y).toBe(680 - 30 * 16 * 2);
       // Expanded: the whole map is centred.
-      expect(cameraOffset(art, 'meadow', 1, { w: 900, h: 700 }, true)).toEqual({ x: (900 - 416) / 2, y: (700 - 480) / 2 });
+      expect(cameraOffset(art, 'meadow', 1, { w: 900, h: 700 }, 'world')).toEqual({ x: (900 - 416) / 2, y: (700 - 480) / 2 });
+   });
+});
+
+describe('scene mode', () => {
+   it('fills the view with the current room at a whole-number zoom', () => {
+      // Village square is 10x8 tiles; with a tile of margin, 11x9 = 176x144 px at 1x.
+      expect(mapScale('scene', { w: 900, h: 450 }, 416, 480, BRIARWELL_ART, 'village_square')).toBe(3);
+      const offset = cameraOffset(BRIARWELL_ART, 'village_square', 3, { w: 900, h: 450 }, 'scene');
+      // The room's centre, (13, 13) tiles, lands in the middle of the view.
+      expect(offset).toEqual({ x: 450 - 13 * 16 * 3, y: 225 - 13 * 16 * 3 });
+   });
+
+   it('frames the current room: the rest dimmed, no one and no places outside it', () => {
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+      render(
+         <ThemeProvider theme={AppTheme}>
+            <WorldMap art={BRIARWELL_ART} rooms={rooms} currentRoomId="village_square" playerName="Wren" mode="scene" />
+         </ThemeProvider>,
+      );
+      expect(screen.getByTestId('scene-window')).toBeInTheDocument();
+      // Discovery still shows through the dimming; the cottage is discovered.
+      expect(screen.getByTestId('map-room-family_cottage')).toHaveAttribute('data-discovered', 'true');
+      expect(screen.getAllByTestId('map-token').map((t) => t.getAttribute('aria-label')).sort()).toEqual(['Little Bess', 'Wren']);
+      expect(screen.getByLabelText('Stone well')).toBeInTheDocument();
    });
 });
