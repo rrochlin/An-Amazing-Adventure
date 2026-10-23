@@ -1,6 +1,42 @@
 import type { MapArt } from '../mapArt';
 
 /**
+ * Inside the family cottage (scene map cottage_interior): one room under the
+ * thatch. The north wall has the hearth and two windows, the door is in the
+ * south wall, and the floor is packed earth.
+ */
+const COTTAGE_INTERIOR: MapArt = {
+   width: 12,
+   height: 9,
+   interior: true,
+   ground: [
+      "____________",
+      "____________",
+      "_ffffffffff_",
+      "_ffffffffff_",
+      "_ffffffffff_",
+      "_ffffffffff_",
+      "_ffffffffff_",
+      "_ffffffffff_",
+      "____________",
+   ],
+   objects: [
+      " reeeeeeeen ",
+      " LWMFMMMWMK ",
+      "    Q   BB  ",
+      "            ",
+      "    tTTt B  ",
+      "            ",
+      " C          ",
+      " %  S       ",
+      " LMMMDMMMMK ",
+   ],
+   rooms: { family_cottage: [0, 0, 12, 9] },
+   points_of_interest: { hearth: [4, 1], front_door: [5, 8] },
+   cast: {},
+};
+
+/**
  * Briarwell, the village of the Fable-opening campaign. Rooms and points of
  * interest match server/campaigns/briarwell/campaign.json. Legend: mapArt.ts.
  */
@@ -104,4 +140,5 @@ export const BRIARWELL_ART: MapArt = {
       bandit_leader: { sprite: 112 },
       guild_master: { sprite: 84 },
    },
+   interiors: { cottage_interior: COTTAGE_INTERIOR },
 };

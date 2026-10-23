@@ -13,6 +13,7 @@ import {
    TOWN_SHEET,
    sheetOffset,
    type MapArt,
+   type TileRef,
 } from './mapArt';
 
 interface WorldMapProps {
@@ -111,17 +112,28 @@ export function WorldMap({
    const gliding = useGlide(ready ? currentRoomId : undefined);
 
    // Draw terrain and objects once per art (padded in a scene).
-   const pad = mode === 'scene' ? SCENE_PAD : 0;
+   // An interior stands alone in the dark: nothing continues past its walls.
+   const pad = mode === 'scene' && !art.interior ? SCENE_PAD : 0;
    useEffect(() => {
       const ctx = canvasRef.current?.getContext('2d');
       if (!ctx) return;
-      const sheet = new Image();
-      sheet.onload = () => {
+      let cancelled = false;
+      const load = (src: string) =>
+         new Promise<HTMLImageElement>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.src = src;
+         });
+      Promise.all([load(TOWN_SHEET), load(DUNGEON_SHEET)]).then(([town, dungeon]) => {
+         if (cancelled) return;
+         const sheets = { town, dungeon };
          ctx.clearRect(0, 0, (art.width + 2 * pad) * TILE, (art.height + 2 * pad) * TILE);
-         drawLayer(ctx, sheet, art.ground, GROUND_TILES, pad);
-         drawLayer(ctx, sheet, art.objects, OBJECT_TILES, pad, true);
+         drawLayer(ctx, sheets, art.ground, GROUND_TILES, pad);
+         drawLayer(ctx, sheets, art.objects, OBJECT_TILES, pad, true);
+      });
+      return () => {
+         cancelled = true;
       };
-      sheet.src = TOWN_SHEET;
    }, [art, pad]);
 
    // Characters keep their tiles from one update to the next.
@@ -367,6 +379,8 @@ export function mapScale(
       // margin, but never so small that the map can't fill the view: a wide
       // room then overflows the view at the sides, like a camera pan.
       const fit = Math.min(view.w / ((rect[2] + 1) * TILE), view.h / ((rect[3] + 1) * TILE));
+      // An interior is fitted whole, with the dark around it.
+      if (art!.interior) return Math.max(2, Math.floor(fit));
       const fill = Math.max(view.w / (art!.width * TILE), view.h / (art!.height * TILE));
       return Math.max(2, Math.ceil(fill), Math.floor(fit));
    }
@@ -414,9 +428,9 @@ const CONTINUES = new Set('123456789');
  */
 function drawLayer(
    ctx: CanvasRenderingContext2D,
-   sheet: HTMLImageElement,
+   sheets: { town: HTMLImageElement; dungeon: HTMLImageElement },
    rows: string[],
-   legend: Record<string, number>,
+   legend: Record<string, TileRef>,
    pad = 0,
    objects = false,
 ) {
@@ -428,8 +442,10 @@ function drawLayer(
          const outside = y < 0 || y >= h || x < 0 || x >= w;
          const ch = rows[clamp(y, h)]?.[clamp(x, w)];
          if (ch === undefined || (outside && objects && !CONTINUES.has(ch))) continue;
-         const index = legend[ch];
-         if (index === undefined) continue;
+         const ref = legend[ch];
+         if (ref === undefined) continue;
+         const [sheet, index] = typeof ref === 'number' ? [sheets.town, ref] : [sheets.dungeon, ref.dungeon];
+         if (index < 0) continue;
          const [sx, sy] = sheetOffset(index);
          ctx.drawImage(sheet, sx, sy, TILE, TILE, (x + pad) * TILE, (y + pad) * TILE, TILE, TILE);
       }

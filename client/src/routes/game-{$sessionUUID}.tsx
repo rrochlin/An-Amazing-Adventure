@@ -530,6 +530,7 @@ function GamePage() {
                }
                rooms={gameState?.rooms ?? {}}
                currentRoomId={gameState?.current_room?.id}
+               sceneMap={campaignState?.active_scene_map}
                playerName={gameState?.self?.name}
                playerScale={gameState?.self?.scale || 1}
                location={gameState?.current_room?.name}

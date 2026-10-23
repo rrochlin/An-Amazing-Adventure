@@ -22,7 +22,24 @@ export interface MapArt {
    points_of_interest: Record<string, [number, number]>;
    /** Character ID (actor ID, or "player") → sprite. */
    cast: Record<string, CastSprite>;
+   /**
+    * An interior: drawn on its own, with no terrain continuing past its edge,
+    * and fitted to the view rather than filling it.
+    */
+   interior?: boolean;
+   /**
+    * Interiors by scene map ID (campaign.json map.scene_maps). Each covers
+    * one campaign room; a scene played on it shows it in place of the room.
+    */
+   interiors?: Record<string, MapArt>;
 }
+
+/**
+ * A tile: an index in the Tiny Town sheet, or `{ dungeon: n }` for the Tiny
+ * Dungeon sheet (indoor furniture). A negative index is empty (an interior's
+ * surroundings).
+ */
+export type TileRef = number | { dungeon: number };
 
 export interface CastSprite {
    /** Tile index in the Tiny Dungeon sheet. */
@@ -35,7 +52,9 @@ export const TOWN_SHEET = townSheet;
 export const DUNGEON_SHEET = dungeonSheet;
 
 /** Ground characters → Tiny Town tile index. */
-export const GROUND_TILES: Record<string, number> = {
+export const GROUND_TILES: Record<string, TileRef> = {
+   '_': -1, // nothing: outside an interior
+   f: 25, // earthen floor
    '.': 0, // grass
    ',': 1, // grass tufts
    '*': 2, // flowers
@@ -47,7 +66,7 @@ export const GROUND_TILES: Record<string, number> = {
 };
 
 /** Object characters → Tiny Town tile index. */
-export const OBJECT_TILES: Record<string, number> = {
+export const OBJECT_TILES: Record<string, TileRef> = {
    O: 16, // round tree
    P: 28, // pine
    Y: 3, // autumn tree
@@ -75,6 +94,14 @@ export const OBJECT_TILES: Record<string, number> = {
    '=': 106, // log bench
    '?': 83, // signpost
    p: 116, // pitchfork
+   // indoors
+   F: { dungeon: 28 }, // hearth
+   Q: 107, // cooking pot
+   T: { dungeon: 72 }, // table
+   t: { dungeon: 73 }, // stool
+   B: { dungeon: 66 }, // straw pallet (bed)
+   C: { dungeon: 89 }, // chest
+   S: { dungeon: 63 }, // shelves
 };
 
 /** Sprites for characters a campaign doesn't cast. */
@@ -87,6 +114,21 @@ const ART: Record<string, MapArt> = {
 /** The pixel-art map for a campaign, if it has one. */
 export function mapArtFor(campaignId: string | undefined): MapArt | undefined {
    return campaignId ? ART[campaignId] : undefined;
+}
+
+/**
+ * The art to draw for the current scene: the scene's interior while the
+ * player is in the room it belongs to, else the campaign's map. Interiors
+ * share the campaign's cast.
+ */
+export function sceneArt(
+   art: MapArt | undefined,
+   sceneMap: { id: string; room_id: string } | null | undefined,
+   currentRoomId: string | undefined,
+): MapArt | undefined {
+   if (!art || !sceneMap || sceneMap.room_id !== currentRoomId) return art;
+   const inside = art.interiors?.[sceneMap.id];
+   return inside ? { ...inside, cast: { ...art.cast, ...inside.cast } } : art;
 }
 
 /** Top-left pixel of a tile in a 12-column sheet. */

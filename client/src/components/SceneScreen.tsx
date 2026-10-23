@@ -5,10 +5,10 @@ import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import CloseIcon from '@mui/icons-material/Close';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { ObjectiveStateView, RoomView } from '@/types/types';
+import type { ObjectiveStateView, RoomView, SceneMapView } from '@/types/types';
 import { QuestList } from './QuestList';
 import { WorldMap } from './map/WorldMap';
-import type { MapArt } from './map/mapArt';
+import { sceneArt, type MapArt } from './map/mapArt';
 
 /** Share of the scene's height the story text box is expected to cover. */
 const TEXT_BOX_SHARE = 0.38;
@@ -19,6 +19,8 @@ interface SceneScreenProps {
    fallback?: ReactNode;
    rooms: Record<string, RoomView>;
    currentRoomId?: string;
+   /** The interior the scene is played on, if any (shown while the player is in its room). */
+   sceneMap?: SceneMapView | null;
    playerName?: string;
    playerScale?: number;
    location?: string;
@@ -46,6 +48,7 @@ export function SceneScreen({
    fallback,
    rooms,
    currentRoomId,
+   sceneMap,
    playerName,
    playerScale,
    location,
@@ -57,6 +60,8 @@ export function SceneScreen({
    onDetails,
 }: SceneScreenProps) {
    const [logOpen, setLogOpen] = useState(false);
+   const shown = sceneArt(art, sceneMap, currentRoomId);
+   const indoors = !!shown?.interior;
    const [journalOpen, setJournalOpen] = useState(false);
    const [worldOpen, setWorldOpen] = useState(false);
 
@@ -144,9 +149,12 @@ export function SceneScreen({
          data-testid="scene-screen"
          sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: '#08050c', display: 'flex' }}
       >
-         {art ? (
+         {shown ? (
             <WorldMap
-               art={art}
+               // A new map (stepping inside or out) starts fresh: no pan
+               // across from where the other map left off.
+               key={indoors ? `inside:${sceneMap?.id}` : 'outside'}
+               art={shown}
                rooms={rooms}
                currentRoomId={currentRoomId}
                playerName={playerName}
@@ -181,7 +189,7 @@ export function SceneScreen({
             }}
          >
             <Typography sx={{ fontFamily: 'Cinzel, Georgia, serif', color: 'primary.main', fontSize: '1rem' }}>
-               {location ?? 'Unknown place'}
+               {(indoors ? sceneMap?.name : location) ?? 'Unknown place'}
                {sceneTitle && (
                   <Typography component="span" sx={{ color: 'text.secondary', fontSize: '0.85rem', ml: 1 }}>
                      · {sceneTitle}
