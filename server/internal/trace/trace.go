@@ -93,6 +93,19 @@ type Snapshot struct {
 	// Campaign is the full campaign runtime state (node, objectives, flags,
 	// labels, dialogue), copied so later mutation can't change it.
 	Campaign json.RawMessage `json:"campaign,omitempty"`
+	// World is the whole saved game at the start of a chat turn (see
+	// WorldOf), so the turn can be rebuilt and replayed. Before only.
+	World json.RawMessage `json:"world,omitempty"`
+}
+
+// WorldOf captures a save for replay: everything except the player-facing
+// chat log (unbounded, and kept on the session) and world-gen output. The
+// narrator context stays; it is bounded by trimming.
+func WorldOf(save game.SaveState) json.RawMessage {
+	save.ChatHistory = nil
+	save.WorldGenLogs = nil
+	raw, _ := json.Marshal(save)
+	return raw
 }
 
 // ModelCall is one request to a model and what came back.

@@ -24,6 +24,7 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/story"
 	"github.com/rrochlin/an-amazing-adventure/internal/trace"
 	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
 )
@@ -46,11 +47,8 @@ type dbClient interface {
 	UpdateUserTokens(context.Context, string, int) error
 }
 
-type aiClient interface {
-	NarrateStream(context.Context, *game.Game, []game.NarrativeMessage, string, *campaigns.CampaignDefinition, func(string)) (ai.NarratorResult, error)
-	EngineerScan(context.Context, *game.Game, string) (ai.EngineerResult, error)
-	ResolveCampaignConditions(context.Context, *game.Game, *campaigns.CampaignDefinition, string, string) (ai.CampaignConditionResolutionResult, error)
-}
+// aiClient is the model access the story pipeline needs.
+type aiClient = story.Models
 
 type wsSender interface {
 	Send(context.Context, string, wsutil.Frame) error
@@ -63,6 +61,8 @@ var (
 	newDBClient = func(ctx context.Context) (dbClient, error) { return db.New(ctx) }
 	newAIClient = func(ctx context.Context) (aiClient, error) { return ai.New(ctx) }
 	newWSSender = func(ctx context.Context) (wsSender, error) { return wsutil.New(ctx) }
+	// newPipeline picks the story pipeline for a turn.
+	newPipeline = func(models aiClient) story.Pipeline { return story.Current{Models: models} }
 )
 
 type chatRequest struct {
@@ -175,6 +175,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	// Record the whole turn for debugging; stored however the turn ends.
 	tr := trace.Start(trace.KindChat, "ws-chat", conn.GameID, g)
 	tr.RequestID, tr.ConnectionID, tr.UserID, tr.Input = reqID, connID, userID, msg.Content
+	tr.Before.World = trace.WorldOf(saveState) // for replaying the turn
 	defer trace.Save(ctx, dbClient, tr, g)
 	sendError := func(message string) {
 		tr.Errorf("sent error: %s", message)
@@ -243,10 +244,15 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
 
-	// Step 1: Stream narrator prose — broadcast each chunk to all party members.
-	narratorResult, err := aiClient.NarrateStream(
-		ctx, g, saveState.Narrative, msg.Content, campaignDef,
-		func(chunk string) {
+	// Steps 1-3: run the story pipeline. Narration streams to every party
+	// member as it arrives; narrative_end goes out as soon as it's complete,
+	// so the client never waits on the post-narration work.
+	turn, err := newPipeline(aiClient).RunTurn(ctx, story.TurnInput{
+		Game:        g,
+		Campaign:    campaignDef,
+		History:     saveState.Narrative,
+		PlayerInput: msg.Content,
+		OnChunk: func(chunk string) {
 			chunkFrame := wsutil.Frame{
 				Type:    wsutil.FrameNarrativeChunk,
 				Payload: map[string]string{"content": chunk},
@@ -257,70 +263,28 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 				_ = dbClient.DeleteConnection(ctx, s)
 			}
 		},
-	)
-	tr.Call(narratorResult.Calls...)
+		OnNarrationDone: func() {
+			tr.Frame(string(wsutil.FrameNarrativeEnd), "", nil)
+			staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
+			for _, s := range staleEnds {
+				_ = dbClient.DeleteConnection(ctx, s)
+			}
+		},
+	})
+	tr.Call(turn.Calls...)
+	for _, e := range turn.Errors {
+		tr.Errorf("%s", e)
+	}
+	if turn.Resolution != nil {
+		tr.Resolution = *turn.Resolution
+	}
+	if turn.Transition != nil {
+		tr.Transition = *turn.Transition
+	}
 	if err != nil {
-		log.Printf("ws-chat: narrator error: %v", err)
-		tr.Errorf("narrator: %v", err)
+		log.Printf("ws-chat: %v", err)
 		sendError("Narrator error — please try again")
 		return events.APIGatewayProxyResponse{StatusCode: 500}, nil
-	}
-
-	// Step 2: Signal streaming complete — broadcast to all party members.
-	tr.Frame(string(wsutil.FrameNarrativeEnd), "", nil)
-	staleEnds, _ := ws.Broadcast(ctx, allConnIDs, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
-	for _, s := range staleEnds {
-		_ = dbClient.DeleteConnection(ctx, s)
-	}
-
-	// Step 3: Engineer infers world mutations from the narrative and executes them.
-	// Runs after narrative_end so the client never waits on the Engineer for prose.
-	engineerResult, err := aiClient.EngineerScan(ctx, g, narratorResult.Narrative)
-	tr.Call(engineerResult.Calls...)
-	if err != nil {
-		// Non-fatal: log the error but continue — game state may be partially mutated,
-		// but the narrative has already been delivered successfully.
-		log.Printf("ws-chat: engineer scan error: %v", err)
-		tr.Errorf("engineer: %v", err)
-	}
-	authoredDialogueText := ""
-	var sceneEvents []game.WorldEvent
-
-	if campaignDef != nil {
-		resolverResult, resolveErr := aiClient.ResolveCampaignConditions(
-			ctx,
-			g,
-			campaignDef,
-			msg.Content,
-			narratorResult.Narrative,
-		)
-		tr.Call(resolverResult.Calls...)
-		if resolveErr != nil {
-			log.Printf("ws-chat: campaign condition resolution error: %v", resolveErr)
-			tr.Errorf("resolver: %v", resolveErr)
-		} else {
-			tr.Resolution = resolverResult.Resolution
-			turnResult, transitionErr := campaigns.OrchestrateTurn(campaignDef, g, resolverResult.Resolution)
-			if transitionErr != nil {
-				log.Printf("ws-chat: campaign transition error: %v", transitionErr)
-				tr.Errorf("transition: %v", transitionErr)
-			} else {
-				tr.Transition = turnResult.Transition
-				authoredDialogueText = turnResult.Transition.DialogueText
-				// Scene changes belong to the new scene's authored text (so the
-				// client shows the title card before it); everything else stays
-				// with the narration that caused it.
-				for _, e := range turnResult.Events {
-					if authoredDialogueText != "" && isSceneEvent(e) {
-						sceneEvents = append(sceneEvents, e)
-					} else {
-						engineerResult.Events = append(engineerResult.Events, e)
-					}
-				}
-			}
-			engineerResult.Tokens.InputTokens += resolverResult.Tokens.InputTokens
-			engineerResult.Tokens.OutputTokens += resolverResult.Tokens.OutputTokens
-		}
 	}
 
 	// Append chat history — attach world events to the narrative message so they
@@ -329,18 +293,14 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	history = append(history, game.ChatMessage{Type: "player", Content: msg.Content})
 	history = append(history, game.ChatMessage{
 		Type:    "narrative",
-		Content: narratorResult.Narrative,
-		Events:  engineerResult.Events,
+		Content: turn.Narrative,
+		Events:  turn.NarrativeEvents,
 	})
-	if authoredDialogueText != "" {
-		narratorResult.NewMessages = append(narratorResult.NewMessages, game.NarrativeMessage{
-			Role:    "assistant",
-			Content: []game.NarrativeBlock{{Type: "text", Text: authoredDialogueText}},
-		})
-		history = append(history, game.ChatMessage{Type: "narrative", Content: authoredDialogueText, Events: sceneEvents})
+	if turn.AuthoredDialogue != "" {
+		history = append(history, game.ChatMessage{Type: "narrative", Content: turn.AuthoredDialogue, Events: turn.SceneEvents})
 		chunkFrame := wsutil.Frame{
 			Type:    wsutil.FrameNarrativeChunk,
-			Payload: map[string]string{"content": authoredDialogueText},
+			Payload: map[string]string{"content": turn.AuthoredDialogue},
 		}
 		tr.Frame(string(chunkFrame.Type), "", chunkFrame.Payload)
 		stale, _ := ws.Broadcast(ctx, allConnIDs, chunkFrame)
@@ -354,18 +314,18 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		}
 	}
 
-	tr.Events = append(append([]game.WorldEvent(nil), engineerResult.Events...), sceneEvents...)
+	tr.Events = append(append([]game.WorldEvent(nil), turn.NarrativeEvents...), turn.SceneEvents...)
 
 	// Step 4: Persist mutation audit log entries (best-effort — failure is non-fatal).
-	putMutations(ctx, dbClient, engineerResult.Mutations)
+	putMutations(ctx, dbClient, turn.Mutations)
 
 	// Update stats (include both Narrator and Engineer token usage).
 	g.ConversationCount++
-	g.TotalTokens += narratorResult.Tokens.Total() + engineerResult.Tokens.Total()
+	g.TotalTokens += turn.Tokens.Total()
 
 	// Step 5: Persist updated game state with optimistic locking retry.
 	g.Version++
-	saved := g.ToSaveState(narratorResult.NewMessages, history)
+	saved := g.ToSaveState(turn.NewMessages, history)
 	for attempt := 0; attempt < 3; attempt++ {
 		if err := dbClient.PutGame(ctx, saved); err != nil {
 			log.Printf("ws-chat: put game attempt %d: %v", attempt+1, err)
@@ -385,7 +345,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}
 
 	// Step 6: Account for token usage — best-effort, non-fatal.
-	totalTokenDelta := narratorResult.Tokens.Total() + engineerResult.Tokens.Total()
+	totalTokenDelta := turn.Tokens.Total()
 	if accountErr := dbClient.UpdateUserTokens(ctx, userID, totalTokenDelta); accountErr != nil {
 		log.Printf("ws-chat: UpdateUserTokens (non-fatal): %v", accountErr)
 	}
@@ -408,7 +368,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
 		delta := game.StateDelta{
-			Events:   append(append([]game.WorldEvent(nil), engineerResult.Events...), sceneEvents...),
+			Events:   append(append([]game.WorldEvent(nil), turn.NarrativeEvents...), turn.SceneEvents...),
 			Player:   &memberView.Player,
 			Self:     &memberView.Self,
 			Campaign: g.BuildCampaignStateView(),
@@ -458,10 +418,3 @@ func main() {
 }
 
 // isSceneEvent reports events that announce a new scene or its objective.
-func isSceneEvent(e game.WorldEvent) bool {
-	switch e.Type {
-	case "scene_started", "campaign_progress", "campaign_ended":
-		return true
-	}
-	return false
-}

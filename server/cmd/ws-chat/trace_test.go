@@ -9,6 +9,7 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 	"github.com/rrochlin/an-amazing-adventure/internal/trace"
 )
 
@@ -97,6 +98,14 @@ func TestHandlerChat_RecordsTurnTrace(t *testing.T) {
 	}
 	if len(tr.Events) != 2 {
 		t.Fatalf("expected the turn's events in the trace, got %+v", tr.Events)
+	}
+	// The starting world is kept so the turn can be replayed.
+	var world game.SaveState
+	if err := json.Unmarshal(tr.Before.World, &world); err != nil || world.SessionID != save.SessionID {
+		t.Fatalf("expected the starting world in the trace, got %v / %q", err, world.SessionID)
+	}
+	if world.Campaign == nil || world.Campaign.ActiveNodeID != "camp_briefing" || len(world.ChatHistory) != 0 {
+		t.Fatalf("world snapshot should be the pre-turn save without the chat log, got %+v", world.Campaign)
 	}
 }
 
