@@ -9,6 +9,19 @@ force are summarised at the end of this file.
 
 ---
 
+## 2026-10-23 — Briarwell runs on the game master
+
+**Decision:** Briarwell turns run on one game master call (`"story_pipeline": "game_master"`) instead of
+narrator → engineer → resolver. The model is forced to hand in the whole turn through the `end_turn`
+tool (narration, world events with typed arguments, beats); code validates it against the scene.
+
+**Why:** On the reference turn set it avoided every recorded failure, kept every turn within the 10s
+budget (5–8s against 9–12s) and used about half the input tokens. See [[game-master]].
+
+**Revisit if:** live playtests show worse prose or missed beats. Reverting is one line in the campaign.
+
+---
+
 ## 2026-10-22 — Story agents: a game master holding a screenplay (blend 3)
 
 Spike #92 (`story-engine/framing.md`). Rob chose blend 3: authored like a screenplay, played like a game

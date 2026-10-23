@@ -1,6 +1,7 @@
 {
   "id": "briarwell",
   "version": "1",
+  "story_pipeline": "game_master",
   "title": "The Burning of Briarwell",
   "premise": "A village child spends their sister's birthday earning coin for a gift, until bandits put Briarwell to the torch and a stranger from the Heroes' Guild pulls them from the ashes.",
   "description": "A short origin story: small kindnesses and small cruelties in a sleepy village, one terrible night, and the road to the Guild. Modeled on the beats of a classic hero-origin opening to validate the authored runtime.",

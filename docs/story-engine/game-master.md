@@ -84,11 +84,33 @@ transitions remain the script's.
 
 ## How it fits
 
-- **Pipeline (#101):** a `story.Pipeline` that builds the brief, calls Bedrock once with
-  `ConverseStream` and the `end_turn` tool, streams the text deltas as narration, validates the
-  decision, applies the world events, converts the beats and runs `OrchestrateTurn`. Enabled per
-  campaign, with the current narrator-engineer-resolver pipeline as the default until it wins.
+- **Pipeline (#101):** `story.GameMaster` builds the brief and calls Bedrock once with
+  `ConverseStream`, **forcing** the `end_turn` tool so every turn comes with a decision. The tool input
+  holds the whole turn: `narration` first (decoded out of the partial JSON as it streams, so the prose
+  still reaches the player live), then `world_events` (each event type with its tool's exact argument
+  schema, from `ai.ToolInputSchema`), then `beats`. Code validates the decision, applies the world
+  events, converts the beats and runs `OrchestrateTurn`. A campaign opts in with
+  `"story_pipeline": "game_master"`; Briarwell does. The validated decision is in the turn trace
+  (`decision`) and in `sessiondump`.
 - **Evaluation (#95):** replay the reference turn set (`server/testdata/turns`) through both pipelines
   and compare. The set already holds the failures this contract is designed to prevent.
 - **Later:** character agents (#103) plug in as proposals the game master folds into its turn;
   dice (#139) as a `request_check` world event the engine resolves before narration continues.
+
+### Results on the reference set (2026-10-23)
+
+`go run ./tools/replay -from testdata/turns -pipeline gamemaster`, 7 turns:
+
+| | current | game master |
+|---|---|---|
+| Latency (average per turn) | 9.3–11.8s, 4 of 7 over the 10s budget | 5.0–8.3s, all within budget |
+| Input tokens | ~10–12k (three calls) | ~4–6k (one call) |
+| Errors | resolver JSON parse failure on 1 turn | none |
+
+Each targeted failure is gone: one step per turn (turn 5 searches the meadow rather than finding,
+returning and getting paid), Tomas stays alive and the player stays under the bed (turn 9), the doll
+isn't marked kept for learning where it is, and no coins are invented.
+
+The first version let the model write narration as text and then call the tool. On 3 of 7 turns it
+never called the tool, and free-form `input` objects got the wrong keys (`move_character` without
+`room_name`). Forcing the tool and giving each event its argument schema fixed both.
