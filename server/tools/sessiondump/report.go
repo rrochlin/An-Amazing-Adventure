@@ -67,6 +67,9 @@ func render(w io.Writer, save game.SaveState, traces []*trace.Turn, mutations []
 				p("    - verdict: `%s`", oneLine(c.Output))
 			}
 		}
+		if t.Decision != nil {
+			p("- decision: `%s`", compactJSON(t.Decision))
+		}
 		if t.Resolution != nil {
 			p("- resolution: `%s`", compactJSON(t.Resolution))
 		}

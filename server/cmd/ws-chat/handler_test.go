@@ -197,6 +197,9 @@ func (f *fakeAIClient) EngineerScan(context.Context, *game.Game, string) (ai.Eng
 	f.engineerCalls++
 	return f.engineer, nil
 }
+func (f *fakeAIClient) GameMasterTurn(context.Context, ai.GameMasterRequest) (ai.GameMasterResult, error) {
+	return ai.GameMasterResult{}, nil
+}
 func (f *fakeAIClient) ResolveCampaignConditions(context.Context, *game.Game, *campaigns.CampaignDefinition, string, string) (ai.CampaignConditionResolutionResult, error) {
 	f.resolverCalls++
 	return f.resolver, f.resolverErr

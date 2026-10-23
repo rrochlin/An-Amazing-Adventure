@@ -1,15 +1,33 @@
 package gm
 
-import "github.com/rrochlin/an-amazing-adventure/internal/campaigns"
+import (
+	"github.com/rrochlin/an-amazing-adventure/internal/ai"
+	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
+)
 
 // ToolName is the single tool the game master calls to hand in its Decision.
 const ToolName = "end_turn"
 
-// Schema is the JSON schema of the Decision, narrowed to the scene: only its
-// allowed world events and its beats (with their outcomes) are valid, so
+// Schema is the JSON schema of the whole turn, narrowed to the scene: the
+// narration, then only the allowed world events (each with the exact
+// arguments its tool takes) and the scene's beats with their outcomes, so
 // the model is constrained before validation ever runs.
 func Schema(node *campaigns.StoryNode) map[string]any {
-	events := AllowedWorldEvents(node)
+	events := []any{}
+	for _, name := range AllowedWorldEvents(node) {
+		input, ok := ai.ToolInputSchema(name)
+		if !ok {
+			continue
+		}
+		events = append(events, map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"type":  map[string]any{"const": name},
+				"input": input,
+			},
+			"required": []string{"type", "input"},
+		})
+	}
 	beats := map[string]any{}
 	if node != nil {
 		for _, s := range campaigns.AllowedConditionSpecsForNode(*node) {
@@ -25,17 +43,14 @@ func Schema(node *campaigns.StoryNode) map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
+			"narration": map[string]any{
+				"type":        "string",
+				"description": "The turn's prose, 2-4 paragraphs: what the player experiences. Write this first.",
+			},
 			"world_events": map[string]any{
 				"type":        "array",
 				"description": "World changes this turn's narration made happen, in order. Only what actually happened; nothing the narration merely mentioned.",
-				"items": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"type":  map[string]any{"type": "string", "enum": events},
-						"input": map[string]any{"type": "object", "description": "The tool's arguments (room_name, character_name, item_name, amount, ...)."},
-					},
-					"required": []string{"type", "input"},
-				},
+				"items":       map[string]any{"anyOf": events},
 			},
 			"beats": map[string]any{
 				"type":                 "object",
@@ -53,7 +68,7 @@ func Schema(node *campaigns.StoryNode) map[string]any {
 				"required": []string{"kind"},
 			},
 		},
-		"required": []string{"world_events", "beats"},
+		"required": []string{"narration", "world_events", "beats"},
 	}
 }
 

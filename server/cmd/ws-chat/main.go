@@ -47,8 +47,11 @@ type dbClient interface {
 	UpdateUserTokens(context.Context, string, int) error
 }
 
-// aiClient is the model access the story pipeline needs.
-type aiClient = story.Models
+// aiClient is the model access the story pipelines need.
+type aiClient interface {
+	story.Models
+	story.GMModels
+}
 
 type wsSender interface {
 	Send(context.Context, string, wsutil.Frame) error
@@ -61,8 +64,10 @@ var (
 	newDBClient = func(ctx context.Context) (dbClient, error) { return db.New(ctx) }
 	newAIClient = func(ctx context.Context) (aiClient, error) { return ai.New(ctx) }
 	newWSSender = func(ctx context.Context) (wsSender, error) { return wsutil.New(ctx) }
-	// newPipeline picks the story pipeline for a turn.
-	newPipeline = func(models aiClient) story.Pipeline { return story.Current{Models: models} }
+	// newPipeline picks the story pipeline for a turn: the campaign's choice.
+	newPipeline = func(models aiClient, def *campaigns.CampaignDefinition) story.Pipeline {
+		return story.PipelineFor(def, models)
+	}
 )
 
 type chatRequest struct {
@@ -247,7 +252,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	// Steps 1-3: run the story pipeline. Narration streams to every party
 	// member as it arrives; narrative_end goes out as soon as it's complete,
 	// so the client never waits on the post-narration work.
-	turn, err := newPipeline(aiClient).RunTurn(ctx, story.TurnInput{
+	turn, err := newPipeline(aiClient, campaignDef).RunTurn(ctx, story.TurnInput{
 		Game:        g,
 		Campaign:    campaignDef,
 		History:     saveState.Narrative,
@@ -274,6 +279,9 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	tr.Call(turn.Calls...)
 	for _, e := range turn.Errors {
 		tr.Errorf("%s", e)
+	}
+	if turn.Decision != nil {
+		tr.Decision = *turn.Decision
 	}
 	if turn.Resolution != nil {
 		tr.Resolution = *turn.Resolution

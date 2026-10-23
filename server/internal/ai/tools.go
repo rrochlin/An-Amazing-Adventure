@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -676,9 +677,30 @@ func execGetRoomInfo(g *game.Game, in map[string]any) (string, *game.WorldEvent,
 
 // ---- helpers for building tool definitions ----
 
+// toolSchemas keeps each tool's input schema by name, for the game master's
+// per-event schema (gm.Schema). Filled as the tools are built.
+var (
+	toolSchemasMu sync.Mutex
+	toolSchemas   = map[string]map[string]any{}
+	toolsOnce     sync.Once
+)
+
+// ToolInputSchema is the JSON schema of a narrator tool's arguments.
+func ToolInputSchema(name string) (map[string]any, bool) {
+	toolsOnce.Do(func() { NarratorTools() })
+	toolSchemasMu.Lock()
+	defer toolSchemasMu.Unlock()
+	s, ok := toolSchemas[name]
+	return s, ok
+}
+
 func tool(name, desc string, inputSchema map[string]any, required []string) types.Tool {
 	inputSchema["required"] = required
 	inputSchema["type"] = "object"
+	inputSchema["description"] = desc
+	toolSchemasMu.Lock()
+	toolSchemas[name] = inputSchema
+	toolSchemasMu.Unlock()
 	return &types.ToolMemberToolSpec{
 		Value: types.ToolSpecification{
 			Name:        aws.String(name),

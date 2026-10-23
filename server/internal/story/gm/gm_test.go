@@ -94,7 +94,7 @@ func TestSchemaIsNarrowedToTheScene(t *testing.T) {
 	def, _ := briarwell(t)
 	s := gm.Schema(node(def, "village_deeds"))
 	raw, _ := json.Marshal(s)
-	for _, want := range []string{`"deed_doll"`, `"returned"`, `"kept"`, `"move_player"`, `is not enough`} {
+	for _, want := range []string{`"deed_doll"`, `"returned"`, `"kept"`, `"const":"move_player"`, `"room_name"`, `is not enough`, `"narration"`} {
 		if !strings.Contains(string(raw), want) {
 			t.Errorf("schema should contain %s", want)
 		}

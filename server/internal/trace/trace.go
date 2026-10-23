@@ -76,6 +76,7 @@ type Turn struct {
 	After  *Snapshot `json:"after,omitempty"`
 
 	Calls      []ModelCall       `json:"calls,omitempty"`
+	Decision   any               `json:"decision,omitempty"` // the game master's, after validation
 	Resolution any               `json:"resolution,omitempty"`
 	Transition any               `json:"transition,omitempty"`
 	Events     []game.WorldEvent `json:"events,omitempty"`

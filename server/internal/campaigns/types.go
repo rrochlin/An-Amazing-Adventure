@@ -24,8 +24,12 @@ type CampaignDefinition struct {
 	Objectives        map[string]ObjectiveTemplate `json:"objectives,omitempty"`
 	DialogueAssets    map[string]DialogueAsset     `json:"dialogue_assets,omitempty"`
 	StoryNodes        map[string]StoryNode         `json:"story_nodes"`
-	StartNodeID       string                       `json:"start_node_id"`
-	IntroSequence     IntroSequence                `json:"intro_sequence,omitempty"`
+	// StoryPipeline picks how turns are run: "" or "current" (narrator,
+	// engineer, resolver) or "game_master" (one agent, see
+	// docs/story-engine/game-master.md).
+	StoryPipeline string        `json:"story_pipeline,omitempty"`
+	StartNodeID   string        `json:"start_node_id"`
+	IntroSequence IntroSequence `json:"intro_sequence,omitempty"`
 	// Endings are checked in order when a run ends; the first whose
 	// conditions all match is chosen. The last must have no conditions, so it
 	// is the catch-all.
@@ -216,6 +220,12 @@ type TransitionRule struct {
 	NextNodeID string      `json:"next_node_id"`
 	Actions    []Action    `json:"actions,omitempty"`
 }
+
+// Story pipelines a campaign can ask for.
+const (
+	StoryPipelineCurrent    = "current"
+	StoryPipelineGameMaster = "game_master"
+)
 
 // Scene control levels.
 const (

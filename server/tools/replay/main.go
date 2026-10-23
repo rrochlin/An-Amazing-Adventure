@@ -8,7 +8,7 @@
 //	SESSIONS_TABLE=amazing-adventure-prod-sessions \
 //	TRACES_TABLE=amazing-adventure-prod-traces \
 //	AWS_PROFILE=aa-debug AWS_REGION=us-west-2 \
-//	go run ./tools/replay [-pipeline current|recorded] [-turn N] [-o report.md] SESSION_ID
+//	go run ./tools/replay [-pipeline current|gamemaster|recorded] [-turn N] [-o report.md] SESSION_ID
 //
 // -pipeline current (the default) reruns the game's own pipeline, which calls
 // Bedrock and needs credentials that can invoke the models. -pipeline recorded
@@ -34,7 +34,7 @@ import (
 )
 
 func main() {
-	pipeline := flag.String("pipeline", "current", "candidate pipeline: current or recorded")
+	pipeline := flag.String("pipeline", "current", "candidate pipeline: current, gamemaster or recorded")
 	only := flag.String("turn", "", "replay (or save) only these traced turns, 1-based, e.g. 3 or 2,3,5")
 	outPath := flag.String("o", "", "write the report here instead of stdout")
 	saveDir := flag.String("save", "", "save the selected turns as reference turns in this directory instead of replaying")
@@ -42,9 +42,9 @@ func main() {
 	fromDir := flag.String("from", "", "replay the reference turns in this directory instead of a session")
 	flag.Parse()
 	if (flag.NArg() != 1) == (*fromDir == "") {
-		fmt.Fprintln(os.Stderr, "usage: replay [-pipeline current|recorded] [-turn N[,N]] [-o FILE] SESSION_ID\n"+
+		fmt.Fprintln(os.Stderr, "usage: replay [-pipeline current|gamemaster|recorded] [-turn N[,N]] [-o FILE] SESSION_ID\n"+
 			"       replay -save DIR [-turn N[,N]] [-note TEXT] SESSION_ID\n"+
-			"       replay -from DIR [-pipeline current|recorded] [-o FILE]")
+			"       replay -from DIR [-pipeline current|gamemaster|recorded] [-o FILE]")
 		os.Exit(2)
 	}
 	ctx := context.Background()
@@ -126,6 +126,12 @@ func main() {
 			fail(fmt.Errorf("bedrock client: %w", err))
 		}
 		rn.Pipeline = func(*trace.Turn) story.Pipeline { return story.Current{Models: models} }
+	case "gamemaster":
+		models, err := ai.New(ctx)
+		if err != nil {
+			fail(fmt.Errorf("bedrock client: %w", err))
+		}
+		rn.Pipeline = func(*trace.Turn) story.Pipeline { return story.GameMaster{Models: models} }
 	case "recorded":
 		rn.Pipeline = func(t *trace.Turn) story.Pipeline { return recorded{t} }
 	default:

@@ -12,6 +12,7 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/story/gm"
 	"github.com/rrochlin/an-amazing-adventure/internal/trace"
 )
 
@@ -57,6 +58,9 @@ type TurnOutput struct {
 	// Resolution and Transition are set when the campaign was evaluated.
 	Resolution *campaigns.ConditionResolution
 	Transition *campaigns.TransitionResult
+	// Decision is the game master's validated decision (nil for the
+	// current pipeline).
+	Decision *gm.Decision
 	// Errors are non-fatal problems, in the order they happened.
 	Errors []string
 }
