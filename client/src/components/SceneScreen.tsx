@@ -84,6 +84,19 @@ export function SceneScreen({
    }, []);
 
    const [panelHeight, setPanelHeight] = useState(0);
+   // The location sign's height: the scene centres its room below it.
+   const chipRef = useRef<HTMLDivElement>(null);
+   const [chipHeight, setChipHeight] = useState(0);
+   useEffect(() => {
+      const el = chipRef.current;
+      if (!el) return;
+      const measure = () => setChipHeight(el.offsetHeight);
+      measure();
+      if (typeof ResizeObserver !== 'function') return;
+      const observer = new ResizeObserver(measure);
+      observer.observe(el);
+      return () => observer.disconnect();
+   }, []);
 
    const overlayButton = (label: string, icon: ReactNode, onClick: () => void, active: boolean) => (
       <Tooltip title={label}>
@@ -117,6 +130,7 @@ export function SceneScreen({
                playerName={playerName}
                playerScale={playerScale}
                mode="scene"
+               insetTop={chipHeight}
                insetBottom={panelHeight}
             />
          ) : (
@@ -127,6 +141,7 @@ export function SceneScreen({
 
          {/* Docked to the top-left corner, like a GBA location sign. */}
          <Box
+            ref={chipRef}
             data-testid="scene-chip"
             sx={{
                position: 'absolute',
@@ -140,7 +155,7 @@ export function SceneScreen({
                borderBottom: '3px solid',
                borderColor: 'primary.dark',
                borderBottomRightRadius: 8,
-               zIndex: 2,
+               zIndex: 1,
             }}
          >
             <Typography sx={{ fontFamily: 'Cinzel, Georgia, serif', color: 'primary.main', fontSize: '1rem' }}>
@@ -187,13 +202,7 @@ export function SceneScreen({
             )}
             {art && overlayButton('World map', <MapIcon />, () => setWorldOpen(true), worldOpen)}
             {overlayButton('Log', <HistoryEduIcon />, () => setLogOpen((v) => !v), logOpen)}
-            {onDetails && (
-               <Tooltip title="Adventure details">
-                  <IconButton aria-label="Adventure details" onClick={onDetails} size="small" sx={{ color: 'primary.main', opacity: 0.7, borderRadius: 1 }}>
-                     <InfoOutlinedIcon fontSize="small" />
-                  </IconButton>
-               </Tooltip>
-            )}
+            {onDetails && overlayButton('Adventure details', <InfoOutlinedIcon />, onDetails, false)}
          </Box>
 
          {journalOpen && (
@@ -202,7 +211,7 @@ export function SceneScreen({
                role="dialog"
                aria-label="Journal"
                sx={{
-                     // Hangs from the button bar.
+                  // Hangs from the button bar.
                   position: 'absolute',
                   top: 44,
                   right: 0,
@@ -217,7 +226,7 @@ export function SceneScreen({
                   p: 2,
                   bgcolor: 'rgba(12, 8, 16, 0.95)',
                   borderColor: 'primary.dark',
-                  zIndex: 2,
+                  zIndex: 3,
                }}
             >
                <Typography
@@ -234,7 +243,7 @@ export function SceneScreen({
             </Paper>
          )}
 
-         <Box sx={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none', '& > *': { pointerEvents: 'auto' } }}>
+         <Box sx={{ position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none', '& > *': { pointerEvents: 'auto' } }}>
             {renderStage(logOpen, setPanelHeight)}
          </Box>
 
