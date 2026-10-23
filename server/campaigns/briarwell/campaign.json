@@ -23,7 +23,8 @@
   "player_role": {
     "name": "Child of Briarwell",
     "premise": "You are a village child whose choices today decide what kind of hero you might one day become.",
-    "role_summary": "Curious, small, and free to be kind or cruel while the village is still standing."
+    "role_summary": "Curious, small, and free to be kind or cruel while the village is still standing.",
+    "scale": 0.8
   },
   "party": {
     "max_human_players": 1,
@@ -124,6 +125,7 @@
       "kind": "npc",
       "goal": "Have the best birthday ever.",
       "description": "The player's little sister, turning seven today. Adores her older sibling.",
+      "scale": 0.65,
       "start_location_id": "family_cottage",
       "importance": "primary"
     },
@@ -140,6 +142,7 @@
       "kind": "npc",
       "goal": "Find her lost rag doll.",
       "description": "A small village girl, younger than Ros, crying because she lost her rag doll.",
+      "scale": 0.6,
       "start_location_id": "village_square",
       "importance": "minor"
     },
@@ -156,6 +159,7 @@
       "kind": "npc",
       "goal": "Push the smaller children around.",
       "description": "A village boy two years older than the player, who bullies the smaller children.",
+      "scale": 0.85,
       "start_location_id": "meadow",
       "importance": "minor"
     },

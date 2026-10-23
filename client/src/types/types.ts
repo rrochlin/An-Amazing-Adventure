@@ -143,6 +143,8 @@ export interface CharacterView {
    health: number;
    max_health: number;
    friendly: boolean;
+   /** Height relative to an adult (1); absent means 1. */
+   scale?: number;
    inventory: ItemView[];
    equipment: EquipmentView;
    dnd?: DnDStatsView; // present for v3+ characters

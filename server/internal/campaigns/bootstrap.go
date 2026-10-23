@@ -69,6 +69,9 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 	startRoomID = roomIDMap[startRoomID]
 
 	player.LocationID = startRoomID
+	if def.PlayerRole.Scale != 0 {
+		player.Scale = def.PlayerRole.Scale
+	}
 	g.SetPlayerCharacter(userID, player)
 	if room, ok := g.Rooms[startRoomID]; ok {
 		_ = room.AddOccupant(player.ID)
@@ -124,6 +127,7 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 		npc.ID = actorID
 		npc.LocationID = roomID
 		npc.Friendly = actor.Kind != "antagonist"
+		npc.Scale = actor.Scale
 		g.NPCs[npc.ID] = npc
 		room := g.Rooms[roomID]
 		_ = room.AddOccupant(npc.ID)

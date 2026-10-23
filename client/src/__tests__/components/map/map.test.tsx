@@ -102,6 +102,19 @@ describe('placeTokens', () => {
       }
    });
 
+   it("draws each character at their own size", () => {
+      const sized = placeTokens(
+         BRIARWELL_ART,
+         { ...rooms, village_square: { ...rooms.village_square, occupants: [{ ...person('bess', 'Little Bess'), scale: 0.6 }, person('giant', 'Giant')] } },
+         'village_square',
+         'Wren',
+         0.8,
+      );
+      expect(sized.find((t) => t.isPlayer)?.scale).toBe(0.8);
+      expect(sized.find((t) => t.id === 'bess')?.scale).toBe(0.6);
+      expect(sized.find((t) => t.id === 'giant')?.scale).toBe(1); // no scale means adult
+   });
+
    it('uses the campaign cast sprites', () => {
       expect(tokens.find((t) => t.id === 'father')?.sprite).toBe(88);
    });

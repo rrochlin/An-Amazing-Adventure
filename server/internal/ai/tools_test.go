@@ -600,3 +600,41 @@ func TestDispatchMovePlayer_FollowsTheNarration(t *testing.T) {
 		t.Fatal("expected an unknown room to be rejected")
 	}
 }
+
+func TestCharacterScale_CreateAndResize(t *testing.T) {
+	g, _, _ := newTestGameWithRooms(t)
+
+	if _, err := dispatch(g, "create_character", map[string]any{
+		"name": "small girl", "description": "about five", "backstory": "-", "room_name": "Tavern", "scale": 0.6,
+	}); err != nil {
+		t.Fatalf("create_character: %v", err)
+	}
+	var girl game.Character
+	for _, c := range g.NPCs {
+		if c.Name == "small girl" {
+			girl = c
+		}
+	}
+	if girl.Scale != 0.6 {
+		t.Fatalf("expected a 0.6-scale girl, got %+v", girl)
+	}
+	if _, err := dispatch(g, "create_character", map[string]any{
+		"name": "colossus", "description": "-", "backstory": "-", "room_name": "Tavern", "scale": 9,
+	}); err == nil {
+		t.Fatal("an out-of-range scale should be rejected")
+	}
+
+	// A shrinking spell on someone in the player's room is visible.
+	_, ev, err := dispatchWithEvent(g, "set_character_scale", map[string]any{"character_name": "small girl", "scale": 0.3})
+	if err != nil || ev == nil || ev.Message != "small girl shrinks." {
+		t.Fatalf("expected a visible shrink, got %#v (%v)", ev, err)
+	}
+	_, ev, err = dispatchWithEvent(g, "set_character_scale", map[string]any{"character_name": "player", "scale": 2})
+	owner, _ := g.OwnerCharacter()
+	if err != nil || owner.Scale != 2 || ev == nil || ev.Message != "You grow." {
+		t.Fatalf("expected the player to grow, got scale %v event %#v (%v)", owner.Scale, ev, err)
+	}
+	if _, err := dispatch(g, "set_character_scale", map[string]any{"character_name": "player", "scale": 0}); err == nil {
+		t.Fatal("scale 0 should be rejected by the tool")
+	}
+}

@@ -112,3 +112,27 @@ func contains(xs []string, x string) bool {
 	}
 	return false
 }
+
+func TestBriarwell_CharactersHaveTheirSizes(t *testing.T) {
+	_, g, _ := bootstrapBriarwell(t)
+	owner, _ := g.OwnerCharacter()
+	if owner.Scale != 0.8 {
+		t.Fatalf("Wren is about ten: want 0.8, got %v", owner.Scale)
+	}
+	for id, want := range map[string]float64{"sister": 0.65, "bess": 0.6, "bully": 0.85, "father": 0} {
+		if got := g.NPCs[id].Scale; got != want {
+			t.Errorf("%s scale = %v, want %v", id, got, want)
+		}
+	}
+	view := g.BuildGameStateView(g.OwnerID, nil)
+	if view.Self.Scale != 0.8 {
+		t.Fatalf("the view should carry the player's scale, got %v", view.Self.Scale)
+	}
+	reg, _ := campaigns.LoadEmbeddedRegistry()
+	def, _ := reg.Get("briarwell")
+	bad := *def
+	bad.Actors = map[string]campaigns.ActorTemplate{"giant": {Name: "Giant", Kind: "npc", Scale: 9}}
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "scale") {
+		t.Fatalf("an out-of-range scale should fail validation, got %v", err)
+	}
+}
