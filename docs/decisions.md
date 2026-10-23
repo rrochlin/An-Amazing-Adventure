@@ -32,6 +32,20 @@ at a table.
 - **Latency budget: about 10 seconds per turn** to start, refined later. For the very first versions,
   quality comes first and we measure where latency lands.
 
+## 2026-10-23 — The scene is the main screen; movement follows the story
+
+Rob, after the Roadwarden map shipped: aim for GBA-era RPGs (Pokémon, Final Fantasy).
+
+- **The scene view is the main screen.** It is a detailed pixel-art view limited to the current scene,
+  with the story in a text box over it.
+- **A separate world map** shows the whole game map with less detail than a scene.
+- **Movement is animated but directed by the story.** Characters walk where dialogue, choices and the
+  game master send them. There is no WASD or click-to-move, so #134 (click to move) is dropped.
+- **Art:** search for a richer GBA/SNES-style tileset with walk-animated characters. Budget about $20;
+  the Kenney CC0 packs stay as the fallback.
+- This supersedes the side-panel layout from the Roadwarden decision below. Points of interest,
+  discovery, fog, tokens and character sizes carry over.
+
 ## 2026-10-23 — Map: Roadwarden-style, CC0 pixel art
 
 - The map is modelled on **Roadwarden**: the left pane shows the area the player is in, beside the text.
