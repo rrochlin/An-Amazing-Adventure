@@ -50,6 +50,12 @@ export interface Token {
 
 /** About this many tiles across fit in the side panel at its zoom. */
 const FOLLOW_TILES = 12;
+/**
+ * Tiles drawn beyond the map's edge in a scene, repeating the edge tiles, so
+ * a room at the edge of the map is centred against more of the same terrain
+ * rather than a blank. Enough for a 2x zoom on a wide screen.
+ */
+const SCENE_PAD = 32;
 
 /**
  * The world as a pixel-art map (Roadwarden-style): terrain and buildings from
@@ -93,18 +99,19 @@ export function WorldMap({
    const offset = cameraOffset(art, currentRoomId, scale, area, mode);
    const inScene = (roomId: string) => mode !== 'scene' || roomId === currentRoomId;
 
-   // Draw terrain and objects once per art.
+   // Draw terrain and objects once per art (padded in a scene).
+   const pad = mode === 'scene' ? SCENE_PAD : 0;
    useEffect(() => {
       const ctx = canvasRef.current?.getContext('2d');
       if (!ctx) return;
       const sheet = new Image();
       sheet.onload = () => {
-         ctx.clearRect(0, 0, nativeW, nativeH);
-         drawLayer(ctx, sheet, art.ground, GROUND_TILES);
-         drawLayer(ctx, sheet, art.objects, OBJECT_TILES);
+         ctx.clearRect(0, 0, (art.width + 2 * pad) * TILE, (art.height + 2 * pad) * TILE);
+         drawLayer(ctx, sheet, art.ground, GROUND_TILES, pad);
+         drawLayer(ctx, sheet, art.objects, OBJECT_TILES, pad, true);
       };
       sheet.src = TOWN_SHEET;
-   }, [art, nativeW, nativeH]);
+   }, [art, pad]);
 
    const tokens = useMemo(
       () =>
@@ -133,7 +140,14 @@ export function WorldMap({
             ref={containerRef}
             // Its own stacking context, so tokens and fog stay under overlays
             // (the story text box, the log) drawn over the map.
-            sx={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', bgcolor: '#0c0810', isolation: 'isolate' }}
+            sx={{
+               flex: 1,
+               minHeight: 0,
+               position: 'relative',
+               overflow: 'hidden',
+               bgcolor: '#0c0810',
+               isolation: 'isolate',
+            }}
          >
             <Box
                data-testid="world-map"
@@ -149,9 +163,17 @@ export function WorldMap({
             >
                <canvas
                   ref={canvasRef}
-                  width={nativeW}
-                  height={nativeH}
-                  style={{ width: '100%', height: '100%', imageRendering: 'pixelated', display: 'block' }}
+                  width={nativeW + 2 * pad * TILE}
+                  height={nativeH + 2 * pad * TILE}
+                  style={{
+                     position: 'absolute',
+                     left: -pad * TILE * scale,
+                     top: -pad * TILE * scale,
+                     width: (nativeW + 2 * pad * TILE) * scale,
+                     height: (nativeH + 2 * pad * TILE) * scale,
+                     imageRendering: 'pixelated',
+                     display: 'block',
+                  }}
                />
 
                {Object.entries(art.rooms).map(([id, [x, y, w, h]]) => {
@@ -213,7 +235,8 @@ export function WorldMap({
                         top: px(art.rooms[currentRoomId][1]),
                         width: px(art.rooms[currentRoomId][2]),
                         height: px(art.rooms[currentRoomId][3]),
-                        boxShadow: '0 0 0 100vmax rgba(8, 5, 12, 0.62)',
+                        // Soft-edged shade over everything outside the room.
+                        boxShadow: '0 0 36px 100vmax rgba(8, 5, 12, 0.5)',
                         pointerEvents: 'none',
                         zIndex: 1,
                      }}
@@ -330,6 +353,9 @@ export function cameraOffset(
    const mapH = art.height * TILE * scale;
    const rect = currentRoomId ? art.rooms[currentRoomId] : undefined;
    const axis = (viewLen: number, mapLen: number, focus: number) => {
+      // A scene is always centred on its room, even at the map's edge; the
+      // container's field colour fills what lies beyond the map.
+      if (mode === 'scene' && rect) return viewLen / 2 - focus;
       if (mode === 'world' || mapLen <= viewLen || !rect) return (viewLen - mapLen) / 2;
       const ideal = viewLen / 2 - focus;
       return Math.min(0, Math.max(viewLen - mapLen, ideal));
@@ -341,20 +367,37 @@ export function cameraOffset(
    };
 }
 
+/** Object characters that continue beyond the map's edge: forest. */
+const CONTINUES = new Set('123456789');
+
+/**
+ * Draws a layer, with `pad` tiles of border on every side that repeat the
+ * map's edge tiles (the nearest cell inside the map). Ground always
+ * continues; of the objects, only forest does (a beehive at the edge
+ * doesn't become a row of beehives).
+ */
 function drawLayer(
    ctx: CanvasRenderingContext2D,
    sheet: HTMLImageElement,
    rows: string[],
    legend: Record<string, number>,
+   pad = 0,
+   objects = false,
 ) {
-   rows.forEach((row, y) => {
-      [...row].forEach((ch, x) => {
+   const h = rows.length;
+   const w = rows[0]?.length ?? 0;
+   const clamp = (v: number, max: number) => Math.min(Math.max(v, 0), max - 1);
+   for (let y = -pad; y < h + pad; y++) {
+      for (let x = -pad; x < w + pad; x++) {
+         const outside = y < 0 || y >= h || x < 0 || x >= w;
+         const ch = rows[clamp(y, h)]?.[clamp(x, w)];
+         if (ch === undefined || (outside && objects && !CONTINUES.has(ch))) continue;
          const index = legend[ch];
-         if (index === undefined) return;
+         if (index === undefined) continue;
          const [sx, sy] = sheetOffset(index);
-         ctx.drawImage(sheet, sx, sy, TILE, TILE, x * TILE, y * TILE, TILE, TILE);
-      });
-   });
+         ctx.drawImage(sheet, sx, sy, TILE, TILE, (x + pad) * TILE, (y + pad) * TILE, TILE, TILE);
+      }
+   }
 }
 
 /**
