@@ -99,6 +99,9 @@ func (d *CampaignDefinition) Validate() error {
 		if actor.Name == "" {
 			return fmt.Errorf("actor %q name is required", actorID)
 		}
+		if err := d.validateSheet(actorID, actor); err != nil {
+			return err
+		}
 		for _, nodeID := range actor.AppearsIn {
 			if _, ok := d.StoryNodes[nodeID]; !ok {
 				return fmt.Errorf("actor %q appears_in references unknown story node %q", actorID, nodeID)
@@ -186,6 +189,9 @@ func (d *CampaignDefinition) Validate() error {
 			return err
 		}
 		if err := d.validateTransitionRules(node.FailureRules, fmt.Sprintf("story node %q failure_rules", nodeID)); err != nil {
+			return err
+		}
+		if err := d.validateScript(nodeID, node); err != nil {
 			return err
 		}
 	}
