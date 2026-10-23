@@ -54,6 +54,14 @@ interface DialogueStageProps {
    location?: string;
    sceneTitle?: string;
    objective?: string;
+   /**
+    * Overlay mode, over the scene view: no header (the scene shows where you
+    * are), a solid text box, and the scrollback only while the log is open.
+    */
+   overlay?: boolean;
+   logOpen?: boolean;
+   /** In overlay mode, reports the docked text panel's height. */
+   onPanelHeight?: (px: number) => void;
 }
 
 /**
@@ -80,6 +88,9 @@ export function DialogueStage({
    location,
    sceneTitle,
    objective,
+   overlay = false,
+   logOpen = false,
+   onPanelHeight,
 }: DialogueStageProps) {
    const beats = useMemo(
       () => buildBeats(messages, streamingMessage),
@@ -237,6 +248,17 @@ export function DialogueStage({
       return () => observer.disconnect();
    }, [hasTranscript]);
 
+   // The docked text panel's height, so the scene can fill the space above it.
+   const panelRef = useRef<HTMLDivElement>(null);
+   useEffect(() => {
+      const el = panelRef.current;
+      if (!overlay || !el || !onPanelHeight || typeof ResizeObserver !== 'function') return;
+      const observer = new ResizeObserver(() => onPanelHeight(el.offsetHeight));
+      observer.observe(el);
+      onPanelHeight(el.offsetHeight);
+      return () => observer.disconnect();
+   }, [overlay, onPanelHeight]);
+
    const showContinue = !!current && lineDone && current.kind === 'line' && (hasNext || !acknowledged) && !showChoices && !showEnding;
 
    return (
@@ -247,8 +269,10 @@ export function DialogueStage({
             flexDirection: 'column',
             overflow: 'hidden',
             position: 'relative',
+            ...(overlay && { bgcolor: 'transparent', backgroundImage: 'none', border: 'none', boxShadow: 'none' }),
          }}
       >
+         {!overlay && (
          <Box
             data-testid="stage-header"
             sx={{
@@ -292,6 +316,7 @@ export function DialogueStage({
                )}
             </Box>
          </Box>
+         )}
 
          <Box
             data-testid="dialogue-stage"
@@ -303,12 +328,14 @@ export function DialogueStage({
                display: 'flex',
                flexDirection: 'column',
                justifyContent: 'flex-end',
-               px: { xs: 2, sm: 4 },
-               pb: 2,
+               px: overlay ? 0 : { xs: 2, sm: 4 },
+               pb: overlay ? 0 : 2,
                cursor: showChoices || showInput ? 'default' : 'pointer',
+               // Over the scene, only the text box, menus and log take clicks.
+               ...(overlay && { pointerEvents: 'none', '& > *': { pointerEvents: 'auto' } }),
             }}
          >
-            {transcript.length > 0 && (
+            {transcript.length > 0 && (!overlay || logOpen) && (
                <Box
                   ref={scrollRef}
                   data-testid="stage-transcript"
@@ -329,6 +356,14 @@ export function DialogueStage({
                      flex: 1,
                      minHeight: 0,
                      overflowY: 'auto',
+                     ...(overlay && {
+                        // The log covers the scene above the docked panel.
+                        bgcolor: 'rgba(12, 8, 16, 0.95)',
+                        px: { xs: 2, sm: 4 },
+                        pt: 8,
+                        pb: 2,
+                        mb: 0,
+                     }),
                      // We keep the newest line in view ourselves; Chrome's
                      // scroll anchoring would fight it.
                      overflowAnchor: 'none',
@@ -378,16 +413,17 @@ export function DialogueStage({
                </Box>
             )}
 
+            <Box ref={panelRef} data-testid="stage-panel" sx={overlay ? DOCKED_PANEL : { display: 'contents' }}>
             {pendingPlayer ? (
                <Box
                   data-testid="stage-player-line"
                   sx={{
-                     border: 2,
+                     border: overlay ? 0 : 2,
                      borderColor: 'secondary.dark',
                      borderRadius: 2,
-                     p: { xs: 2, sm: 3 },
-                     minHeight: 110,
-                     backgroundColor: 'rgba(26, 15, 30, 0.75)',
+                     p: overlay ? 0 : { xs: 2, sm: 3 },
+                     minHeight: overlay ? 96 : 110,
+                     backgroundColor: overlay ? 'transparent' : 'rgba(26, 15, 30, 0.75)',
                      position: 'relative',
                   }}
                >
@@ -428,12 +464,12 @@ export function DialogueStage({
             ) : current ? (
                <Box
                   sx={{
-                     border: 2,
+                     border: overlay ? 0 : 2,
                      borderColor: 'primary.dark',
                      borderRadius: 2,
-                     p: { xs: 2, sm: 3 },
-                     minHeight: 110,
-                     backgroundColor: 'rgba(26, 15, 30, 0.75)',
+                     p: overlay ? 0 : { xs: 2, sm: 3 },
+                     minHeight: overlay ? 96 : 110,
+                     backgroundColor: overlay ? 'transparent' : 'rgba(26, 15, 30, 0.75)',
                      position: 'relative',
                   }}
                >
@@ -556,6 +592,7 @@ export function DialogueStage({
                   )}
                </Box>
             )}
+            </Box>
          </Box>
 
          <Snackbar
@@ -585,6 +622,17 @@ export function DialogueStage({
       </Paper>
    );
 }
+
+// The GBA-style text panel: full width, flush with the bottom edge.
+const DOCKED_PANEL = {
+   bgcolor: '#140d1a',
+   borderTop: '3px solid',
+   borderColor: 'primary.dark',
+   px: { xs: 2, sm: 4 },
+   pt: 2,
+   pb: 2,
+   boxShadow: '0 -6px 18px rgba(0,0,0,0.5)',
+} as const;
 
 function SceneCard({ title }: { title: string }) {
    return (
