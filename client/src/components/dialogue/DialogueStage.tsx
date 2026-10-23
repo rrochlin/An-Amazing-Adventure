@@ -215,6 +215,7 @@ export function DialogueStage({
    // scrolled up to reread.
    const scrollRef = useRef<HTMLDivElement>(null);
    const pinned = useRef(true);
+   const lastScrollTop = useRef(0);
    useLayoutEffect(() => {
       const el = scrollRef.current;
       if (el && pinned.current) el.scrollTop = el.scrollHeight;
@@ -313,13 +314,24 @@ export function DialogueStage({
                   data-testid="stage-transcript"
                   aria-label="story so far"
                   onScroll={(e) => {
+                     // Only scrolling up means the player is rereading. Layout
+                     // changes (the dialogue box growing) also fire scroll
+                     // events, moving down; those mustn't unpin.
                      const el = e.currentTarget;
-                     pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+                     if (el.scrollHeight - el.scrollTop - el.clientHeight < 24) {
+                        pinned.current = true;
+                     } else if (el.scrollTop < lastScrollTop.current - 1) {
+                        pinned.current = false;
+                     }
+                     lastScrollTop.current = el.scrollTop;
                   }}
                   sx={{
                      flex: 1,
                      minHeight: 0,
                      overflowY: 'auto',
+                     // We keep the newest line in view ourselves; Chrome's
+                     // scroll anchoring would fight it.
+                     overflowAnchor: 'none',
                      mb: 2,
                      pr: 1,
                      display: 'flex',
