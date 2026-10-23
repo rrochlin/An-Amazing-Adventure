@@ -232,6 +232,17 @@ const (
 	TierPlayer = "player"
 )
 
+// WorldEventTypes are the world changes a turn can make, by the name of the
+// engineer tool that applies each (internal/ai/tools.go).
+var WorldEventTypes = []string{
+	"move_player", "move_character",
+	"give_item_to_player", "take_item_from_player", "create_item", "place_item_in_room",
+	"create_character", "set_character_scale", "set_character_alive",
+	"damage_character", "heal_character",
+	"update_room", "create_room",
+	"trigger_short_rest", "trigger_long_rest",
+}
+
 // StageDirections tell whoever runs a scene what it is and its limits.
 type StageDirections struct {
 	// Focus is what the scene is about.
@@ -247,6 +258,11 @@ type StageDirections struct {
 	MustNotReveal []string `json:"must_not_reveal,omitempty"`
 	// Boundaries are the limits a bounded scene must not stray outside of.
 	Boundaries []string `json:"boundaries,omitempty"`
+	// AllowedWorldEvents names the world changes the game master may make
+	// in this scene (see WorldEventTypes), on top of the control level's
+	// defaults. Only here can a scene allow create_character or
+	// set_character_alive: who exists and who dies is authored.
+	AllowedWorldEvents []string `json:"allowed_world_events,omitempty"`
 	// Tone notes.
 	Tone []string `json:"tone,omitempty"`
 }

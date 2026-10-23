@@ -98,6 +98,12 @@ func (d *CampaignDefinition) validateScript(nodeID string, node StoryNode) error
 		return errorf("%s is controlled but has no dialogue and no stage_directions.must_happen", where)
 	}
 
+	for _, ev := range node.StageDirections.AllowedWorldEvents {
+		if !containsString(WorldEventTypes, ev) {
+			return errorf("%s stage_directions.allowed_world_events has unknown type %q", where, ev)
+		}
+	}
+
 	seenCast := map[string]bool{}
 	for _, m := range node.Cast {
 		actor, ok := d.Actors[m.ActorID]
