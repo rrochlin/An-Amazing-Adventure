@@ -128,12 +128,12 @@
    },
    "world": {
     "session_id": "14a9a780-80b8-456b-8a32-5d43f2cea605",
-    "owner_id": "88a18380-4021-7055-cb8f-af696db70b4b",
-    "user_id": "88a18380-4021-7055-cb8f-af696db70b4b",
+    "owner_id": "player",
+    "user_id": "player",
     "schema_version": 5,
     "version": 8,
     "players": {
-     "88a18380-4021-7055-cb8f-af696db70b4b": {
+     "player": {
       "id": "da246c58-0fed-47be-b6b4-7d684ee958c3",
       "name": "Wren",
       "description": "You are a child of about ten growing up in the village of Briarwell, with a gruff, loving father, a patient mother, and a younger sister whose birthday is today.",

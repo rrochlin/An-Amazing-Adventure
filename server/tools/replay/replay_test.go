@@ -173,8 +173,10 @@ func TestRecordedPipelineRepeatsTheOriginal(t *testing.T) {
 
 func TestReferenceTurnsRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	world, _ := json.Marshal(game.SaveState{SessionID: "abcdef12-session", Title: "T"})
-	chat := &trace.Turn{SessionID: "abcdef12-session", Kind: trace.KindChat, Input: "look", UserID: "cognito-sub", ConnectionID: "conn", Before: &trace.Snapshot{World: world}}
+	world, _ := json.Marshal(game.SaveState{SessionID: "abcdef12-session", Title: "T", OwnerID: "cognito-sub", UserID: "cognito-sub",
+		Players: map[string]game.Character{"cognito-sub": {ID: "c1", Name: "Hero"}}})
+	chat := &trace.Turn{SessionID: "abcdef12-session", Kind: trace.KindChat, Input: "look", UserID: "cognito-sub", ConnectionID: "conn",
+		Before: &trace.Snapshot{World: world}, Frames: []trace.Frame{{Type: "state_delta", To: "conn"}}}
 	choice := &trace.Turn{SessionID: "abcdef12-session", Kind: trace.KindDialogueChoice, Before: &trace.Snapshot{World: world}}
 	bare := &trace.Turn{SessionID: "abcdef12-session", Kind: trace.KindChat, Before: &trace.Snapshot{}}
 	save := game.SaveState{SessionID: "abcdef12-session", Title: "T"}
@@ -198,8 +200,15 @@ func TestReferenceTurnsRoundTrip(t *testing.T) {
 	if r.Note != "baseline" || r.Turn != 1 || r.Trace.Input != "look" || r.saveFor().Title != "T" {
 		t.Fatalf("round trip lost data: %+v", r)
 	}
-	if r.Trace.UserID != "" || r.Trace.ConnectionID != "" {
+	if r.Trace.UserID != "" || r.Trace.ConnectionID != "" || r.Trace.Frames[0].To != "" {
 		t.Fatalf("saved turns must not carry who played or on which socket: %+v", r.Trace)
+	}
+	if strings.Contains(string(r.Trace.Before.World), "cognito-sub") {
+		t.Fatal("the player's id must be replaced inside the starting world too")
+	}
+	var w game.SaveState
+	if err := json.Unmarshal(r.Trace.Before.World, &w); err != nil || w.OwnerID != "player" || w.Players["player"].Name != "Hero" {
+		t.Fatalf("the world should still rebuild with the placeholder id: %+v %v", w, err)
 	}
 	if got, err := parseTurns("2, 3,5", 9); err != nil || len(got) != 3 || got[2] != 5 {
 		t.Fatalf("parseTurns: %v %v", got, err)
