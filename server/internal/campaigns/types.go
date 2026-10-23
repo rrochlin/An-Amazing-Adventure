@@ -110,6 +110,18 @@ type ActorTemplate struct {
 	// Description says who the character is (role, relationships); it is
 	// what an agent playing them needs to know.
 	Description string `json:"description,omitempty"`
+
+	// Character sheet (docs/story-engine/script-format.md).
+	Backstory   string   `json:"backstory,omitempty"`
+	Motivations []string `json:"motivations,omitempty"`
+	// Relationships maps an actor ID, or "player", to how this character
+	// sees them.
+	Relationships map[string]string `json:"relationships,omitempty"`
+	// Knows are things the character knows (including secrets).
+	Knows []string `json:"knows,omitempty"`
+	// DefaultTier is the agent tier when a scene doesn't say: "actor"
+	// (default) or "player".
+	DefaultTier string `json:"default_tier,omitempty"`
 }
 
 type ActorRail struct {
@@ -153,8 +165,25 @@ type StoryNode struct {
 	OnEnter           []Action               `json:"on_enter,omitempty"`
 	CompletionRules   []TransitionRule       `json:"completion_rules,omitempty"`
 	FailureRules      []TransitionRule       `json:"failure_rules,omitempty"`
+	// NarratorContract is the older name for StageDirections; the loader
+	// copies it over when stage_directions is absent.
 	NarratorContract  NodeNarratorContract   `json:"narrator_contract,omitempty"`
 	AllowedConditions []AllowedConditionSpec `json:"allowed_conditions,omitempty"`
+
+	// Scene script (docs/story-engine/script-format.md).
+	// Control is how tightly the scene follows its script: "controlled"
+	// scenes unfold as written; "bounded" scenes improvise inside their
+	// stage directions' boundaries. Defaults: controlled for yarn_dialogue,
+	// bounded otherwise.
+	Control         string          `json:"control,omitempty"`
+	StageDirections StageDirections `json:"stage_directions,omitempty"`
+	// Cast lists the characters with permission to act in this scene, and
+	// how. A character not in the cast doesn't act here.
+	Cast []SceneCastMember `json:"cast,omitempty"`
+	// Beats are the story conditions this scene can settle, each outcome
+	// with its meaning written out, so the resolver (or game master) judges
+	// against a definition instead of guessing from a value's name.
+	Beats []Beat `json:"beats,omitempty"`
 	// EndsRun ends the run when this node is entered.
 	EndsRun bool `json:"ends_run,omitempty"`
 }
@@ -173,6 +202,74 @@ type TransitionRule struct {
 	Conditions []Condition `json:"conditions"`
 	NextNodeID string      `json:"next_node_id"`
 	Actions    []Action    `json:"actions,omitempty"`
+}
+
+// Scene control levels.
+const (
+	ControlControlled = "controlled"
+	ControlBounded    = "bounded"
+)
+
+// Agent tiers: how much freedom the agent playing a character has.
+const (
+	// TierActor enacts the character's part with little autonomy.
+	TierActor = "actor"
+	// TierPlayer pursues the character's motivations with autonomy within
+	// reason, and can be a real obstacle.
+	TierPlayer = "player"
+)
+
+// StageDirections tell whoever runs a scene what it is and its limits.
+type StageDirections struct {
+	// Focus is what the scene is about.
+	Focus string `json:"focus,omitempty"`
+	// Setting is where and when, and how it looks and feels.
+	Setting string `json:"setting,omitempty"`
+	// MustMention are details to work into the scene.
+	MustMention []string `json:"must_mention,omitempty"`
+	// MustHappen are events the scene has to contain, in order. A controlled
+	// scene plays these as written.
+	MustHappen []string `json:"must_happen,omitempty"`
+	// MustNotReveal are things the scene must not reveal or hint at.
+	MustNotReveal []string `json:"must_not_reveal,omitempty"`
+	// Boundaries are the limits a bounded scene must not stray outside of.
+	Boundaries []string `json:"boundaries,omitempty"`
+	// Tone notes.
+	Tone []string `json:"tone,omitempty"`
+}
+
+// SceneCastMember gives a character permission to act in a scene.
+type SceneCastMember struct {
+	ActorID string `json:"actor_id"`
+	// Tier overrides the character's default tier for this scene.
+	Tier string `json:"tier,omitempty"`
+	// Part is what the character is doing in this scene.
+	Part string `json:"part,omitempty"`
+	// Wants is what the character wants out of this scene.
+	Wants string `json:"wants,omitempty"`
+	// Knows is what the character knows here, beyond their sheet.
+	Knows []string `json:"knows,omitempty"`
+}
+
+// Beat is a story condition a scene can settle, with written meanings.
+type Beat struct {
+	// Key is the campaign state key: a label, or a flag.
+	Key string `json:"key"`
+	// Kind is "label" (one of Outcomes) or "flag" (set true when Meaning
+	// happens).
+	Kind string `json:"kind"`
+	// Description says what the beat is about.
+	Description string `json:"description"`
+	// Meaning is when a flag beat is set.
+	Meaning string `json:"meaning,omitempty"`
+	// Outcomes are a label beat's values and what each one means.
+	Outcomes []BeatOutcome `json:"outcomes,omitempty"`
+}
+
+// BeatOutcome is one value of a label beat and what it means.
+type BeatOutcome struct {
+	Value   string `json:"value"`
+	Meaning string `json:"meaning"`
 }
 
 type NodeNarratorContract struct {
@@ -206,6 +303,10 @@ type AllowedConditionSpec struct {
 	Type          string   `json:"type"`
 	Key           string   `json:"key,omitempty"`
 	AllowedValues []string `json:"allowed_values,omitempty"`
+	// Description and Meanings come from the scene's beats: what the
+	// condition is about, and what each value (or, for a flag, "true") means.
+	Description string            `json:"description,omitempty"`
+	Meanings    map[string]string `json:"meanings,omitempty"`
 }
 
 type Action struct {

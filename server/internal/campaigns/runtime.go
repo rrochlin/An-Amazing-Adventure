@@ -36,6 +36,9 @@ type TurnOrchestrationResult struct {
 
 func AllowedConditionSpecsForNode(node StoryNode) []AllowedConditionSpec {
 	merged := make(map[string]AllowedConditionSpec)
+	for _, spec := range beatSpecs(node.Beats) {
+		mergeAllowedSpec(merged, spec)
+	}
 	for _, spec := range node.AllowedConditions {
 		mergeAllowedSpec(merged, spec)
 	}
@@ -729,6 +732,17 @@ func mergeAllowedSpec(dst map[string]AllowedConditionSpec, spec AllowedCondition
 	key := spec.Type + "::" + spec.Key
 	if existing, ok := dst[key]; ok {
 		existing.AllowedValues = dedupeStrings(append(existing.AllowedValues, spec.AllowedValues...))
+		if existing.Description == "" {
+			existing.Description = spec.Description
+		}
+		for value, meaning := range spec.Meanings {
+			if existing.Meanings == nil {
+				existing.Meanings = map[string]string{}
+			}
+			if _, ok := existing.Meanings[value]; !ok {
+				existing.Meanings[value] = meaning
+			}
+		}
 		dst[key] = existing
 		return
 	}

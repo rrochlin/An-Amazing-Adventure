@@ -44,18 +44,42 @@ func NarratorBrief(def *CampaignDefinition, g *game.Game) string {
 		if node.ObjectiveText != "" {
 			line("The player's current objective: %s", node.ObjectiveText)
 		}
-		c := node.NarratorContract
-		if c.SceneFocus != "" {
-			line("Scene focus: %s", c.SceneFocus)
+		c := node.StageDirections
+		if isZeroDirections(c) {
+			// Definitions built in code (tests) skip Normalize.
+			nc := node.NarratorContract
+			c = StageDirections{Focus: nc.SceneFocus, MustMention: nc.MustMention, MustNotReveal: nc.MustNotReveal, Tone: nc.ToneNotes}
+		}
+		if SceneControl(node) == ControlControlled {
+			line("This scene is controlled: it unfolds as written. Don't add events or let it go elsewhere.")
+		} else {
+			line("This scene is bounded: improvise freely, but stay inside its boundaries.")
+		}
+		if c.Focus != "" {
+			line("Scene focus: %s", c.Focus)
+		}
+		if c.Setting != "" {
+			line("Setting: %s", c.Setting)
+		}
+		if len(c.MustHappen) > 0 {
+			line("These must happen, in order: %s", strings.Join(c.MustHappen, "; "))
 		}
 		if len(c.MustMention) > 0 {
 			line("Work these into the scene: %s", strings.Join(c.MustMention, "; "))
 		}
+		if len(c.Boundaries) > 0 {
+			line("Boundaries (never go outside these): %s", strings.Join(c.Boundaries, "; "))
+		}
 		if len(c.MustNotReveal) > 0 {
 			line("Never reveal or hint at: %s", strings.Join(c.MustNotReveal, "; "))
 		}
-		for _, note := range c.ToneNotes {
+		for _, note := range c.Tone {
 			line("Tone note: %s", note)
+		}
+		for _, m := range node.Cast {
+			if a, ok := def.Actors[m.ActorID]; ok && (m.Part != "" || m.Wants != "") {
+				line("In this scene, %s: %s%s", a.Name, m.Part, prefixed(" Wants: ", m.Wants))
+			}
 		}
 	}
 
@@ -160,4 +184,11 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func prefixed(prefix, s string) string {
+	if s == "" {
+		return ""
+	}
+	return prefix + s
 }

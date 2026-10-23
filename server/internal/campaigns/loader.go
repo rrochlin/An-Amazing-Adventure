@@ -29,6 +29,7 @@ func LoadCampaignFile(path string) (*CampaignDefinition, error) {
 	def.SourceDir = filepath.Dir(path)
 	def.SourceFS = os.DirFS(def.SourceDir)
 
+	def.Normalize()
 	if err := def.Validate(); err != nil {
 		return nil, fmt.Errorf("validate campaign file %q: %w", path, err)
 	}
@@ -62,6 +63,7 @@ func LoadCampaignFS(fsys fs.FS, path string) (*CampaignDefinition, error) {
 		def.SourceFS = fsys
 	}
 
+	def.Normalize()
 	if err := def.Validate(); err != nil {
 		return nil, fmt.Errorf("validate campaign file %q: %w", path, err)
 	}
