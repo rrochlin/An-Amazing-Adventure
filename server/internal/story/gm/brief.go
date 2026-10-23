@@ -19,7 +19,7 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 
 	owner, _ := g.OwnerCharacter()
 	line("You are the game master of a text adventure, running one turn for the player, %s.", owner.Name)
-	line("You narrate what happens in vivid prose (2-4 paragraphs, sights, sounds, dialogue, action; no option lists, no tallies), then you hand in your decision with the %s tool: the world changes that actually happened and the beats that were settled.", ToolName)
+	line("You hand in the whole turn with the %s tool: first the narration (vivid prose, 2-4 paragraphs: sights, sounds, dialogue, action; no option lists, no tallies), then the world changes that actually happened, then the beats that were settled.", ToolName)
 	line("Narrate only what the player's action achieves this turn, where they are. Stop at the next decision point and leave the next step to the player: never carry them through a second errand or on to a second place in one turn.")
 
 	node := scene(def, g)
