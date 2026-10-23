@@ -27,8 +27,6 @@ export interface MapArt {
 export interface CastSprite {
    /** Tile index in the Tiny Dungeon sheet. */
    sprite: number;
-   /** Children are drawn smaller. */
-   child?: boolean;
 }
 
 export const TILE = 16;

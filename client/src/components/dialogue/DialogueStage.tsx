@@ -219,8 +219,11 @@ export function DialogueStage({
       const el = scrollRef.current;
       if (el && pinned.current) el.scrollTop = el.scrollHeight;
    }, [transcript.length]);
-   // The dialogue box grows as a line types in, which shrinks the scrollback
-   // from below. Keep its newest lines in view rather than behind the box.
+   // Re-pin whenever the scrollback's box or its content changes size: the
+   // dialogue box growing as a line types in shrinks the box, and a web font
+   // loading or lines re-wrapping grows the content. Chromium's scroll
+   // anchoring hides the second case; Safari (WebKit) has none.
+   const contentRef = useRef<HTMLDivElement>(null);
    const hasTranscript = transcript.length > 0;
    useEffect(() => {
       const el = scrollRef.current;
@@ -229,6 +232,7 @@ export function DialogueStage({
          if (pinned.current) el.scrollTop = el.scrollHeight;
       });
       observer.observe(el);
+      if (contentRef.current) observer.observe(contentRef.current);
       return () => observer.disconnect();
    }, [hasTranscript]);
 
@@ -320,42 +324,45 @@ export function DialogueStage({
                      pr: 1,
                      display: 'flex',
                      flexDirection: 'column',
-                     gap: 0.75,
-                     // Short logs sit just above the dialogue box.
-                     '& > :first-of-type': { mt: 'auto' },
                   }}
                >
-                  {transcript.map((item, i) => (
-                     <Typography
-                        key={item.key}
-                        sx={{
-                           // The newest lines read clearest.
-                           opacity: i >= transcript.length - 3 ? 0.85 : 0.65,
-                           flexShrink: 0,
-                           fontFamily: 'Crimson Text, Georgia, serif',
-                           fontSize: '1rem',
-                           lineHeight: 1.45,
-                           color: item.kind === 'player' ? 'secondary.light' : 'text.primary',
-                           textAlign: item.kind === 'scene' ? 'center' : 'left',
-                           fontStyle: item.kind === 'player' ? 'italic' : 'normal',
-                        }}
-                     >
-                        {item.kind === 'scene' ? (
-                           `— ${item.text} —`
-                        ) : item.kind === 'player' ? (
-                           `You: ${item.text}`
-                        ) : (
-                           <>
-                              {item.speaker && (
-                                 <Box component="span" sx={{ fontWeight: 700, mr: 0.75 }}>
-                                    {item.speaker}:
-                                 </Box>
-                              )}
-                              {renderInline(item.text)}
-                           </>
-                        )}
-                     </Typography>
-                  ))}
+                  <Box
+                     ref={contentRef}
+                     // Short logs sit just above the dialogue box.
+                     sx={{ mt: 'auto', display: 'flex', flexDirection: 'column', gap: 0.75 }}
+                  >
+                     {transcript.map((item, i) => (
+                        <Typography
+                           key={item.key}
+                           sx={{
+                              // The newest lines read clearest.
+                              opacity: i >= transcript.length - 3 ? 0.85 : 0.65,
+                              flexShrink: 0,
+                              fontFamily: 'Crimson Text, Georgia, serif',
+                              fontSize: '1rem',
+                              lineHeight: 1.45,
+                              color: item.kind === 'player' ? 'secondary.light' : 'text.primary',
+                              textAlign: item.kind === 'scene' ? 'center' : 'left',
+                              fontStyle: item.kind === 'player' ? 'italic' : 'normal',
+                           }}
+                        >
+                           {item.kind === 'scene' ? (
+                              `— ${item.text} —`
+                           ) : item.kind === 'player' ? (
+                              `You: ${item.text}`
+                           ) : (
+                              <>
+                                 {item.speaker && (
+                                    <Box component="span" sx={{ fontWeight: 700, mr: 0.75 }}>
+                                       {item.speaker}:
+                                    </Box>
+                                 )}
+                                 {renderInline(item.text)}
+                              </>
+                           )}
+                        </Typography>
+                     ))}
+                  </Box>
                </Box>
             )}
 

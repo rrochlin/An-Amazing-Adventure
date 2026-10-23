@@ -21,6 +21,7 @@ import { GameLayout } from '../components/GameLayout';
 import { isAuthenticated, getIdTokenClaims } from '../services/auth.service';
 import { LoadGame, RetryWorldGen } from '../services/api.game';
 import { useGameStore } from '../store/gameStore';
+import { useChoiceSubmit } from '@/hooks/useChoiceSubmit';
 import { useGameSocket } from '../hooks/useGameSocket';
 import { WorldGenTerminal } from '../components/WorldGenTerminal';
 import { AppTheme } from '@/theme/theme';
@@ -83,8 +84,6 @@ function GamePage() {
    const [reconnectToast, setReconnectToast] = useState(false);
    const [ownerID, setOwnerID] = useState<string | null>(null);
    const [adventureTitle, setAdventureTitle] = useState<string | null>(null);
-   const [isSubmittingChoice, setIsSubmittingChoice] = useState(false);
-   const choiceSubmitLockRef = useRef(false);
     // Stuck world-gen detection: set after 90s with no world_gen_ready and still not-ready
    const [worldGenStuck, setWorldGenStuck] = useState(false);
    const [retrying, setRetrying] = useState(false);
@@ -249,8 +248,7 @@ function GamePage() {
 
    useEffect(() => {
       reset();
-      choiceSubmitLockRef.current = false;
-      setIsSubmittingChoice(false);
+      releaseChoice();
       loadGameRef.current = false;
       setTransitionPhase('terminal');
       loadGame();
@@ -281,30 +279,18 @@ function GamePage() {
    const pendingChoices =
       campaignState?.active_dialogue?.pending_choices ?? undefined;
 
-   const handleChoiceSelected = (choiceId: number) => {
-      if (choiceSubmitLockRef.current) return;
-      choiceSubmitLockRef.current = true;
-      setIsSubmittingChoice(true);
+   const {
+      submitting: isSubmittingChoice,
+      submit: handleChoiceSelected,
+      release: releaseChoice,
+   } = useChoiceSubmit(campaignState, wsError, (choiceId) => {
       // Echo the chosen option in the log, as a typed command would be.
       const chosen = pendingChoices?.find((c) => c.id === choiceId);
       if (chosen?.text) {
          addChatMessage({ type: 'player', content: chosen.text });
       }
       sendAction('dialogue_choice', String(choiceId));
-   };
-
-   useEffect(() => {
-      if (!isSubmittingChoice) return;
-      if (wsError) {
-         choiceSubmitLockRef.current = false;
-         setIsSubmittingChoice(false);
-         return;
-      }
-      if (!campaignState?.active_dialogue?.awaiting_choice) {
-         choiceSubmitLockRef.current = false;
-         setIsSubmittingChoice(false);
-      }
-   }, [campaignState, isSubmittingChoice, wsError]);
+   });
 
    if (loadError) {
       return (

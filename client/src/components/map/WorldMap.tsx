@@ -31,7 +31,6 @@ export interface Token {
    x: number;
    y: number;
    sprite: number;
-   child: boolean;
    isPlayer: boolean;
 }
 
@@ -213,7 +212,8 @@ export function WorldMap({
 }
 
 function MapToken({ token, scale }: { token: Token; scale: number }) {
-   const size = TILE * scale * (token.child ? 0.75 : 1);
+   // Everyone is drawn at the same size, as in pixel-art RPGs.
+   const size = TILE * scale;
    const [sx, sy] = sheetOffset(token.sprite);
    const k = size / TILE;
    return (
@@ -342,7 +342,6 @@ export function placeTokens(
                   : p.friendly
                     ? DEFAULT_SPRITES.friendly
                     : DEFAULT_SPRITES.hostile),
-            child: cast?.child ?? false,
             isPlayer: p.isPlayer,
          });
       });
