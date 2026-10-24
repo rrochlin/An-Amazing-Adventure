@@ -30,7 +30,8 @@ var (
 	campaignRegistryErr  error
 )
 
-func getCampaignRegistry() (*campaigns.Registry, error) {
+// getCampaignRegistry is replaced in tests that need a campaign of their own.
+var getCampaignRegistry = func() (*campaigns.Registry, error) {
 	campaignRegistryOnce.Do(func() {
 		campaignRegistry, campaignRegistryErr = campaigns.LoadEmbeddedRegistry()
 	})
@@ -39,7 +40,7 @@ func getCampaignRegistry() (*campaigns.Registry, error) {
 
 type actionRequest struct {
 	Action    string `json:"action"`
-	SubAction string `json:"sub_action"` // "move" | "pick_up" | "drop" | "equip" | "unequip" | "attack" | "dialogue_choice"
+	SubAction string `json:"sub_action"` // "move" | "move_to_room" | "pick_up" | "drop" | "equip" | "unequip" | "attack" | "dialogue_choice"
 	Payload   string `json:"payload"`    // direction, item name, target monster ID, or choice ID
 	// WeaponID is optional — used only for "attack" sub_action.
 	// If empty the character's equipped main-hand weapon is used.
@@ -207,10 +208,20 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 	// Execute the action
 	var actionErr error
+	walked := false
 	switch msg.SubAction {
 	case "move":
 		// MovePlayer also marks the destination discovered (fog of war).
 		_, actionErr = g.MovePlayer(msg.Payload)
+	case "move_to_room":
+		// Free movement: the player walked across the map into a connected
+		// room. No model call; the campaign's rules run below.
+		if d := g.Campaign.ActiveDialogue; d != nil && d.AwaitingChoice {
+			_ = sender.SendError(ctx, connID, "dialogue_choice_required")
+			return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+		}
+		_, actionErr = g.MoveToRoom(userID, msg.Payload)
+		walked = actionErr == nil
 	case "pick_up":
 		item, findErr := g.GetItemByName(msg.Payload)
 		if findErr != nil {
@@ -279,6 +290,11 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		log.Printf("ws-game-action: %s: %v", msg.SubAction, actionErr)
 		_ = sender.SendError(ctx, connID, actionErr.Error())
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+
+	// Walking into a room can start a scene (a rule waiting on player_in_room).
+	if walked && g.Campaign != nil && g.Campaign.CampaignID != "" {
+		walkInto(ctx, dbClient, sender, conn, g, &saveState, tr)
 	}
 
 	// A monster's reply turn can kill the party, which ends a campaign run.
@@ -630,4 +646,50 @@ func handleDialogueChoice(
 
 	log.Printf("ws-game-action: dialogue_choice: complete conn=%s game=%s choice=%d", connID, conn.GameID, choiceID)
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+// walkInto runs the campaign's rules after the player walked into a room:
+// a scene that starts is broadcast like one a choice starts, and its text and
+// events join the log and the story so far.
+func walkInto(ctx context.Context, dbClient dbClient, ws dialogueChoiceSender, conn db.Connection, g *game.Game, saveState *game.SaveState, tr *trace.Turn) {
+	reg, err := getCampaignRegistry()
+	if err != nil {
+		log.Printf("ws-game-action: move_to_room: load campaigns: %v", err)
+		return
+	}
+	def, ok := reg.Get(g.Campaign.CampaignID)
+	if !ok {
+		return
+	}
+	turn, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{})
+	if err != nil {
+		log.Printf("ws-game-action: move_to_room: campaign rules: %v", err)
+		tr.Errorf("campaign rules: %v", err)
+		return
+	}
+	tr.Transition, tr.Events = turn.Transition, turn.Events
+	text := ""
+	if turn.Transition.Transitioned {
+		text = turn.Transition.DialogueText
+	}
+	if text == "" && len(turn.Events) == 0 {
+		return
+	}
+	if text != "" {
+		conns, _ := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
+		if len(conns) == 0 {
+			conns = []db.Connection{conn}
+		}
+		ids := make([]string, 0, len(conns))
+		for _, c := range conns {
+			ids = append(ids, c.ConnectionID)
+		}
+		_, _ = ws.Broadcast(ctx, ids, wsutil.Frame{Type: wsutil.FrameNarrativeChunk, Payload: map[string]string{"content": text}})
+		_, _ = ws.Broadcast(ctx, ids, wsutil.Frame{Type: wsutil.FrameNarrativeEnd})
+		saveState.Narrative = append(saveState.Narrative, game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: text}},
+		})
+	}
+	saveState.ChatHistory = append(saveState.ChatHistory, game.ChatMessage{Type: "narrative", Content: text, Events: turn.Events})
 }

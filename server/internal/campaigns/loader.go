@@ -161,6 +161,16 @@ func LoadEmbeddedRegistry() (*Registry, error) {
 	return &Registry{byID: defs}, nil
 }
 
+// NewRegistry holds the given campaigns, by ID (tests use it for campaigns
+// written for the test).
+func NewRegistry(defs ...*CampaignDefinition) *Registry {
+	byID := make(map[string]*CampaignDefinition, len(defs))
+	for _, d := range defs {
+		byID[d.ID] = d
+	}
+	return &Registry{byID: byID}
+}
+
 func (r *Registry) Get(id string) (*CampaignDefinition, bool) {
 	if r == nil || r.byID == nil {
 		return nil, false
