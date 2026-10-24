@@ -92,6 +92,26 @@ describe('DialogueStage', () => {
       expect(screen.getByRole('button', { name: /go to bed/i })).toBeInTheDocument();
    });
 
+   it('ignores a click on a choice that has only just appeared', () => {
+      // Playtest 7: clicking through the last line picked the first gift.
+      const onChoiceSelected = vi.fn();
+      const { update } = setup(inProgress);
+      update({
+         messages: [...inProgress, { type: 'narrative', content: 'Old Garrick: Your coin buys any one of these.' }],
+         pendingChoices: [{ id: 0, text: 'Honey sweets.' }],
+         onChoiceSelected,
+      });
+      tick(5000);
+      const choice = screen.getByRole('button', { name: /honey sweets/i });
+      // Shown a moment ago (fake time moves only with tick).
+      act(() => vi.setSystemTime(Date.now() - 4000));
+      fireEvent.click(choice);
+      expect(onChoiceSelected).not.toHaveBeenCalled();
+      act(() => vi.setSystemTime(Date.now() + 5000));
+      fireEvent.click(choice);
+      expect(onChoiceSelected).toHaveBeenCalledWith(0);
+   });
+
    it('opens a new scene with a title card, then its text, and toasts the objective', () => {
       const { update } = setup(inProgress);
       update({

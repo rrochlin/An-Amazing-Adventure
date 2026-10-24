@@ -335,6 +335,14 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			g.Campaign.Conversation = nil
 		}
 	}
+	// So does the other person leaving (or the player being moved away).
+	if c := g.Campaign; c != nil && c.Conversation != nil {
+		npc, ok := g.NPCs[c.Conversation.With]
+		owner, _ := g.OwnerCharacter()
+		if !ok || !npc.Alive || npc.LocationID != owner.LocationID {
+			c.Conversation = nil
+		}
+	}
 	if err != nil {
 		log.Printf("ws-chat: %v", err)
 		sendError("Narrator error — please try again")

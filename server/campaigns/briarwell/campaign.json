@@ -94,6 +94,9 @@
           { "id": "old_fence_post", "name": "Old fence post" },
           { "id": "long_grass", "name": "Long grass" }
         ],
+        "items": [
+          { "name": "Bess's rag doll", "description": "A small rag doll in a blue dress, one button eye hanging loose, lying face-down in the long grass by the old fence post." }
+        ],
         "connections": { "north": "village_square", "south": "woods_edge" }
       },
       "woods_edge": {
@@ -162,6 +165,7 @@
       "kind": "npc",
       "goal": "Find her lost rag doll.",
       "description": "A small village girl, younger than Ros, crying because she lost her rag doll.",
+      "knows": ["She dropped her rag doll in the Meadow, near the old fence post, when Dunstan chased the little ones off this morning. She is too scared of Dunstan to go back for it."],
       "scale": 0.6,
       "start_location_id": "village_square",
       "importance": "minor"

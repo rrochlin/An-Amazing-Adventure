@@ -101,6 +101,15 @@ type CampaignRoom struct {
 	Connections map[string]string `json:"connections,omitempty"`
 	// PointsOfInterest are notable spots inside the room, shown on the map.
 	PointsOfInterest []game.PointOfInterest `json:"points_of_interest,omitempty"`
+	// Items are things lying in the room when the run begins: a lost doll
+	// is somewhere, not wherever the story improvises it.
+	Items []CampaignItem `json:"items,omitempty"`
+}
+
+// CampaignItem is an authored item placed in a room at the start.
+type CampaignItem struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
 }
 
 type EntranceOption struct {

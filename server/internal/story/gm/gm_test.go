@@ -251,3 +251,20 @@ func TestDamageHurtsButDoesNotKillUnlessTheSceneAllowsIt(t *testing.T) {
 		t.Fatalf("an authored death should stand, kept %+v", kept.WorldEvents)
 	}
 }
+
+func TestBriefSaysWhatTheCharactersHereKnow(t *testing.T) {
+	def, g := briarwell(t)
+	if err := g.PlaceCharacter(g.OwnerID, "village_square"); err != nil {
+		t.Fatal(err)
+	}
+	brief := gm.Brief(def, g)
+	if !strings.Contains(brief, "Little Bess knows: She dropped her rag doll in the Meadow") {
+		t.Fatalf("Bess is here, so the brief should say what she knows:\n%s", brief)
+	}
+	if err := g.PlaceCharacter(g.OwnerID, "old_mill"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(gm.Brief(def, g), "Little Bess knows") {
+		t.Fatal("need to know: not when Bess isn't here")
+	}
+}

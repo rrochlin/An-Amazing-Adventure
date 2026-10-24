@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"slices"
+	"strings"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
@@ -173,6 +174,13 @@ func (d *CampaignDefinition) Validate() error {
 		}
 	}
 
+	for roomID, room := range d.Map.Rooms {
+		for i, it := range room.Items {
+			if strings.TrimSpace(it.Name) == "" {
+				return fmt.Errorf("map.rooms.%s.items[%d] needs a name", roomID, i)
+			}
+		}
+	}
 	for id, sm := range d.Map.SceneMaps {
 		if sm.Name == "" {
 			return fmt.Errorf("map.scene_maps %q needs a name", id)

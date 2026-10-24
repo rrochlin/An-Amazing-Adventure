@@ -210,18 +210,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	var actionErr error
 	walked := false
 	switch msg.SubAction {
-	case "move":
-		// MovePlayer also marks the destination discovered (fog of war).
-		_, actionErr = g.MovePlayer(msg.Payload)
-	case "end_conversation":
-		// The player leaves the conversation: back to free roam. No model call.
-		if g.Campaign != nil {
-			g.Campaign.Conversation = nil
-		}
-	case "move_to_room":
-		// Free movement: the player walked across the map into a connected
-		// room. No model call; the campaign's rules run below.
-		// In dialogue (a choice open, a conversation) the player stays put.
+	case "move", "move_to_room":
+		// Moving by an exit (a direction) or by walking across the map (a
+		// room): no model call; the campaign's rules run below. In dialogue
+		// (a choice open, a conversation) the player stays put.
 		if g.Campaign.InDialogue() {
 			reason := "in_conversation"
 			if g.Campaign.Conversation == nil {
@@ -230,8 +222,18 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			_ = sender.SendError(ctx, connID, reason)
 			return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 		}
-		_, actionErr = g.MoveToRoom(userID, msg.Payload)
+		// Either way the destination is discovered (fog of war).
+		if msg.SubAction == "move" {
+			_, actionErr = g.MovePlayer(msg.Payload)
+		} else {
+			_, actionErr = g.MoveToRoom(userID, msg.Payload)
+		}
 		walked = actionErr == nil
+	case "end_conversation":
+		// The player leaves the conversation: back to free roam. No model call.
+		if g.Campaign != nil {
+			g.Campaign.Conversation = nil
+		}
 	case "pick_up":
 		item, findErr := g.GetItemByName(msg.Payload)
 		if findErr != nil {
@@ -656,10 +658,13 @@ func handleDialogueChoice(
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
 		delta := game.StateDelta{
-			Events:   append([]game.WorldEvent(nil), turnResult.Events...),
-			Player:   &memberView.Player,
-			Self:     &memberView.Self,
-			Campaign: g.BuildCampaignStateView(),
+			Events: append([]game.WorldEvent(nil), turnResult.Events...),
+			// The room too: a scene the choice starts can move the player
+			// (playtest 7: the birthday at home still showed Market Lane).
+			CurrentRoom: &memberView.CurrentRoom,
+			Player:      &memberView.Player,
+			Self:        &memberView.Self,
+			Campaign:    g.BuildCampaignStateView(),
 			// Every room, so characters moving anywhere show on the map.
 			UpdatedRooms: memberView.Rooms,
 		}

@@ -234,3 +234,57 @@ func TestConversation_LocksWalkingUntilThePlayerLeaves(t *testing.T) {
 		t.Fatal("free roam again: the player can walk")
 	}
 }
+
+// The side panel's exits move by direction: the same rules as walking.
+func TestMoveByExit_FollowsTheWalkingRules(t *testing.T) {
+	store, sender := walkingSession(t, briarwell(t))
+	g, _ := game.FromSaveState(store.save)
+	g.Campaign.Conversation = &game.ConversationView{With: "father", Name: "Tomas"}
+	store.save = g.ToSaveState(store.save.Narrative, store.save.ChatHistory)
+	exit := func() {
+		body, _ := json.Marshal(actionRequest{Action: "game_action", SubAction: "move", Payload: "east"})
+		if _, err := handler(context.Background(), makeActionReq("conn-walk", string(body))); err != nil {
+			t.Fatal(err)
+		}
+	}
+	exit()
+	if len(sender.errors) != 1 || sender.errors[0] != "in_conversation" || playerRoom(t, store.save) != "family_cottage" {
+		t.Fatalf("an exit mid-conversation: errors %v, player in %q", sender.errors, playerRoom(t, store.save))
+	}
+	g, _ = game.FromSaveState(store.save)
+	g.Campaign.Conversation = nil
+	g.Version++
+	store.save = g.ToSaveState(store.save.Narrative, store.save.ChatHistory)
+	exit()
+	last := store.save.ChatHistory[len(store.save.ChatHistory)-1]
+	if playerRoom(t, store.save) != "village_square" || last.Type != "arrival" {
+		t.Fatalf("an exit should arrive like walking: player in %q, last %+v", playerRoom(t, store.save), last)
+	}
+}
+
+// Playtest 7: a choice that starts a scene somewhere else (the gift bought,
+// the birthday at home) left the client showing Market Lane.
+func TestDialogueChoice_TellsTheClientWhereAMovedPlayerIs(t *testing.T) {
+	def := briarwell(t)
+	store, sender := walkingSession(t, def)
+	g, _ := game.FromSaveState(store.save)
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"}}); err != nil {
+		t.Fatal(err)
+	}
+	if g.Campaign.ActiveNodeID != "gift_stall" {
+		t.Fatalf("setup: node %s", g.Campaign.ActiveNodeID)
+	}
+	g.Version++
+	store.save = g.ToSaveState(store.save.Narrative, store.save.ChatHistory)
+	body, _ := json.Marshal(actionRequest{Action: "game_action", SubAction: "dialogue_choice", Payload: "0"})
+	if _, err := handler(context.Background(), makeActionReq("conn-walk", string(body))); err != nil {
+		t.Fatal(err)
+	}
+	if store.save.Campaign.ActiveNodeID != "birthday" || playerRoom(t, store.save) != "family_cottage" {
+		t.Fatalf("node %s, player in %s", store.save.Campaign.ActiveNodeID, playerRoom(t, store.save))
+	}
+	d := sender.deltas[len(sender.deltas)-1]
+	if d.CurrentRoom == nil || d.CurrentRoom.ID != "family_cottage" {
+		t.Fatalf("the client should be told the player is home, got %+v", d.CurrentRoom)
+	}
+}

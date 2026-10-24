@@ -33,12 +33,15 @@ func roamingSave(t *testing.T) game.SaveState {
 	return g.ToSaveState(historyToNarrative(history), history)
 }
 
-func talk(t *testing.T, save game.SaveState, req chatRequest) (*fakeDBClient, *fakeWSSender, *fakeAIClient) {
+func talk(t *testing.T, save game.SaveState, req chatRequest, gmDecision ...string) (*fakeDBClient, *fakeWSSender, *fakeAIClient) {
 	t.Helper()
 	t.Setenv("MUTATIONS_TABLE", "mutations-test")
 	conn := db.Connection{ConnectionID: "conn-1", GameID: save.SessionID, UserID: db.BinaryID("user-1")}
 	dbFake := &fakeDBClient{connection: conn, connectionsByID: []db.Connection{conn}, user: &db.UserRecord{UserID: db.BinaryID("user-1"), AIEnabled: true}, save: save}
 	wsFake, aiFake := &fakeWSSender{}, &fakeAIClient{}
+	if len(gmDecision) > 0 {
+		aiFake.gmDecision = gmDecision[0]
+	}
 	orig, origWS, origAI := newDBClient, newWSSender, newAIClient
 	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
 	newWSSender = func(context.Context) (wsSender, error) { return wsFake, nil }
@@ -76,5 +79,18 @@ func TestTalkTo_OnlySomeoneInTheRoom(t *testing.T) {
 	}
 	if dbFake.putGameState.Campaign != nil && dbFake.putGameState.Campaign.Conversation != nil {
 		t.Fatal("no conversation should open")
+	}
+}
+
+// Playtest 7: Dunstan walked off mid-conversation and the text box still
+// spoke to him.
+func TestConversation_EndsWhenTheOtherPersonLeaves(t *testing.T) {
+	leaves := `{"world_events":[{"type":"move_character","input":{"character_name":"Tomas","room_name":"Village Square"}}],"beats":{}}`
+	dbFake, wsFake, _ := talk(t, roamingSave(t), chatRequest{Action: "chat", TalkTo: "father"}, leaves)
+	if len(wsFake.errors) != 0 {
+		t.Fatalf("errors %v", wsFake.errors)
+	}
+	if c := dbFake.putGameState.Campaign.Conversation; c != nil {
+		t.Fatalf("Tomas left, so the conversation should end, got %+v", c)
 	}
 }
