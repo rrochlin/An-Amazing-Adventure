@@ -30,6 +30,5 @@ first all the way to the ending, the second to the first scene change, checking 
 - The player is placed, not walked, when the story moves them to another room (the scene pans, the
   sprite appears there).
 - A mark tile can be a pocket (the long grass): reachable, but boxed in on three sides.
-- Authored Yarn dialogue can't stage yet (`<<move>>` / `<<emote>>` commands).
 - Speech bubbles over the speaker (#183) are the natural next step now that lines name a speaker.
 - The game master still tries to hand out coins (dropped by validation every time).
