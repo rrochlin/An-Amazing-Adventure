@@ -132,6 +132,8 @@ func (p Current) RunTurn(ctx context.Context, in TurnInput) (TurnOutput, error) 
 				transition := turn.Transition
 				out.Transition = &transition
 				out.AuthoredDialogue = transition.DialogueText
+			// Staging the new scene's dialogue ran into plays on its text.
+			out.SceneEvents = append(out.SceneEvents, campaigns.DrainStaging(g, out.AuthoredDialogue)...)
 				// Scene changes belong to the new scene's authored text (so
 				// the client shows the title card before it); everything
 				// else stays with the narration that caused it.

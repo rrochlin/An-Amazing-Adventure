@@ -40,6 +40,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote player hop" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:errand_ack_eager_0" }
       operands: { float_value: 0 }
@@ -56,6 +61,11 @@ nodes: {
     instructions: {
       opcode: RUN_COMMAND
       operands: { string_value: "set_label attitude reluctant" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote father shake" }
       operands: { float_value: 0 }
     }
     instructions: {
@@ -76,7 +86,7 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 15
+      value: 17
     }
     labels: {
       key: "L2shortcutoption_Errand_1"
@@ -84,7 +94,7 @@ nodes: {
     }
     labels: {
       key: "L3shortcutoption_Errand_2"
-      value: 11
+      value: 12
     }
     headers: {
       key: "title"

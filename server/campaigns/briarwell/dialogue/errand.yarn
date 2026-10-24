@@ -5,10 +5,12 @@ Father: It's your sister's birthday, and I've no coin to spare for a present. Bu
 Father: Do a good turn for someone in the village and they'll likely pay you for it. Earn enough, and buy Ros something from Old Garrick's stall. #line:errand_002
 -> I'll do it! I'll get her the best present ever. #line:errand_opt_eager
     <<set_label attitude eager>>
+    <<emote player hop>>
     Father ruffles your hair. #line:errand_ack_eager_0
     Father: That's my child. Off you go, then. #line:errand_ack_eager
 -> Do I have to? Can't Mother just buy something? #line:errand_opt_reluctant
     <<set_label attitude reluctant>>
+    <<emote father shake>>
     Father raises an eyebrow. #line:errand_ack_reluctant_0
     Father: A gift you earn means more. Go on, before I find you chores instead. #line:errand_ack_reluctant
 ===

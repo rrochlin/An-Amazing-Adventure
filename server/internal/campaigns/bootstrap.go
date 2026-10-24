@@ -166,7 +166,7 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 	if dialogueText, err := EnterActiveNode(def, g); err != nil {
 		return nil, nil, err
 	} else if dialogueText != "" {
-		history = append(history, game.ChatMessage{Type: "narrative", Content: dialogueText})
+		history = append(history, game.ChatMessage{Type: "narrative", Content: dialogueText, Events: DrainStaging(g, dialogueText)})
 	}
 
 	return g, history, nil

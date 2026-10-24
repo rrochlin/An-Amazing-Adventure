@@ -8,6 +8,7 @@ Stranger: My name is Holloway. I keep the Heroes' Guild. There is nothing left f
     His grip is warm and steady. He lifts you onto his horse without another word. #line:rescue_ack_go
 -> No! I have to find my family! #line:rescue_opt_refuse
     <<set_label guild_answer refused>>
+    <<emote player shake>>
     Holloway: If they live, you'll need to be strong enough to find them. #line:rescue_ack_refuse
     He lifts you onto his horse anyway, gently. #line:rescue_ack_refuse_2
 ===

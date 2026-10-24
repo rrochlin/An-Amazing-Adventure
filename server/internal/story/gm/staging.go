@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
@@ -27,7 +28,7 @@ type Cue struct {
 const PlayerCue = "player"
 
 // Emotes are the reactions the stage can play.
-var Emotes = []string{"hop", "shake", "startle", "bow", "laugh", "cry"}
+var Emotes = campaigns.Emotes
 
 // stagingSchema is the staging array, narrowed to who is here and the
 // room's marks.

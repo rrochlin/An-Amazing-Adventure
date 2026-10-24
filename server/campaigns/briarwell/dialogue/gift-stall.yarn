@@ -7,6 +7,7 @@ Old Garrick: A birthday, is it? Well, your coin buys any one of these. #line:gif
     <<take_item coin>>
     <<take_item coin>>
     <<give_item honey sweets>>
+    <<emote trader laugh>>
     Old Garrick: Sweets for the sweet. #line:gift_ack_sweets
     He wraps them tight in brown paper. #line:gift_ack_sweets_2
 -> A ribbon the colour of cornflowers. #line:gift_opt_ribbon
@@ -21,5 +22,6 @@ Old Garrick: A birthday, is it? Well, your coin buys any one of these. #line:gif
     <<take_item coin>>
     <<take_item coin>>
     <<give_item carved wooden bird>>
+    <<emote trader bow>>
     Old Garrick: Took me a week, that one. It'll last her a lifetime. #line:gift_ack_bird
 ===

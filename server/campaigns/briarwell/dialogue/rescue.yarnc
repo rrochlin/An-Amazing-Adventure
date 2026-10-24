@@ -54,6 +54,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote player shake" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:rescue_ack_refuse" }
       operands: { float_value: 0 }
@@ -71,7 +76,7 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 14
+      value: 15
     }
     labels: {
       key: "L2shortcutoption_Rescue_1"

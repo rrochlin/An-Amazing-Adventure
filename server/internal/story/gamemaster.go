@@ -112,6 +112,8 @@ func (p GameMaster) RunTurn(ctx context.Context, in TurnInput) (TurnOutput, erro
 			transition := turn.Transition
 			out.Transition = &transition
 			out.AuthoredDialogue = transition.DialogueText
+			// Staging the new scene's dialogue ran into plays on its text.
+			out.SceneEvents = append(out.SceneEvents, campaigns.DrainStaging(g, out.AuthoredDialogue)...)
 			for _, e := range turn.Events {
 				if out.AuthoredDialogue != "" && IsSceneEvent(e) {
 					out.SceneEvents = append(out.SceneEvents, e)
