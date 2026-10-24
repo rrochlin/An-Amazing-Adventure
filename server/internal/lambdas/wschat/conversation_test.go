@@ -9,6 +9,7 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
 	"github.com/rrochlin/an-amazing-adventure/internal/db"
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
+	"github.com/rrochlin/an-amazing-adventure/internal/wsutil"
 )
 
 // A Briarwell session past Father's question (no choice open), in the cottage
@@ -92,5 +93,64 @@ func TestConversation_EndsWhenTheOtherPersonLeaves(t *testing.T) {
 	}
 	if c := dbFake.putGameState.Campaign.Conversation; c != nil {
 		t.Fatalf("Tomas left, so the conversation should end, got %+v", c)
+	}
+}
+
+// joiningDB is a game whose player reloads mid-turn: a second connection
+// appears after the turn has started streaming.
+type joiningDB struct {
+	*fakeDBClient
+	calls int
+}
+
+func (j *joiningDB) GetConnectionsByGameID(ctx context.Context, id string) ([]db.Connection, error) {
+	j.calls++
+	conns, err := j.fakeDBClient.GetConnectionsByGameID(ctx, id)
+	if j.calls > 2 { // the first lookups happen before streaming
+		conns = append(conns, db.Connection{ConnectionID: "conn-reloaded", GameID: id, UserID: db.BinaryID("user-1")})
+	}
+	return conns, err
+}
+
+type recordingWS struct {
+	*fakeWSSender
+	sent map[string][]wsutil.Frame
+}
+
+func (r *recordingWS) Send(_ context.Context, id string, f wsutil.Frame) error {
+	r.sent[id] = append(r.sent[id], f)
+	return nil
+}
+
+// Playtest 8: reloading during a turn left the page without that turn's
+// narration (it was streamed to the old connection only).
+func TestReloadMidTurn_TheNewConnectionGetsTheStory(t *testing.T) {
+	t.Setenv("MUTATIONS_TABLE", "mutations-test")
+	save := roamingSave(t)
+	conn := db.Connection{ConnectionID: "conn-1", GameID: save.SessionID, UserID: db.BinaryID("user-1")}
+	dbFake := &joiningDB{fakeDBClient: &fakeDBClient{connection: conn, connectionsByID: []db.Connection{conn}, user: &db.UserRecord{UserID: db.BinaryID("user-1"), AIEnabled: true}, save: save}}
+	wsFake := &recordingWS{fakeWSSender: &fakeWSSender{}, sent: map[string][]wsutil.Frame{}}
+	aiFake := &fakeAIClient{}
+	orig, origWS, origAI := newDBClient, newWSSender, newAIClient
+	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
+	newWSSender = func(context.Context) (wsSender, error) { return wsFake, nil }
+	newAIClient = func(context.Context) (aiClient, error) { return aiFake, nil }
+	t.Cleanup(func() { newDBClient, newWSSender, newAIClient = orig, origWS, origAI })
+
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "I look around"})
+	if _, err := handler(context.Background(), makeWSChatReq("conn-1", string(body))); err != nil {
+		t.Fatal(err)
+	}
+	frames := wsFake.sent["conn-reloaded"]
+	if len(frames) != 1 || frames[0].Type != wsutil.FrameGameStateUpdate {
+		t.Fatalf("the reloaded page should get the whole state, got %+v", frames)
+	}
+	view := frames[0].Payload.(game.GameStateView)
+	last := view.ChatHistory[len(view.ChatHistory)-1]
+	if last.Content != "Tomas looks up from the table." {
+		t.Fatalf("with the turn's narration in it, got %+v", last)
+	}
+	if len(wsFake.sent["conn-1"]) != 0 {
+		t.Fatal("the connection that saw the stream needs no full state")
 	}
 }

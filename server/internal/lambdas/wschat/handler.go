@@ -426,9 +426,20 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	} else {
 		freshConns = ensureSenderConnection(freshConns, conn)
 	}
+	streamedTo := map[string]bool{}
+	for _, id := range allConnIDs {
+		streamedTo[id] = true
+	}
 	for _, gc := range freshConns {
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
+		// A connection that opened mid-turn (a reload) missed the streamed
+		// narration: it gets the whole state, story so far included.
+		if !streamedTo[gc.ConnectionID] {
+			full := g.BuildGameStateView(memberUID, history)
+			tr.Frame(string(wsutil.FrameGameStateUpdate), gc.ConnectionID, nil)
+			_ = ws.Send(ctx, gc.ConnectionID, wsutil.Frame{Type: wsutil.FrameGameStateUpdate, Payload: full})
+		}
 		delta := game.StateDelta{
 			Events:   append(append([]game.WorldEvent(nil), turn.NarrativeEvents...), turn.SceneEvents...),
 			Player:   &memberView.Player,
