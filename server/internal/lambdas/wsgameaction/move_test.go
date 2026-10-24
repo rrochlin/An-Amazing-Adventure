@@ -288,3 +288,36 @@ func TestDialogueChoice_TellsTheClientWhereAMovedPlayerIs(t *testing.T) {
 		t.Fatalf("the client should be told the player is home, got %+v", d.CurrentRoom)
 	}
 }
+
+func TestDialogueChoice_SendsEachMessagesStaging(t *testing.T) {
+	// Buying the sweets: Garrick laughs on his own line, then the birthday
+	// starts and Ros hops on hers. Two messages, each with its own cues.
+	def := briarwell(t)
+	store, sender := walkingSession(t, def)
+	g, _ := game.FromSaveState(store.save)
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"}}); err != nil {
+		t.Fatal(err)
+	}
+	g.Version++
+	store.save = g.ToSaveState(store.save.Narrative, store.save.ChatHistory)
+	body, _ := json.Marshal(actionRequest{Action: "game_action", SubAction: "dialogue_choice", Payload: "0"})
+	if _, err := handler(context.Background(), makeActionReq("conn-walk", string(body))); err != nil {
+		t.Fatal(err)
+	}
+	d := sender.deltas[len(sender.deltas)-1]
+	cue := func(events []game.WorldEvent, who, emote string) bool {
+		for _, e := range events {
+			if e.Type == "cue" && e.Character == who && e.Emote == emote {
+				return true
+			}
+		}
+		return false
+	}
+	if !d.Authored || !cue(d.Events, "trader", "laugh") || !cue(d.SceneEvents, "sister", "hop") {
+		t.Fatalf("each message's cues: events %+v, scene events %+v", d.Events, d.SceneEvents)
+	}
+	h := store.save.ChatHistory
+	if !cue(h[len(h)-2].Events, "trader", "laugh") || !cue(h[len(h)-1].Events, "sister", "hop") {
+		t.Errorf("saved with their messages: %+v / %+v", h[len(h)-2].Events, h[len(h)-1].Events)
+	}
+}

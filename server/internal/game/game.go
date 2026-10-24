@@ -208,6 +208,11 @@ type Game struct {
 	// monsters in the current room are dead.
 	InitiativeOrder []combat.InitiativeEntry
 
+	// PendingStaging is staging the authored dialogue ran into this
+	// invocation (<<move>>, <<emote>>), waiting to be sent with the message
+	// its text ends up in. Not saved: it lives for one turn.
+	PendingStaging []StagingBatch
+
 	// DungeonData is the procedurally generated dungeon layout (v4+).
 	// Nil for games created before SchemaVersion 4 (they use the legacy Rooms map).
 	DungeonData *DungeonData
@@ -1426,6 +1431,13 @@ type StateDelta struct {
 	// message before last, and SceneEvents to the authored message.
 	Authored    bool         `json:"authored,omitempty"`
 	SceneEvents []WorldEvent `json:"scene_events,omitempty"`
+}
+
+// StagingBatch is the staging of one run of authored dialogue: cue events
+// whose Line counts lines of Text, the text that run produced.
+type StagingBatch struct {
+	Text string
+	Cues []WorldEvent
 }
 
 // ArrivalLine is what the player sees on walking into a room: its name, its

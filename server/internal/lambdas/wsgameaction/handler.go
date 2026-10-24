@@ -320,11 +320,11 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 				tr.Errorf("end run on party wipe: %v", wipeErr)
 			} else if wipe.Transition.RunEnded {
 				tr.Transition = wipe.Transition
-				tr.Events = wipe.Events
+				tr.Events = append(wipe.Events, campaigns.DrainStaging(g, wipe.Transition.DialogueText)...)
 				saveState.ChatHistory = append(saveState.ChatHistory, game.ChatMessage{
 					Type:    "narrative",
 					Content: wipe.Transition.DialogueText,
-					Events:  wipe.Events,
+					Events:  tr.Events,
 				})
 			}
 		}
@@ -559,6 +559,7 @@ func handleDialogueChoice(
 		_ = ws.SendError(ctx, connID, resumeErr.Error())
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
+	choiceCues := campaigns.DrainStaging(g, choiceText)
 
 	// Build the per-connection broadcast list.
 	allConns, connsErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)
@@ -599,7 +600,7 @@ func handleDialogueChoice(
 		for _, s := range staleEnds {
 			_ = dbClient.DeleteConnection(ctx, s)
 		}
-		history = append(history, game.ChatMessage{Type: "narrative", Content: choiceText})
+		history = append(history, game.ChatMessage{Type: "narrative", Content: choiceText, Events: choiceCues})
 		narrative = append(narrative, game.NarrativeMessage{
 			Role:    "assistant",
 			Content: []game.NarrativeBlock{{Type: "text", Text: choiceText}},
@@ -607,11 +608,14 @@ func handleDialogueChoice(
 	}
 
 	// Check whether the completed dialogue triggers a campaign node transition.
+	sceneText := ""
 	turnResult, transitionErr := campaigns.OrchestrateTurn(campaignDef, g, campaigns.ConditionResolution{})
 	if transitionErr != nil {
 		log.Printf("ws-game-action: dialogue_choice: campaign transition: %v", transitionErr)
 	} else if turnResult.Transition.Transitioned && turnResult.Transition.DialogueText != "" {
 		text := turnResult.Transition.DialogueText
+		sceneText = text
+		turnResult.Events = append(turnResult.Events, campaigns.DrainStaging(g, text)...)
 		chunkFrame := wsutil.Frame{
 			Type:    wsutil.FrameNarrativeChunk,
 			Payload: map[string]string{"content": text},
@@ -635,7 +639,7 @@ func handleDialogueChoice(
 			if history[i].Type != "narrative" {
 				continue
 			}
-			history[i].Events = append([]game.WorldEvent(nil), turnResult.Events...)
+			history[i].Events = append(history[i].Events, turnResult.Events...)
 			break
 		}
 	}
@@ -658,7 +662,7 @@ func handleDialogueChoice(
 		memberUID := string(gc.UserID)
 		memberView := g.BuildGameStateView(memberUID, nil)
 		delta := game.StateDelta{
-			Events: append([]game.WorldEvent(nil), turnResult.Events...),
+			Events: append(append([]game.WorldEvent(nil), choiceCues...), turnResult.Events...),
 			// The room too: a scene the choice starts can move the player
 			// (playtest 7: the birthday at home still showed Market Lane).
 			CurrentRoom: &memberView.CurrentRoom,
@@ -667,6 +671,13 @@ func handleDialogueChoice(
 			Campaign:    g.BuildCampaignStateView(),
 			// Every room, so characters moving anywhere show on the map.
 			UpdatedRooms: memberView.Rooms,
+		}
+		// The choice's text and a new scene's text are two messages: each
+		// keeps its own events (the stage plays a cue on its own text).
+		if choiceText != "" && sceneText != "" {
+			delta.Events = choiceCues
+			delta.SceneEvents = turnResult.Events
+			delta.Authored = true
 		}
 		if sendErr := ws.SendDelta(ctx, gc.ConnectionID, delta); sendErr != nil {
 			log.Printf("ws-game-action: dialogue_choice: send delta to %s: %v", gc.ConnectionID, sendErr)
@@ -731,5 +742,7 @@ func walkInto(ctx context.Context, dbClient dbClient, ws dialogueChoiceSender, c
 			Content: []game.NarrativeBlock{{Type: "text", Text: text}},
 		})
 	}
-	saveState.ChatHistory = append(saveState.ChatHistory, game.ChatMessage{Type: "narrative", Content: text, Events: turn.Events})
+	// The delta sends tr.Events: the scene's staging goes with them.
+	tr.Events = append(turn.Events, campaigns.DrainStaging(g, text)...)
+	saveState.ChatHistory = append(saveState.ChatHistory, game.ChatMessage{Type: "narrative", Content: text, Events: tr.Events})
 }

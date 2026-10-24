@@ -72,6 +72,22 @@ free roam first, add a condition the player meets by acting, such as `player_in_
 Until the player walks to Market Lane, the scene stays open and the other deeds can still be done.
 Briarwell moves on at once; `TestFreeRoamBufferBeforeTheNextScene` shows the paused version.
 
+### Staging in authored dialogue
+
+Yarn dialogue stages a scene with the same cues the game master hands in ([[game-master]]):
+
+```
+<<move father front_door>>
+Later, as the candles gutter, Father goes to the window and goes very still.
+<<emote father startle>>
+There is smoke rising from the woods.
+```
+
+- `<<move ACTOR MARK>>`: the character (an actor ID, or `player`) walks to a mark, one of the map's
+  points of interest, and stands there.
+- `<<emote ACTOR EMOTE>>`: a reaction, one of `hop`, `shake`, `startle`, `bow`, `laugh`, `cry`.
+- A cue plays with the line after it. The loader rejects an unknown actor, mark or emote.
+
 ### Rules the loader enforces
 
 - A controlled scene needs exact lines (a Yarn dialogue) or `stage_directions.must_happen`.

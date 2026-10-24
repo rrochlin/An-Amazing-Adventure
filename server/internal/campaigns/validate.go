@@ -257,7 +257,7 @@ func (d *CampaignDefinition) Validate() error {
 		}
 	}
 
-	return nil
+	return d.validateStaging()
 }
 
 func (d *CampaignDefinition) validateTransitionRules(rules []TransitionRule, context string) error {

@@ -425,8 +425,8 @@ func currentDialogueOpening(def *CampaignDefinition, g *game.Game) string {
 	if err != nil {
 		return ""
 	}
-	if len(result.Commands) > 0 {
-		if applyErr := ApplyDialogueCommands(def, g, result.Commands); applyErr != nil {
+	if commands := takeStaging(g, result); len(commands) > 0 {
+		if applyErr := ApplyDialogueCommands(def, g, commands); applyErr != nil {
 			return ""
 		}
 	}
@@ -482,8 +482,8 @@ func ResumeDialogueWithChoice(def *CampaignDefinition, g *game.Game, choiceID in
 	if err != nil {
 		return "", fmt.Errorf("resume dialogue with choice %d: %w", choiceID, err)
 	}
-	if len(result.Commands) > 0 {
-		if applyErr := ApplyDialogueCommands(def, g, result.Commands); applyErr != nil {
+	if commands := takeStaging(g, result); len(commands) > 0 {
+		if applyErr := ApplyDialogueCommands(def, g, commands); applyErr != nil {
 			return "", fmt.Errorf("apply dialogue commands: %w", applyErr)
 		}
 	}

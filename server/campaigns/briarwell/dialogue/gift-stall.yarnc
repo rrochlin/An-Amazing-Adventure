@@ -57,6 +57,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote trader laugh" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:gift_ack_sweets" }
       operands: { float_value: 0 }
@@ -125,6 +130,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote trader bow" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:gift_ack_bird" }
       operands: { float_value: 0 }
@@ -137,7 +147,7 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 27
+      value: 29
     }
     labels: {
       key: "L2shortcutoption_GiftStall_1"
@@ -145,11 +155,11 @@ nodes: {
     }
     labels: {
       key: "L3shortcutoption_GiftStall_2"
-      value: 14
+      value: 15
     }
     labels: {
       key: "L4shortcutoption_GiftStall_3"
-      value: 21
+      value: 22
     }
     headers: {
       key: "title"

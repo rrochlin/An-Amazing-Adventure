@@ -4,6 +4,11 @@ nodes: {
   value: {
     name: "Birthday"
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote sister hop" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:bday_001" }
       operands: { float_value: 0 }
@@ -40,6 +45,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote sister laugh" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:bday_ack_give_0" }
       operands: { float_value: 0 }
@@ -59,6 +69,11 @@ nodes: {
       operands: { float_value: 0 }
     }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote sister cry" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:bday_ack_keep" }
       operands: { float_value: 0 }
@@ -69,8 +84,18 @@ nodes: {
     }
     instructions: { opcode: POP }
     instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "move father front_door" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
       opcode: RUN_LINE
       operands: { string_value: "line:bday_smoke" }
+      operands: { float_value: 0 }
+    }
+    instructions: {
+      opcode: RUN_COMMAND
+      operands: { string_value: "emote father startle" }
       operands: { float_value: 0 }
     }
     instructions: {
@@ -126,27 +151,27 @@ nodes: {
     instructions: { opcode: STOP }
     labels: {
       key: "L1group_end"
-      value: 14
+      value: 17
     }
     labels: {
       key: "L2shortcutoption_Birthday_1"
-      value: 6
+      value: 7
     }
     labels: {
       key: "L3shortcutoption_Birthday_2"
-      value: 11
+      value: 13
     }
     labels: {
       key: "L4group_end"
-      value: 27
+      value: 32
     }
     labels: {
       key: "L5shortcutoption_Birthday_1"
-      value: 22
+      value: 27
     }
     labels: {
       key: "L6shortcutoption_Birthday_2"
-      value: 24
+      value: 29
     }
     headers: {
       key: "title"

@@ -325,8 +325,14 @@ func TestHandleDialogueChoice_RouteChoiceProgression(t *testing.T) {
 			if delta.Campaign == nil {
 				t.Fatalf("expected campaign state in delta, got %#v", delta)
 			}
-			if len(delta.Events) != 2 || delta.Events[0].Type != "scene_started" || delta.Events[1].Message != tc.wantEvent {
-				t.Fatalf("expected campaign-progress event in delta, got %#v", delta.Events)
+			// The new scene's events go with its own text; when the choice
+			// said something first, they're sent as the authored message's.
+			sceneEvents := delta.Events
+			if delta.Authored {
+				sceneEvents = delta.SceneEvents
+			}
+			if len(sceneEvents) != 2 || sceneEvents[0].Type != "scene_started" || sceneEvents[1].Message != tc.wantEvent {
+				t.Fatalf("expected campaign-progress event in delta, got %#v", delta)
 			}
 			if delta.Campaign.Labels["selected_branch"] != tc.wantSelectedBranch {
 				t.Fatalf("expected delta selected_branch=%q, got %#v", tc.wantSelectedBranch, delta.Campaign.Labels)

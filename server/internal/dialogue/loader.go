@@ -27,8 +27,11 @@ type Choice struct {
 }
 
 type RunResult struct {
-	Lines          []string
-	Commands       []string
+	Lines    []string
+	Commands []string
+	// CommandLines is, for each command, how many lines came before it:
+	// staging commands play with the line that follows.
+	CommandLines   []int
 	CurrentNode    string
 	Variables      map[string]string
 	Completed      bool
@@ -43,6 +46,7 @@ type handler struct {
 	lineText       map[string]string
 	lines          []string
 	commands       []string
+	commandLines   []int
 	selections     []int // choices to replay, in order, at successive Options calls
 	consumed       int   // how many selections have been applied
 	nodeChoices    []int // choices applied since the current node started
@@ -84,6 +88,7 @@ func (h *handler) Options(options []yarnvm.Option) (int, error) {
 				if h.consumed == len(h.selections) {
 					h.lines = nil
 					h.commands = nil
+					h.commandLines = nil
 				}
 				return idx, nil
 			}
@@ -107,6 +112,7 @@ func (h *handler) Options(options []yarnvm.Option) (int, error) {
 
 func (h *handler) Command(command string) error {
 	h.commands = append(h.commands, command)
+	h.commandLines = append(h.commandLines, len(h.lines))
 	return nil
 }
 
@@ -173,6 +179,7 @@ func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars 
 			return RunResult{
 				Lines:          h.lines,
 				Commands:       h.commands,
+				CommandLines:   h.commandLines,
 				CurrentNode:    h.currentNode,
 				Variables:      storeVars(vars.Contents()),
 				Completed:      false,
@@ -187,12 +194,32 @@ func RunNode(fsys fs.FS, programPath, stringsPath, startNode string, storedVars 
 	}
 
 	return RunResult{
-		Lines:       h.lines,
-		Commands:    h.commands,
-		CurrentNode: h.currentNode,
-		Variables:   storeVars(vars.Contents()),
-		Completed:   true,
+		Lines:        h.lines,
+		Commands:     h.commands,
+		CommandLines: h.commandLines,
+		CurrentNode:  h.currentNode,
+		Variables:    storeVars(vars.Contents()),
+		Completed:    true,
 	}, nil
+}
+
+// Commands lists every command a compiled program can run, as written
+// (for checking a campaign's commands when it loads).
+func Commands(fsys fs.FS, programPath string) ([]string, error) {
+	prog, err := loadProgram(fsys, programPath)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, node := range prog.GetNodes() {
+		for _, ins := range node.GetInstructions() {
+			if ins.GetOpcode() != yarnpb.Instruction_RUN_COMMAND || len(ins.GetOperands()) == 0 {
+				continue
+			}
+			out = append(out, ins.GetOperands()[0].GetStringValue())
+		}
+	}
+	return out, nil
 }
 
 func loadProgram(fsys fs.FS, programPath string) (*yarnpb.Program, error) {
