@@ -44,6 +44,8 @@ export interface StageView {
 
 /** How long a camera pan or a character's walk takes. */
 const GLIDE_MS = 800;
+/** With nothing moving for this long, the scene stops drawing (battery). */
+const IDLE_MS = 1500;
 /** One step of the player's walk. */
 const STEP_MS = 170;
 /** One step of a character's walk (a little slower than the player's). */
@@ -116,7 +118,16 @@ export class StageScene extends Phaser.Scene {
          .setOrigin(0.5, 1)
          .setDepth(100)
          .setVisible(false);
-      this.scale.on('resize', () => this.frame(false));
+      this.scale.on('resize', () => {
+         this.wake();
+         this.frame(false);
+      });
+      // Anything the player does wakes a sleeping scene.
+      const wake = () => this.wake();
+      window.addEventListener('keydown', wake);
+      this.input.on('pointermove', wake);
+      this.game.canvas.addEventListener('pointerdown', wake);
+      this.events.once('destroy', () => window.removeEventListener('keydown', wake));
       this.setUpControls();
       if (this.view) this.render(this.view);
    }
@@ -191,7 +202,8 @@ export class StageScene extends Phaser.Scene {
       return (Object.keys(this.keys) as Direction[]).find((d) => this.keys[d]?.some((k) => k.isDown));
    }
 
-   update() {
+   update(time: number) {
+      this.sleepWhenIdle(time);
       this.placeBubble();
       const view = this.view;
       if (!view || this.walking || !this.playerTile) return;
@@ -293,11 +305,40 @@ export class StageScene extends Phaser.Scene {
       this.tweens.add({ targets: sprite, scaleY: scale * 1.08, duration: STEP_MS / 2, yoyo: true, ease: 'Sine.easeOut' });
    }
 
+   private activeAt = 0;
+
+   /**
+    * Stop the game loop once nothing has moved for a while: no tweens, no
+    * walk, no keys held. The canvas keeps its last frame; any change from
+    * React, a key, the pointer or a resize starts it again.
+    */
+   private sleepWhenIdle(time: number) {
+      const busy =
+         this.walking ||
+         this.path.length > 0 ||
+         this.storyPath.length > 0 ||
+         this.emotes.length > 0 ||
+         this.tweens.getTweens().length > 0 ||
+         this.heldDirection() !== undefined;
+      if (busy || !this.activeAt) this.activeAt = time;
+      if (time - this.activeAt > IDLE_MS) {
+         this.activeAt = 0;
+         this.game.loop.sleep();
+      }
+   }
+
+   private wake() {
+      if (this.ready && !this.game.loop.running) {
+         this.activeAt = 0;
+         this.game.loop.wake();
+      }
+   }
+
    /** State for browser checks. */
    probe() {
       const p = this.sprites.get('player');
       const tiles = Object.fromEntries([...this.sprites].map(([id, s]) => [id, s.getData('tile') as Tile | undefined]));
-      return { tile: this.playerTile, room: this.roomShown(this.view!), walking: this.walking, sprite: p && { x: p.x, y: p.y }, tiles, played: this.played.size };
+      return { asleep: !this.game.loop.running, tile: this.playerTile, room: this.roomShown(this.view!), walking: this.walking, sprite: p && { x: p.x, y: p.y }, tiles, played: this.played.size };
    }
 
    /** The room on screen: the one the player walked into, until the server agrees. */
@@ -308,6 +349,7 @@ export class StageScene extends Phaser.Scene {
    /** Called by React on every change. */
    setView(view: StageView) {
       this.view = view;
+      this.wake();
       if (this.ready) this.render(view);
    }
 
