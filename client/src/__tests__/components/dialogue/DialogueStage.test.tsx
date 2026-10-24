@@ -357,4 +357,28 @@ describe('free roam and dialogue', () => {
       fireEvent.click(stage()); // read: back to walking
       expect(onSpeaking).toHaveBeenLastCalledWith(null);
    });
+
+   it("lets the world catch up at a new scene's title card, before its text", () => {
+      const onCaughtUp = vi.fn();
+      const { update } = setup(inProgress, { onCaughtUp });
+      onCaughtUp.mockClear();
+      update({
+         onCaughtUp,
+         messages: [
+            ...inProgress,
+            { type: 'player', content: 'I buy the bird' },
+            { type: 'narrative', content: 'Old Garrick: Took me a week, that one.' },
+            {
+               type: 'narrative',
+               content: 'The cottage glows with candlelight.\nRos: Did you get me something?',
+               events: [{ type: 'scene_started', message: "Ros's Birthday" }],
+            },
+         ],
+      });
+      tick(100);
+      expect(onCaughtUp).not.toHaveBeenCalled(); // Garrick's line is still to read
+      fireEvent.click(stage());
+      fireEvent.click(stage()); // on to the title card
+      expect(onCaughtUp).toHaveBeenCalled();
+   });
 });

@@ -128,8 +128,18 @@ export function sceneArt(
 ): MapArt | undefined {
    if (!art || !sceneMap || sceneMap.room_id !== currentRoomId) return art;
    const inside = art.interiors?.[sceneMap.id];
-   return inside ? { ...inside, cast: { ...art.cast, ...inside.cast } } : art;
+   if (!inside) return art;
+   // The same object every time: the stage rebuilds when the art changes
+   // (playtest 10: a fresh copy each render reset every walk indoors).
+   let merged = mergedInteriors.get(inside);
+   if (!merged) {
+      merged = { ...inside, cast: { ...art.cast, ...inside.cast } };
+      mergedInteriors.set(inside, merged);
+   }
+   return merged;
 }
+
+const mergedInteriors = new WeakMap<MapArt, MapArt>();
 
 /** Top-left pixel of a tile in a 12-column sheet. */
 export function sheetOffset(index: number): [number, number] {
