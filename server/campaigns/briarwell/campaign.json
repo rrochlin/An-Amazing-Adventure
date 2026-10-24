@@ -36,7 +36,18 @@
       "cottage_interior": {
         "room_id": "family_cottage",
         "name": "Inside the Cottage",
-        "description": "One warm room under the thatch with a packed-earth floor: the hearth and its cooking pot in the back wall between two shuttered windows, the family table with its stools in the middle, the parents' straw bed and Ros's cot to the right, a chest, a barrel and a shelf of crockery by the front door."
+        "description": "One warm room under the thatch with a packed-earth floor: the hearth and its cooking pot in the back wall between two shuttered windows, the family table with its stools in the middle, the parents' straw bed and Ros's cot to the right, a chest, a barrel and a shelf of crockery by the front door.",
+        "points_of_interest": [
+          {"id": "hearth", "name": "Hearth"},
+          {"id": "window", "name": "Shuttered window"},
+          {"id": "table", "name": "Family table"},
+          {"id": "parents_bed", "name": "Parents' bed"},
+          {"id": "cot", "name": "Ros's cot"},
+          {"id": "chest", "name": "Chest"},
+          {"id": "barrel", "name": "Barrel"},
+          {"id": "shelf", "name": "Crockery shelf"},
+          {"id": "front_door", "name": "Front door"}
+        ]
       }
     },
     "rooms": {

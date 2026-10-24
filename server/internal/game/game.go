@@ -126,6 +126,25 @@ type SceneMapView struct {
 	ID     string `json:"id" dynamodbav:"id"`
 	RoomID string `json:"room_id" dynamodbav:"room_id"`
 	Name   string `json:"name" dynamodbav:"name"`
+	// PointsOfInterest are the interior's marks.
+	PointsOfInterest []PointOfInterest `json:"points_of_interest,omitempty" dynamodbav:"points_of_interest,omitempty"`
+}
+
+// MarksHere is where people can stand in the player's room: the interior's
+// marks while the scene is played indoors, the room's otherwise.
+func (g *Game) MarksHere() []PointOfInterest {
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return nil
+	}
+	if c := g.Campaign; c != nil && c.ActiveSceneMap != nil && c.ActiveSceneMap.RoomID == owner.LocationID && len(c.ActiveSceneMap.PointsOfInterest) > 0 {
+		return c.ActiveSceneMap.PointsOfInterest
+	}
+	room, err := g.GetRoom(owner.LocationID)
+	if err != nil {
+		return nil
+	}
+	return room.PointsOfInterest
 }
 
 // ConversationView is the character the player is talking to.

@@ -158,7 +158,7 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 	g.Campaign.ActiveMood = node.Mood
 	g.Campaign.ActiveSceneMap = nil
 	if sm, ok := def.Map.SceneMaps[node.SceneMap]; ok && node.SceneMap != "" {
-		g.Campaign.ActiveSceneMap = &game.SceneMapView{ID: node.SceneMap, RoomID: sm.RoomID, Name: sm.Name}
+		g.Campaign.ActiveSceneMap = &game.SceneMapView{ID: node.SceneMap, RoomID: sm.RoomID, Name: sm.Name, PointsOfInterest: append([]game.PointOfInterest(nil), sm.PointsOfInterest...)}
 	}
 	if node.LocationID != "" {
 		// The scene happens somewhere: the player is there.

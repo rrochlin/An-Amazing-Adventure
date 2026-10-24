@@ -371,3 +371,31 @@ func TestStagingCanWalkSomeoneUpToAnother(t *testing.T) {
 		t.Errorf("cue event %+v", events[0])
 	}
 }
+
+func TestIndoorsTheInteriorsMarksAreOffered(t *testing.T) {
+	// Playtest 11: the player hid behind the barrel by the door, and the only
+	// marks the game master could name were the hearth, door and gate.
+	def, g := briarwell(t)
+	g.Campaign.ActiveNodeID = "bandit_raid"
+	if g.Campaign.ActiveSceneMap == nil || g.Campaign.ActiveSceneMap.ID != "cottage_interior" {
+		t.Fatalf("setup: the opening is played indoors, got %+v", g.Campaign.ActiveSceneMap)
+	}
+	raw, _ := json.Marshal(gm.Schema(node(def, "bandit_raid"), g))
+	if !strings.Contains(string(raw), `"barrel"`) || strings.Contains(string(raw), `"garden_gate"`) {
+		t.Errorf("indoors: the interior's marks, not the room's: %s", raw)
+	}
+	kept, _ := gm.Validate(node(def, "bandit_raid"), g, gm.Decision{Staging: []gm.Cue{{Who: "player", MoveTo: "barrel"}}})
+	if len(kept.Staging) != 1 {
+		t.Errorf("the barrel is a mark indoors")
+	}
+	if !strings.Contains(gm.Brief(def, g), "barrel (Barrel)") {
+		t.Error("the brief lists the interior's marks")
+	}
+
+	if err := g.PlaceCharacter(g.OwnerID, "village_square"); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := json.Marshal(gm.Schema(node(def, "bandit_raid"), g)); strings.Contains(string(raw), `"barrel"`) {
+		t.Error("outside, the room's own marks")
+	}
+}

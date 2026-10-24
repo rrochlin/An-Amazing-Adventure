@@ -212,6 +212,7 @@ export function SceneScreen({
                   playerMark={playerMark}
                   cues={cues}
                   speaking={speaking}
+                  places={indoors ? sceneMap?.points_of_interest : undefined}
                   insetTop={chipHeight}
                   insetBottom={framedPanel}
                   // An open overlay (journal, map, log) holds the player still too.
