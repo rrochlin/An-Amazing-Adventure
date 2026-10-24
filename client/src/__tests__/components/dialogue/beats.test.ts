@@ -166,3 +166,10 @@ describe('mechanics on the stage', () => {
       expect(beats[0].cues).toBeUndefined();
    });
 });
+
+describe('walking up to someone', () => {
+   it('keeps who the cue walks toward', () => {
+      const beats = buildBeats([{ type: 'narrative', content: 'You stride over.', events: [{ type: 'cue', message: '', character: 'player', toward: 'bully' }] }]);
+      expect(beats[0].cues?.[0]).toMatchObject({ character: 'player', toward: 'bully' });
+   });
+});

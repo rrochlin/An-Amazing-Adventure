@@ -41,6 +41,8 @@ export interface StageCue {
    /** An NPC id, or "player". */
    character: string;
    mark?: string;
+   /** Someone they walk up beside. */
+   toward?: string;
    emote?: string;
    /** A change shown rising over them: "−2 ❤", "+ Rag doll". */
    pop?: string;
@@ -126,7 +128,13 @@ function messageBeats(
    events.forEach((e, n) => {
       if (e.type !== 'cue' || !e.character || !lineAt.length) return;
       const at = lineAt[Math.min(e.line ?? 0, lineAt.length - 1)];
-      const cue: StageCue = { id: `${index}-C${n}`, character: e.character, mark: e.mark || undefined, emote: e.emote || undefined };
+      const cue: StageCue = {
+         id: `${index}-C${n}`,
+         character: e.character,
+         mark: e.mark || undefined,
+         toward: e.toward || undefined,
+         emote: e.emote || undefined,
+      };
       beats[at] = { ...beats[at], cues: [...(beats[at].cues ?? []), cue] };
    });
    // What happened to someone (hurt, healed, an item gained or lost) shows

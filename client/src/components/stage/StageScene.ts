@@ -96,6 +96,8 @@ export class StageScene extends Phaser.Scene {
    private storyPath: Tile[] = [];
    /** The story's walk is taking the player to the room it moved them to (no room changes to report). */
    private crossing = false;
+   /** Where the story walked someone up to another, until they next move room. */
+   private spots = new Map<string, { x: number; y: number; room: string }>();
    /** Reactions waiting for their character to stop walking. */
    private emotes: { id: string; emote: string }[] = [];
    /** What happened to someone, to show rising over them. */
@@ -392,6 +394,7 @@ export class StageScene extends Phaser.Scene {
       this.storyPath = [];
       this.crossing = false;
       this.marks.clear();
+      this.spots.clear();
       const { pad, ground, objects } = sceneLayers(art);
       for (const [i, grid] of [ground, objects].entries()) {
          const map = this.make.tilemap({ data: grid, tileWidth: TILE, tileHeight: TILE });
@@ -441,6 +444,20 @@ export class StageScene extends Phaser.Scene {
    private syncCharacters(view: StageView, room: string | undefined) {
       const before = this.placed;
       this.placed = placeTokens(view.art, view.rooms, view.currentRoomId, view.playerName ?? 'You', view.playerScale ?? 1, this.placed, this.markRecord(view));
+      // Someone the story walked up to another stands there while they stay
+      // in that room and the tile is free.
+      for (const t of this.placed) {
+         const spot = this.spots.get(t.id);
+         if (!spot) continue;
+         if (spot.room !== t.roomId) {
+            this.spots.delete(t.id);
+            continue;
+         }
+         if (!this.placed.some((o) => o !== t && o.roomId === t.roomId && o.x === spot.x && o.y === spot.y)) {
+            t.x = spot.x;
+            t.y = spot.y;
+         }
+      }
       const here = this.placed.filter((t) => t.isPlayer || t.roomId === room);
       const seen = new Set<string>();
       for (const t of here) {
@@ -590,11 +607,43 @@ export class StageScene extends Phaser.Scene {
          if (this.played.has(cue.id)) continue;
          this.played.add(cue.id);
          if (cue.mark) {
+            this.spots.delete(cue.character);
             this.marks.set(cue.character, { mark: cue.mark, room: cue.character === 'player' ? room : this.roomOf(view, cue.character) });
             if (cue.character === 'player') this.playerToMark = true;
          }
+         if (cue.toward) this.walkToward(view, cue.character, cue.toward);
          if (cue.emote) this.emotes.push({ id: cue.character, emote: cue.emote });
          if (cue.pop) this.pops.push({ id: cue.character, text: cue.pop, tone: cue.tone ?? 'gain' });
+      }
+   }
+
+   /**
+    * Someone walks up beside another: to the free tile next to them that's
+    * the shortest walk. The player walks there as a story walk; anyone else
+    * stands there until they next move.
+    */
+   private walkToward(view: StageView, who: string, toward: string) {
+      const target = this.placed.find((t) => t.id === toward);
+      const mover = who === 'player' ? (this.playerTile && { x: this.playerTile.x, y: this.playerTile.y }) : this.placed.find((t) => t.id === who);
+      if (!target || !mover) return;
+      if (Math.abs(mover.x - target.x) + Math.abs(mover.y - target.y) === 1) return;
+      const occupied = new Set(this.placed.filter((t) => t.id !== who && t.roomId === target.roomId).map((t) => `${t.x},${t.y}`));
+      if (who !== 'player' && this.playerTile) occupied.add(`${this.playerTile.x},${this.playerTile.y}`);
+      let best: Tile[] | undefined;
+      for (const d of Object.values(STEPS)) {
+         const spot = { x: target.x + d.x, y: target.y + d.y };
+         if (occupied.has(`${spot.x},${spot.y}`)) continue;
+         const path = findPath(view.art, view.rooms, mover, spot, occupied);
+         if (path.length && (!best || path.length < best.length)) best = path;
+      }
+      if (!best) return;
+      if (who === 'player') {
+         this.storyPath = best;
+         this.path = [];
+         this.goingToTalk = undefined;
+      } else {
+         const end = best[best.length - 1];
+         this.spots.set(who, { x: end.x, y: end.y, room: target.roomId });
       }
    }
 
