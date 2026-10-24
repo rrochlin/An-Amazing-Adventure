@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { RoomView } from '@/types/types';
-import type { SpokenLine, StageCue } from '../dialogue/beats';
+import type { PopTone, SpokenLine, StageCue } from '../dialogue/beats';
 import { DUNGEON_SHEET, TILE, TOWN_SHEET, type MapArt } from '../map/mapArt';
 import { placeTokens, type Token } from '../map/WorldMap';
 import {
@@ -98,6 +98,8 @@ export class StageScene extends Phaser.Scene {
    private crossing = false;
    /** Reactions waiting for their character to stop walking. */
    private emotes: { id: string; emote: string }[] = [];
+   /** What happened to someone, to show rising over them. */
+   private pops: { id: string; text: string; tone: PopTone }[] = [];
    /** The speech bubble on screen, over whoever is speaking. */
    private bubble?: { line: string; who: string; box: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text; panel: Phaser.GameObjects.Graphics };
 
@@ -366,6 +368,7 @@ export class StageScene extends Phaser.Scene {
       this.syncCharacters(view, room);
       this.playEmotes();
       this.syncBubble(view, room);
+      this.playPops();
       this.drawShade(view, room);
       // Pan only when the player has moved to another room.
       this.frame(this.framedRoom !== undefined && this.framedRoom !== room);
@@ -591,6 +594,7 @@ export class StageScene extends Phaser.Scene {
             if (cue.character === 'player') this.playerToMark = true;
          }
          if (cue.emote) this.emotes.push({ id: cue.character, emote: cue.emote });
+         if (cue.pop) this.pops.push({ id: cue.character, text: cue.pop, tone: cue.tone ?? 'gain' });
       }
    }
 
@@ -730,6 +734,42 @@ export class StageScene extends Phaser.Scene {
       const zoom = this.cameras.main.zoom;
       this.bubble.box.setPosition(sprite.x, sprite.y - sprite.displayHeight - 1);
       if (!this.tweens.isTweening(this.bubble.box)) this.bubble.box.setScale(1 / zoom);
+   }
+
+   /**
+    * What happened to someone rises over their head and fades: damage in red
+    * (with a flash and a shake), healing in green, items gained in gold and
+    * lost in grey. Several at once stack upward.
+    */
+   private playPops() {
+      const byWho = new Map<string, number>();
+      for (const p of this.pops) {
+         const sprite = this.sprites.get(p.id);
+         if (!sprite) continue; // not on screen: the side panel still has it
+         const stack = byWho.get(p.id) ?? 0;
+         byWho.set(p.id, stack + 1);
+         const zoom = this.cameras.main.zoom;
+         const color = { gain: '#f5d77a', loss: '#c9c2b8', harm: '#ff6b5b', heal: '#7ee08a' }[p.tone];
+         const text = this.add
+            .text(sprite.x, sprite.y - sprite.displayHeight - 2 - (stack * 17) / zoom, p.text, {
+               fontFamily: 'Cinzel, Georgia, serif',
+               fontSize: '15px',
+               fontStyle: 'bold',
+               color,
+               stroke: '#0c0810',
+               strokeThickness: 3,
+            })
+            .setOrigin(0.5, 1)
+            .setScale(1 / zoom)
+            .setDepth(103);
+         this.tweens.add({ targets: text, y: text.y - 14 / zoom, alpha: 0, delay: 1800 + stack * 200, duration: 900, ease: 'Sine.easeIn', onComplete: () => text.destroy() });
+         if (p.tone === 'harm' && stack === 0) {
+            sprite.setTint(0xff7a6a);
+            this.time.delayedCall(250, () => sprite.clearTint());
+            this.emote(sprite, 'shake');
+         }
+      }
+      this.pops = [];
    }
 
    /** A "!" over someone's head for a moment. */

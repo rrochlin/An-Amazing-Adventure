@@ -137,3 +137,32 @@ describe('staging cues', () => {
       expect(beats[1].cues![0].id).toBe('1-C0');
    });
 });
+
+describe('mechanics on the stage', () => {
+   it('shows what happened to someone over them on the last line', () => {
+      const beats = buildBeats([
+         { type: 'player', content: 'I give her the doll' },
+         {
+            type: 'narrative',
+            content: 'Bess hugs the doll.\nLittle Bess: Thank you!',
+            events: [
+               { type: 'item_lost', message: "Bess's rag doll removed", character: 'player', item: "Bess's rag doll", amount: 1 },
+               { type: 'item_gained', message: '2 × copper coin added', character: 'player', item: 'copper coin', amount: 2 },
+               { type: 'damage', message: 'Dunstan takes 2', character: 'bully', amount: 2 },
+               { type: 'objective_completed', message: 'Objective complete' },
+            ],
+         },
+      ]);
+      expect(beats[0].cues).toBeUndefined();
+      expect(beats[1].cues?.map((c) => [c.character, c.pop, c.tone])).toEqual([
+         ['player', "− Bess's rag doll", 'loss'],
+         ['player', '+ 2 × copper coin', 'gain'],
+         ['bully', '−2 ❤', 'harm'],
+      ]);
+   });
+
+   it('shows nothing for old events that carry no details', () => {
+      const beats = buildBeats([{ type: 'narrative', content: 'Ouch.', events: [{ type: 'damage', message: 'You take 2 damage.' }] }]);
+      expect(beats[0].cues).toBeUndefined();
+   });
+});

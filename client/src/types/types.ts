@@ -215,6 +215,9 @@ export interface WorldEvent {
    mark?: string;
    emote?: string;
    line?: number;
+   /** Damage, healing or an item change: how much, and which item. */
+   amount?: number;
+   item?: string;
 }
 
 export interface ChatMessage {

@@ -42,6 +42,32 @@ export interface StageCue {
    character: string;
    mark?: string;
    emote?: string;
+   /** A change shown rising over them: "−2 ❤", "+ Rag doll". */
+   pop?: string;
+   tone?: PopTone;
+}
+
+export type PopTone = 'gain' | 'loss' | 'harm' | 'heal';
+
+/** What the stage shows over someone for a mechanics event, if anything. */
+export function popFor(e: WorldEvent): { pop: string; tone: PopTone } | undefined {
+   const n = e.amount ?? 0;
+   const item = e.item ? (n > 1 ? `${n} × ${e.item}` : e.item) : '';
+   switch (e.type) {
+      case 'damage':
+         return n ? { pop: `−${n} ❤`, tone: 'harm' } : undefined;
+      case 'death':
+         return { pop: '✝', tone: 'harm' };
+      case 'heal':
+         return n ? { pop: `+${n} ❤`, tone: 'heal' } : undefined;
+      case 'revive':
+         return { pop: '❤', tone: 'heal' };
+      case 'item_gained':
+         return item ? { pop: `+ ${item}`, tone: 'gain' } : undefined;
+      case 'item_lost':
+         return item ? { pop: `− ${item}`, tone: 'loss' } : undefined;
+   }
+   return undefined;
 }
 
 /** Event types announced as toasts rather than shown in the dialogue. */
@@ -103,6 +129,17 @@ function messageBeats(
       const cue: StageCue = { id: `${index}-C${n}`, character: e.character, mark: e.mark || undefined, emote: e.emote || undefined };
       beats[at] = { ...beats[at], cues: [...(beats[at].cues ?? []), cue] };
    });
+   // What happened to someone (hurt, healed, an item gained or lost) shows
+   // over them as the message's last line plays: where its outcome lands.
+   if (lineAt.length) {
+      const last = lineAt[lineAt.length - 1];
+      events.forEach((e, n) => {
+         const pop = popFor(e);
+         if (!pop) return;
+         const cue: StageCue = { id: `${index}-P${n}`, character: e.character || 'player', ...pop };
+         beats[last] = { ...beats[last], cues: [...(beats[last].cues ?? []), cue] };
+      });
+   }
    return beats;
 }
 
