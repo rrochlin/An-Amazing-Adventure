@@ -27,7 +27,4 @@ first all the way to the ending, the second to the first scene change, checking 
 
 ## Still open
 
-- The player is placed, not walked, when the story moves them to another room (the scene pans, the
-  sprite appears there).
-- Speech bubbles over the speaker (#183) are the natural next step now that lines name a speaker.
 - The game master still tries to hand out coins (dropped by validation every time).

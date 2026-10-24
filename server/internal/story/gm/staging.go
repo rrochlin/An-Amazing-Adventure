@@ -163,7 +163,7 @@ func stagingBrief(g *game.Game) string {
 	for _, p := range room.PointsOfInterest {
 		marks = append(marks, fmt.Sprintf("%s (%s)", p.ID, p.Name))
 	}
-	fmt.Fprintf(&b, "Marks here: %s.\n", strings.Join(marks, ", "))
+	fmt.Fprintf(&b, "Marks here: %s. They are all in %s: when someone leaves it this turn (move_player, move_character), stage nothing for them; the stage walks them out.\n", strings.Join(marks, ", "), room.Name)
 	var where []string
 	if owner, ok := g.OwnerCharacter(); ok && owner.MarkHere() != "" {
 		where = append(where, "the player at "+owner.MarkHere())
