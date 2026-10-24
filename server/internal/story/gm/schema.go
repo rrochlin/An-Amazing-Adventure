@@ -3,6 +3,7 @@ package gm
 import (
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
 // ToolName is the single tool the game master calls to hand in its Decision.
@@ -12,7 +13,7 @@ const ToolName = "end_turn"
 // narration, then only the allowed world events (each with the exact
 // arguments its tool takes) and the scene's beats with their outcomes, so
 // the model is constrained before validation ever runs.
-func Schema(node *campaigns.StoryNode) map[string]any {
+func Schema(node *campaigns.StoryNode, g *game.Game) map[string]any {
 	events := []any{}
 	for _, name := range AllowedWorldEvents(node) {
 		input, ok := ai.ToolInputSchema(name)
@@ -31,6 +32,9 @@ func Schema(node *campaigns.StoryNode) map[string]any {
 	beats := map[string]any{}
 	if node != nil {
 		for _, s := range campaigns.AllowedConditionSpecsForNode(*node) {
+			if _, settled := Settled(g, s); settled {
+				continue // final; not offered again
+			}
 			desc := s.Description
 			switch s.Type {
 			case "label_equals":
@@ -45,7 +49,7 @@ func Schema(node *campaigns.StoryNode) map[string]any {
 		"properties": map[string]any{
 			"narration": map[string]any{
 				"type":        "string",
-				"description": "The turn's prose, 2-4 paragraphs: what the player experiences. Write this first.",
+				"description": "The turn's prose, 2-4 paragraphs: what the player experiences. Write this first. It ends on the moment itself (a line of dialogue, a sight, a question): no list of what the player could do next, no recap of errands or places still open.",
 			},
 			"world_events": map[string]any{
 				"type":        "array",
@@ -60,7 +64,7 @@ func Schema(node *campaigns.StoryNode) map[string]any {
 			},
 			"off_script": map[string]any{
 				"type":        "object",
-				"description": "Present only when the player's action wasn't covered by the script.",
+				"description": "Only about THIS turn, and present only when the player's action this turn wasn't covered by the script. Leave it out otherwise.",
 				"properties": map[string]any{
 					"kind":   map[string]any{"type": "string", "enum": []string{OffScriptImprovised, OffScriptSteered, OffScriptRefused}},
 					"reason": map[string]any{"type": "string"},

@@ -5,10 +5,13 @@
 package gm
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
 // Decision is the structured half of a game master turn: the prose is
@@ -88,7 +91,7 @@ func AllowedWorldEvents(node *campaigns.StoryNode) []string {
 
 // Validate keeps what the scene permits and reports what it dropped, so a
 // game master that oversteps is corrected by code, not trusted.
-func Validate(node *campaigns.StoryNode, d Decision) (Decision, []string) {
+func Validate(node *campaigns.StoryNode, g *game.Game, d Decision) (Decision, []string) {
 	var dropped []string
 	allowed := map[string]bool{}
 	for _, t := range AllowedWorldEvents(node) {
@@ -98,6 +101,10 @@ func Validate(node *campaigns.StoryNode, d Decision) (Decision, []string) {
 	for _, ev := range d.WorldEvents {
 		if !allowed[ev.Type] {
 			dropped = append(dropped, fmt.Sprintf("world event %q is not allowed in this scene", ev.Type))
+			continue
+		}
+		if room, ok := alreadyThere(g, ev); ok {
+			dropped = append(dropped, fmt.Sprintf("move_player: the player is already in %s", room))
 			continue
 		}
 		kept.WorldEvents = append(kept.WorldEvents, ev)
@@ -113,6 +120,12 @@ func Validate(node *campaigns.StoryNode, d Decision) (Decision, []string) {
 		spec, ok := specs[key]
 		if !ok {
 			dropped = append(dropped, fmt.Sprintf("beat %q is not one of this scene's beats", key))
+			continue
+		}
+		// A settled beat is final: settling it again would rewrite what
+		// already happened (and what it paid).
+		if was, settled := Settled(g, spec); settled {
+			dropped = append(dropped, fmt.Sprintf("beat %q was already settled as %v", key, was))
 			continue
 		}
 		switch spec.Type {
@@ -172,4 +185,84 @@ func contains(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// Settled reports whether a beat already has its outcome, and which.
+func Settled(g *game.Game, spec campaigns.AllowedConditionSpec) (any, bool) {
+	if g == nil || g.Campaign == nil {
+		return nil, false
+	}
+	switch spec.Type {
+	case "label_equals":
+		if v := g.Campaign.Labels[spec.Key]; v != "" {
+			return v, true
+		}
+	case "flag_true":
+		if g.Campaign.BoolFlags[spec.Key] {
+			return true, true
+		}
+	}
+	return nil, false
+}
+
+// alreadyThere reports a move_player to the room the player is in.
+func alreadyThere(g *game.Game, ev WorldEvent) (string, bool) {
+	if g == nil || ev.Type != "move_player" {
+		return "", false
+	}
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return "", false
+	}
+	room, err := g.GetRoom(owner.LocationID)
+	if err != nil {
+		return "", false
+	}
+	target, _ := ev.Input["room_name"].(string)
+	target = strings.TrimSpace(target)
+	if strings.EqualFold(target, room.Name) || strings.EqualFold(target, room.ID) {
+		return room.Name, true
+	}
+	return "", false
+}
+
+// ParseDecision reads the decision a model handed in. Models sometimes
+// write a nested value as a string: empty ("") for nothing, or the JSON
+// itself quoted ("{\"deed_doll\": \"kept\"}"). Those are read as what they
+// mean, and reported in notes; anything else unreadable is an error.
+func ParseDecision(raw string) (Decision, []string, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &fields); err != nil {
+		return Decision{}, nil, err
+	}
+	var notes []string
+	for _, key := range []string{"world_events", "beats", "off_script"} {
+		v, ok := fields[key]
+		if !ok {
+			continue
+		}
+		var s string
+		if json.Unmarshal(v, &s) != nil {
+			continue // not a string: as it should be
+		}
+		s = strings.TrimSpace(s)
+		switch {
+		case s == "" || s == "null" || s == "{}" || s == "[]":
+			delete(fields, key)
+			notes = append(notes, fmt.Sprintf("%s was handed in as %q; read as empty", key, s))
+		case json.Valid([]byte(s)):
+			fields[key] = json.RawMessage(s)
+			notes = append(notes, fmt.Sprintf("%s was handed in as a quoted string; read as JSON", key))
+		}
+		// Anything else stays, and fails to decode below.
+	}
+	fixed, err := json.Marshal(fields)
+	if err != nil {
+		return Decision{}, notes, err
+	}
+	var d Decision
+	if err := json.Unmarshal(fixed, &d); err != nil {
+		return Decision{}, notes, err
+	}
+	return d, notes, nil
 }

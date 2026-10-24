@@ -21,6 +21,9 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 	line("You are the game master of a text adventure, running one turn for the player, %s.", owner.Name)
 	line("You hand in the whole turn with the %s tool: first the narration (vivid prose, 2-4 paragraphs: sights, sounds, dialogue, action; no option lists, no tallies), then the world changes that actually happened, then the beats that were settled.", ToolName)
 	line("Narrate only what the player's action achieves this turn, where they are. Stop at the next decision point and leave the next step to the player: never carry them through a second errand or on to a second place in one turn.")
+	line("The player decides what their character does, says and feels: play out what they attempt. Never make their character hesitate, change their mind or decline. When something can't work, or a beat is already settled, show the world's answer instead (someone refuses, shrugs, pays nothing).")
+	line("Keep to the cast: don't give names to new characters (an unnamed passer-by is fine).")
+	line("End on the moment itself: a line of dialogue, a sight, a question someone asks. Never end by listing what the player could do (\"You could..., or you could...\") and never recap the errands or places still open; the journal does that.")
 
 	node := scene(def, g)
 	switch {
@@ -46,14 +49,25 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 	}
 
 	line("\n## Handing in your decision")
-	line("Allowed world changes in this scene: %s. Report only changes the narration made happen, never ones it mentioned or foreshadowed. Money is handled by the story: never create or give coins.", strings.Join(AllowedWorldEvents(node), ", "))
+	line("Allowed world changes in this scene: %s. Report only changes the narration made happen, never ones it mentioned or foreshadowed.", strings.Join(AllowedWorldEvents(node), ", "))
+	line("Money and rewards are handled by the story: never create or give coins. In the narration, coins or items change hands only when a beat you settle this turn pays them (listed with the beat), or a world change you report hands them over. Nobody else pays the player.")
 	if node != nil {
-		specs := campaigns.AllowedConditionSpecsForNode(*node)
-		if len(specs) > 0 {
-			line("Beats you can settle this turn, each only when its meaning has clearly happened:")
-			for _, s := range specs {
-				line("- %s", describeSpec(s))
+		var open, settled []string
+		for _, s := range campaigns.AllowedConditionSpecsForNode(*node) {
+			if was, done := Settled(g, s); done {
+				settled = append(settled, fmt.Sprintf("%s = %v", s.Key, was))
+				continue
 			}
+			open = append(open, describeSpec(s)+pays(def, g, s))
+		}
+		if len(open) > 0 {
+			line("Beats you can settle this turn, each only when its meaning has clearly happened:")
+			for _, s := range open {
+				line("- %s", s)
+			}
+		}
+		if len(settled) > 0 {
+			line("Already settled, and final: never settle these again, and they pay nothing more: %s.", strings.Join(settled, "; "))
 		}
 	}
 	return b.String()
@@ -149,4 +163,50 @@ func names(g *game.Game, ids []string, empty string) string {
 		return empty
 	}
 	return strings.Join(out, ", ")
+}
+
+// pays says what settling a beat hands the player: the on_success items of
+// active objectives that the beat completes.
+func pays(def *campaigns.CampaignDefinition, g *game.Game, s campaigns.AllowedConditionSpec) string {
+	if def == nil || g == nil || g.Campaign == nil {
+		return ""
+	}
+	active := map[string]bool{}
+	for _, o := range g.Campaign.ActiveObjectives {
+		if o.Status == "active" {
+			active[o.ID] = true
+		}
+	}
+	var items []string
+	ids := make([]string, 0, len(def.Objectives))
+	for id := range def.Objectives {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		obj := def.Objectives[id]
+		if !active[id] || !completedBy(obj.SuccessWhen, s.Key) {
+			continue
+		}
+		for _, a := range obj.OnSuccess {
+			if a.Type == "give_item" && a.Item != "" {
+				name, _, _ := strings.Cut(a.Item, "|")
+				items = append(items, "one "+name)
+			}
+		}
+	}
+	if len(items) == 0 {
+		return ""
+	}
+	return ". Settling it pays the player " + strings.Join(items, " and ") + " (the story hands it over)"
+}
+
+// completedBy reports whether conditions turn on the beat key.
+func completedBy(conds []campaigns.Condition, key string) bool {
+	for _, c := range conds {
+		if c.Key == key {
+			return true
+		}
+	}
+	return false
 }
