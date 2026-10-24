@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BRIARWELL_ART } from '@/components/map/art/briarwell';
 import { GROUND_TILES, OBJECT_TILES } from '@/components/map/mapArt';
-import { DUNGEON_GID, SCENE_PAD, layerGrid, sceneLayers, stageCamera, standPoint } from '@/components/stage/stageModel';
+import { DUNGEON_GID, SCENE_PAD, canStep, findPath, layerGrid, roomAt, sceneLayers, stageCamera, standable, standPoint } from '@/components/stage/stageModel';
 
 describe('stage layers', () => {
    it('turns the art into tile indices, Tiny Dungeon tiles offset, empty as -1', () => {
@@ -46,5 +46,48 @@ describe('stage camera', () => {
 
    it('stands characters on the bottom centre of their tile', () => {
       expect(standPoint(2, 3)).toEqual({ x: 40, y: 64 });
+   });
+});
+
+describe('walking', () => {
+   const rooms = {
+      family_cottage: { connections: { east: 'village_square' } },
+      village_square: { connections: { west: 'family_cottage', north: 'market_lane', east: 'old_mill', south: 'meadow' } },
+      market_lane: { connections: { south: 'village_square' } },
+      old_mill: { connections: { west: 'village_square' } },
+      meadow: { connections: { north: 'village_square', south: 'woods_edge' } },
+      woods_edge: { connections: { north: 'meadow' } },
+   };
+   const none = new Set<string>();
+
+   it('stands only on free ground inside a room', () => {
+      expect(standable(BRIARWELL_ART, { x: 12, y: 13 })).toBe(true); // the square
+      expect(standable(BRIARWELL_ART, { x: 12, y: 11 })).toBe(false); // the well
+      expect(standable(BRIARWELL_ART, { x: 1, y: 1 })).toBe(false); // ground outside every room
+      expect(roomAt(BRIARWELL_ART, { x: 12, y: 13 })).toBe('village_square');
+   });
+
+   it('steps into a connected room, never into one that does not connect', () => {
+      // Cottage (x < 8) to the square (x >= 8): connected.
+      expect(canStep(BRIARWELL_ART, rooms, { x: 7, y: 13 }, { x: 8, y: 13 }, none)).toBe(true);
+      // Square to the mill boundary (x = 17 → 18) connects; the cottage to the lane does not.
+      const cottageTop = { x: 6, y: 9 };
+      expect(roomAt(BRIARWELL_ART, cottageTop)).toBe('family_cottage');
+      expect(canStep(BRIARWELL_ART, rooms, cottageTop, { x: 6, y: 8 }, none)).toBe(false);
+   });
+
+   it('walks around objects and other characters by the shortest way', () => {
+      const from = { x: 12, y: 12 };
+      const to = { x: 12, y: 10 }; // the well (12, 11) is in between
+      const path = findPath(BRIARWELL_ART, rooms, from, to, none);
+      expect(path.at(-1)).toEqual(to);
+      expect(path).toHaveLength(4); // around the well
+      expect(path.some((t) => t.x === 12 && t.y === 11)).toBe(false);
+      const blocked = findPath(BRIARWELL_ART, rooms, from, to, new Set(['11,11', '13,11', '11,12', '13,12']));
+      expect(blocked.some((t) => ['11,11', '13,11'].includes(`${t.x},${t.y}`))).toBe(false);
+   });
+
+   it('finds no way to a tile it cannot stand on', () => {
+      expect(findPath(BRIARWELL_ART, rooms, { x: 12, y: 12 }, { x: 12, y: 11 }, none)).toEqual([]);
    });
 });
