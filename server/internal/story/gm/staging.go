@@ -176,7 +176,7 @@ func stagingBrief(g *game.Game) string {
 	if len(where) > 0 {
 		fmt.Fprintf(&b, "Standing: %s.\n", strings.Join(where, ", "))
 	}
-	b.WriteString("Stage the scene: when the narration has someone walk somewhere in this room (the player included) or visibly react, add a staging cue for the paragraph that shows it, counting paragraphs from 0 (move_to a mark; emote one of " + strings.Join(Emotes, ", ") + "). Put each spoken line on its own paragraph as Name: words, with no quotation marks, so it comes from that character on the stage.\n")
+	b.WriteString("Stage the scene: when the narration puts someone somewhere in this room (at the barn, by the well), has them walk there, or shows them react (the player and the people they meet alike), add a staging cue for the paragraph that shows it, counting paragraphs from 0 (move_to a mark; emote one of " + strings.Join(Emotes, ", ") + "). Put each spoken line on its own paragraph as Name: words, with no quotation marks, so it comes from that character on the stage.\n")
 	return b.String()
 }
 
