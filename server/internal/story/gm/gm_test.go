@@ -350,3 +350,24 @@ func TestValidateDropsMovingSomeoneWhereTheyAre(t *testing.T) {
 		t.Errorf("dropped %v", dropped)
 	}
 }
+
+func TestStagingCanWalkSomeoneUpToAnother(t *testing.T) {
+	def, g := briarwell(t)
+	if err := g.PlaceCharacter(g.OwnerID, "village_square"); err != nil {
+		t.Fatal(err)
+	}
+	d := gm.Decision{Staging: []gm.Cue{
+		{Line: 0, Who: "player", Toward: "Little Bess"},
+		{Line: 1, Who: "Little Bess", Toward: "player", Emote: "hop"},
+		{Line: 1, Who: "Little Bess", Toward: "Dunstan"}, // not here
+		{Line: 1, Who: "player", Toward: "player"},       // nobody to walk to
+	}}
+	kept, dropped := gm.Validate(node(def, "village_deeds"), g, d)
+	if len(kept.Staging) != 2 || kept.Staging[0].Toward != "bess" || kept.Staging[1].Toward != gm.PlayerCue {
+		t.Fatalf("kept %+v dropped %v", kept.Staging, dropped)
+	}
+	events := gm.ApplyStaging(g, kept.Staging, 3)
+	if events[0].Toward != "bess" || events[0].Character != gm.PlayerCue {
+		t.Errorf("cue event %+v", events[0])
+	}
+}

@@ -213,6 +213,8 @@ export interface WorldEvent {
     */
    character?: string;
    mark?: string;
+   /** A cue's character walks up to this one. */
+   toward?: string;
    emote?: string;
    line?: number;
    /** Damage, healing or an item change: how much, and which item. */
