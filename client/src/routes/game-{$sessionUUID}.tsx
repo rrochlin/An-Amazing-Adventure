@@ -22,7 +22,7 @@ import { useChoiceSubmit } from '@/hooks/useChoiceSubmit';
 import { useGameSocket } from '../hooks/useGameSocket';
 import { WorldGenTerminal } from '../components/WorldGenTerminal';
 import type { RoomView } from '../types/types';
-import type { StageCue } from '../components/dialogue/beats';
+import type { SpokenLine, StageCue } from '../components/dialogue/beats';
 
 function GameErrorFallback() {
    const navigate = useNavigate();
@@ -283,6 +283,8 @@ function GamePage() {
    // Staging the story has reached; the scene plays each cue once.
    const [stageCues, setStageCues] = useState<StageCue[]>([]);
    const addStageCues = useCallback((cues: StageCue[]) => setStageCues((had) => [...had, ...cues]), []);
+   // The spoken line on screen, shown over the speaker.
+   const [speaking, setSpeaking] = useState<SpokenLine | null>(null);
    // Narrow screens: the character panel opens as a drawer.
    const [infoOpen, setInfoOpen] = useState(false);
    const movementLocked =
@@ -564,6 +566,7 @@ function GamePage() {
                playerScale={gameState?.self?.scale || 1}
                playerMark={gameState?.self?.mark}
                cues={stageCues}
+               speaking={speaking}
                location={gameState?.current_room?.name}
                sceneTitle={campaignState?.active_node_title}
                objective={campaignState?.current_objective}
@@ -607,6 +610,7 @@ function GamePage() {
                   conversationWith={campaignState?.conversation?.name}
                   onReading={setStoryOnScreen}
                   onCues={addStageCues}
+                  onSpeaking={setSpeaking}
                   onLeaveConversation={() => sendAction('end_conversation', '')}
                />
                )}

@@ -133,3 +133,31 @@ func (o overlay) Open(name string) (fs.File, error) {
 	}
 	return o.base.Open(name)
 }
+
+func TestCalledNamesReachTheStage(t *testing.T) {
+	_, g, _ := bootstrapBriarwell(t)
+	view := g.BuildGameStateView("user-1", nil)
+	var father []string
+	for _, c := range view.CurrentRoom.Occupants {
+		if c.ID == "father" {
+			father = c.Called
+		}
+	}
+	if len(father) != 1 || father[0] != "Father" {
+		t.Fatalf("Tomas is called Father in his lines, got %v", father)
+	}
+
+	reg, _ := campaigns.LoadEmbeddedRegistry()
+	base, _ := reg.Get("briarwell")
+	def := *base
+	def.Actors = map[string]campaigns.ActorTemplate{}
+	for id, a := range base.Actors {
+		def.Actors[id] = a
+	}
+	mother := def.Actors["mother"]
+	mother.Called = []string{"father"}
+	def.Actors["mother"] = mother
+	if err := def.Validate(); err == nil || !strings.Contains(err.Error(), "both called") {
+		t.Errorf("two characters can't share a name in spoken lines, got %v", err)
+	}
+}

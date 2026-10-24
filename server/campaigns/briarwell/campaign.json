@@ -117,6 +117,7 @@
   "actors": {
     "father": {
       "name": "Tomas",
+      "called": ["Father"],
       "kind": "npc",
       "goal": "Teach his child that a coin earned honestly is worth more than one taken.",
       "description": "The player's father. A woodcutter, gentle but firm, who wants his child to grow up honest.",
@@ -129,6 +130,7 @@
     },
     "mother": {
       "name": "Elin",
+      "called": ["Mother"],
       "kind": "npc",
       "goal": "Keep the household warm and the birthday a happy one.",
       "description": "The player's mother. Warm and practical; she runs the household and bakes for every birthday.",
@@ -154,6 +156,7 @@
     },
     "trader": {
       "name": "Old Garrick",
+      "called": ["Garrick"],
       "kind": "npc",
       "goal": "Sell a child something nice for a fair coin.",
       "description": "An old trader who has kept a stall on Market Lane for decades. Kind to children, fair with prices.",
@@ -162,6 +165,7 @@
     },
     "bess": {
       "name": "Little Bess",
+      "called": ["Bess"],
       "kind": "npc",
       "goal": "Find her lost rag doll.",
       "description": "A small village girl, younger than Ros, crying because she lost her rag doll.",
@@ -172,6 +176,7 @@
     },
     "miller": {
       "name": "Hob the Miller",
+      "called": ["Hob", "Miller"],
       "kind": "npc",
       "goal": "Keep his wife from learning about his secret meetings behind the barn.",
       "description": "The village miller, married, who slips away to secret meetings behind his barn.",
@@ -189,6 +194,7 @@
     },
     "bandit_leader": {
       "name": "Red Corwin",
+      "called": ["Corwin"],
       "kind": "antagonist",
       "goal": "Raid Briarwell and carry off anything, or anyone, worth selling.",
       "description": "Leader of a bandit gang. Ruthless, red-bearded, and careful to leave no witnesses who matter.",
@@ -204,6 +210,7 @@
     },
     "guild_master": {
       "name": "Master Holloway",
+      "called": ["Holloway", "Stranger"],
       "kind": "npc",
       "goal": "Find a child with the spark of a hero, and get them out alive.",
       "description": "Master of the Heroes' Guild, travel-worn and calm. A stranger to the player until the rescue.",

@@ -26,6 +26,14 @@ export interface Beat {
    cues?: StageCue[];
 }
 
+/** A spoken line on screen now: the scene shows it over the speaker. */
+export interface SpokenLine {
+   /** The beat's id: a new line is a new bubble. */
+   id: string;
+   speaker: string;
+   text: string;
+}
+
 /** One staging cue, as the scene plays it. */
 export interface StageCue {
    /** Stable: "<msg>-C<n>", so a cue plays once. */

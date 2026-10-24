@@ -18,6 +18,7 @@ tags:
 | Field | Meaning |
 |---|---|
 | `name`, `kind`, `goal` | As before. `goal` is the character's standing want. |
+| `called` | What else spoken lines call them (`["Father"]`, `["Holloway", "Stranger"]`), so the stage knows a `Father:` line is theirs and shows it over them. No two actors share one. |
 | `description` | Who they are, including what they are to the player ("The player's father."). |
 | `backstory` | Their history, for whoever plays them. |
 | `motivations` | What drives them. |

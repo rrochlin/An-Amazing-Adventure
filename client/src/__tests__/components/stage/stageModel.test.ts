@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { BRIARWELL_ART } from '@/components/map/art/briarwell';
 import { GROUND_TILES, OBJECT_TILES } from '@/components/map/mapArt';
-import { DUNGEON_GID, SCENE_PAD, canStep, findPath, layerGrid, roomAt, sceneLayers, stageCamera, standable, standPoint } from '@/components/stage/stageModel';
+import { DUNGEON_GID, SCENE_PAD, bubbleText, canStep, findPath, layerGrid, roomAt, sceneLayers, stageCamera, standable, standPoint, whoSpeaks } from '@/components/stage/stageModel';
 
 describe('stage layers', () => {
    it('turns the art into tile indices, Tiny Dungeon tiles offset, empty as -1', () => {
@@ -89,5 +89,32 @@ describe('walking', () => {
 
    it('finds no way to a tile it cannot stand on', () => {
       expect(findPath(BRIARWELL_ART, rooms, { x: 12, y: 12 }, { x: 12, y: 11 }, none)).toEqual([]);
+   });
+});
+
+describe('speech bubbles', () => {
+   const people = [
+      { id: 'father', name: 'Tomas', called: ['Father'] },
+      { id: 'bess', name: 'Little Bess' },
+      { id: 'guild_master', name: 'Master Holloway', called: ['Holloway', 'Stranger'] },
+   ];
+
+   it('finds the speaker by name, by what lines call them, or by one word of their name', () => {
+      expect(whoSpeaks('Tomas', people)).toBe('father');
+      expect(whoSpeaks('FATHER', people)).toBe('father');
+      expect(whoSpeaks('Bess', people)).toBe('bess');
+      expect(whoSpeaks('Stranger', people)).toBe('guild_master');
+      expect(whoSpeaks('Wren', people, 'Wren')).toBe('player');
+   });
+
+   it("is nobody's line when the speaker isn't on screen", () => {
+      expect(whoSpeaks('Dunstan', people)).toBeUndefined();
+      expect(whoSpeaks('Master', [{ id: 'x', name: 'Master Holloway' }])).toBe('x');
+      expect(whoSpeaks('', people)).toBeUndefined();
+   });
+
+   it('shows short lines whole and long ones as an ellipsis', () => {
+      expect(bubbleText('  You came!  ')).toBe('You came!');
+      expect(bubbleText('Dunstan chased us out of the meadow this morning and I must have dropped her by the fence post.')).toBe('…');
    });
 });

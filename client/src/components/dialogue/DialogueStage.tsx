@@ -17,7 +17,7 @@ import type {
    WorldEvent,
 } from '@/types/types';
 import { EndingPanel } from '../Chat';
-import { buildBeats, buildTranscript, type Beat, type StageCue } from './beats';
+import { buildBeats, buildTranscript, type Beat, type SpokenLine, type StageCue } from './beats';
 import { renderInline } from './inline';
 import { useTypewriter } from './useTypewriter';
 
@@ -73,6 +73,8 @@ interface DialogueStageProps {
    onReading?: (reading: boolean) => void;
    /** Staging reached in the story, each cue once: the scene plays it. */
    onCues?: (cues: StageCue[]) => void;
+   /** The spoken line on screen, if any (null once the story is done). */
+   onSpeaking?: (line: SpokenLine | null) => void;
    /** Called whenever the stage has shown the last line it has. */
    onCaughtUp?: () => void;
 }
@@ -109,6 +111,7 @@ export function DialogueStage({
    onLeaveConversation,
    onReading,
    onCues,
+   onSpeaking,
 }: DialogueStageProps) {
    const beats = useMemo(
       () => buildBeats(messages, streamingMessage),
@@ -179,6 +182,12 @@ export function DialogueStage({
    useEffect(() => {
       onReading?.(reading);
    }, [reading, onReading]);
+   // Whose line is on screen: the scene shows it over them until the story
+   // moves on, or is done and the player walks again.
+   const spoken = reading && current?.kind === 'line' && current.speaker ? current : undefined;
+   useEffect(() => {
+      onSpeaking?.(spoken ? { id: spoken.id, speaker: spoken.speaker!, text: spoken.text } : null);
+   }, [spoken?.id, spoken?.text, onSpeaking]); // eslint-disable-line react-hooks/exhaustive-deps
 
    const goNext = useCallback(() => {
       if (!hasNext) return;

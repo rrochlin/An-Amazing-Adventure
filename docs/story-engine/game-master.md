@@ -60,7 +60,10 @@ The prose, streamed as it is written, then one tool call, `end_turn`, carrying a
   to another room leaves the mark behind) before the world events apply, and the cues go to the client
   as `cue` events on the narration message. The client plays each when its paragraph comes up:
   characters walk tile by tile to a free tile beside the mark, and reactions play once they stop.
-  Spoken lines are their own paragraphs, as `Name: words`, so they come from that character.
+  Spoken lines are their own paragraphs, as `Name: words`, so they come from that character: the
+  stage shows the line in a bubble over the speaker (whole if short, "…" if long; the panel always has
+  it). A speaker is matched by name, by one word of the name, or by an actor's `called` names
+  ("Father", "Stranger").
 - `off_script`: present when the player's action wasn't scripted, and how it was handled.
 
 The tool's JSON schema (`gm.Schema`) is built per scene: the event `type` enum is the scene's allowlist

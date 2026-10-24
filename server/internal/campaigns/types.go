@@ -120,7 +120,10 @@ type EntranceOption struct {
 }
 
 type ActorTemplate struct {
-	Name       string    `json:"name"`
+	Name string `json:"name"`
+	// Called is what else the story calls them in a spoken line ("Father:",
+	// "Stranger:"), so the stage knows whose line it is.
+	Called     []string  `json:"called,omitempty"`
 	Kind       string    `json:"kind"`
 	Goal       string    `json:"goal,omitempty"`
 	Importance string    `json:"importance,omitempty"`
