@@ -256,6 +256,13 @@ export interface StateDelta {
    updated_rooms?: Record<string, RoomView>;
    campaign?: CampaignStateView | null;
    events?: WorldEvent[]; // player-visible world events this turn
+   /**
+    * The narration was followed by authored dialogue (a new scene): `events`
+    * belong to the narration (the message before last), `scene_events` to
+    * the authored message.
+    */
+   authored?: boolean;
+   scene_events?: WorldEvent[];
    // new_message removed — narrative arrives via streaming frames, not state_delta
 }
 

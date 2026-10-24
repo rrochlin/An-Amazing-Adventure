@@ -214,6 +214,20 @@ describe('gameStore', () => {
       expect(chatMessages[0].events).toBeUndefined();
    });
 
+   it('attaches events to the narration when a new scene\'s text came after it', () => {
+      useGameStore.getState().setGameState(makeGameState());
+      const store = useGameStore.getState();
+      store.appendStreamChunk('Father throws himself at the door.');
+      store.finalizeStreamingMessage();
+      store.appendStreamChunk('A stranger kneels in the ashes.');
+      store.finalizeStreamingMessage();
+      store.attachEventsToLastMessage([{ type: 'cue', message: '', character: 'father', mark: 'front_door' }], 1);
+      store.attachEventsToLastMessage([{ type: 'scene_started', message: 'The Stranger in the Ashes' }]);
+      const [narration, authored] = useGameStore.getState().chatMessages;
+      expect(narration.events?.[0].type).toBe('cue');
+      expect(authored.events?.[0].type).toBe('scene_started');
+   });
+
    it('attachEventsToLastMessage does nothing if chatMessages is empty', () => {
       // Should not throw
       useGameStore

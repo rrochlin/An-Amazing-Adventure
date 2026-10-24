@@ -1421,6 +1421,11 @@ type StateDelta struct {
 	UpdatedRooms map[string]RoomView `json:"updated_rooms,omitempty"`
 	Campaign     *CampaignStateView  `json:"campaign,omitempty"`
 	Events       []WorldEvent        `json:"events,omitempty"` // player-visible world events this turn
+	// Authored is set when the turn's narration was followed by authored
+	// dialogue (a new scene): Events then belong to the narration, the
+	// message before last, and SceneEvents to the authored message.
+	Authored    bool         `json:"authored,omitempty"`
+	SceneEvents []WorldEvent `json:"scene_events,omitempty"`
 }
 
 // ArrivalLine is what the player sees on walking into a room: its name, its

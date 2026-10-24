@@ -84,7 +84,12 @@ export function useGameSocket({
                // narrative_end fires before state_delta, so finalizeStreamingMessage()
                // has already committed the narrative message by the time we get here.
                // Attach any world events to that last narrative message.
-               if (delta.events?.length) {
+               if (delta.authored) {
+                  // A new scene's authored text came after the narration:
+                  // each keeps its own events.
+                  attachEventsToLastMessage(delta.events ?? [], 1);
+                  attachEventsToLastMessage(delta.scene_events ?? []);
+               } else if (delta.events?.length) {
                   attachEventsToLastMessage(delta.events);
                }
                break;
