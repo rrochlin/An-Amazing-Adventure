@@ -9,6 +9,26 @@ force are summarised at the end of this file.
 
 ---
 
+## 2026-10-24 — The scene moves to Phaser 4; the player can walk
+
+**Decision:** The scene view becomes a Phaser 4 game embedded in the React app (React keeps the UI: text
+panel, journal, sign, menus). The player can walk around freely, with the keyboard or by clicking or
+tapping, alongside movement the story directs. The model is Pokémon or Baldur's Gate: explore freely,
+walk up to people and things to interact, and the story takes the controls for its scenes.
+
+**Defaults, until Rob says otherwise:**
+- Walking around is free: no model call. Crossing into another room tells the server, which checks the
+  rooms connect and runs the campaign rules (so `player_in_room` can start scenes).
+- An action key (or a click on someone) next to a character or point of interest starts a turn about
+  them ("I talk to Bess").
+- Input is locked while the story plays a scene beat, a choice is open or the player is typing.
+
+**Why:** After the feasibility spike (#175), Rob chose a proper game engine over extending the DOM
+renderer, because player movement is now in scope. Phaser brings tilemaps, cameras, frame animations,
+tweens, input and filters.
+
+---
+
 ## 2026-10-24 — Every session has a real character; health is its hit points
 
 **Decision:** A campaign session always has the player's D&D character and stats, built from the
