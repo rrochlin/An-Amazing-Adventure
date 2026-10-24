@@ -396,26 +396,33 @@ func diff(before, after game.SaveState) string {
 	if pb.LocationID != pa.LocationID {
 		lines = append(lines, fmt.Sprintf("player moved %s → %s", pb.LocationID, pa.LocationID))
 	}
-	inv := func(g *game.Game, c game.Character) map[string]bool {
-		m := map[string]bool{}
+	// Counted by name: two copper coins are two.
+	inv := func(g *game.Game, c game.Character) map[string]int {
+		m := map[string]int{}
 		for _, id := range c.Inventory {
 			if it, ok := g.Items[id]; ok {
-				m[it.Name] = true
+				m[it.Name]++
 			} else {
-				m[id+" (missing item)"] = true
+				m[id+" (missing item)"]++
 			}
 		}
 		return m
 	}
 	ib, ia := inv(gb, pb), inv(ga, pa)
-	for n := range ia {
-		if !ib[n] {
-			lines = append(lines, "player gained "+n)
+	count := func(n int, name string) string {
+		if n == 1 {
+			return name
+		}
+		return fmt.Sprintf("%d× %s", n, name)
+	}
+	for n, c := range ia {
+		if c > ib[n] {
+			lines = append(lines, "player gained "+count(c-ib[n], n))
 		}
 	}
-	for n := range ib {
-		if !ia[n] {
-			lines = append(lines, "player lost "+n)
+	for n, c := range ib {
+		if c > ia[n] {
+			lines = append(lines, "player lost "+count(c-ia[n], n))
 		}
 	}
 	if pb.Health != pa.Health {

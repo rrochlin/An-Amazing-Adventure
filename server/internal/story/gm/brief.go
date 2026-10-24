@@ -50,6 +50,7 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 
 	line("\n## Handing in your decision")
 	line("Allowed world changes in this scene: %s. Report only changes the narration made happen, never ones it mentioned or foreshadowed.", strings.Join(AllowedWorldEvents(node), ", "))
+	line("The narration and the world must agree. If the player picks something up or is handed something, report it (create_item for a new thing, then give_item_to_player), or it won't be in their pack; if they give something away, report take_item_from_player. If the scene doesn't allow the change, don't narrate it.")
 	line("Money and rewards are handled by the story: never create or give coins. In the narration, coins or items change hands only when a beat you settle this turn pays them (listed with the beat), or a world change you report hands them over. Nobody else pays the player.")
 	if node != nil {
 		var open, settled []string

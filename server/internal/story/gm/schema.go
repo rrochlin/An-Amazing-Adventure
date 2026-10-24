@@ -53,7 +53,7 @@ func Schema(node *campaigns.StoryNode, g *game.Game) map[string]any {
 			},
 			"world_events": map[string]any{
 				"type":        "array",
-				"description": "World changes this turn's narration made happen, in order. Only what actually happened; nothing the narration merely mentioned.",
+				"description": "World changes this turn's narration made happen, in order. Only what actually happened; nothing the narration merely mentioned. Anything the narration put in the player's hands needs create_item (if new) then give_item_to_player here.",
 				"items":       map[string]any{"anyOf": events},
 			},
 			"beats": map[string]any{

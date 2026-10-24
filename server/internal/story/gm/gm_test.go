@@ -206,3 +206,23 @@ func TestParseDecisionReadsQuotedValues(t *testing.T) {
 		t.Fatal("a wrongly shaped event should be an error, not half applied")
 	}
 }
+
+func TestValidateDropsCreatingWhatIsAlreadyHere(t *testing.T) {
+	def, g := briarwell(t)
+	owner, _ := g.OwnerCharacter()
+	doll := game.Item{ID: "doll-1", Name: "Rag Doll"}
+	g.Items[doll.ID] = doll
+	room := g.Rooms[owner.LocationID]
+	room.Items = append(room.Items, doll.ID)
+	g.Rooms[owner.LocationID] = room
+	kept, dropped := gm.Validate(node(def, "village_deeds"), g, gm.Decision{WorldEvents: []gm.WorldEvent{
+		{Type: "create_item", Input: map[string]any{"name": "rag doll", "description": "again"}},
+		{Type: "give_item_to_player", Input: map[string]any{"item_name": "Rag Doll"}},
+	}})
+	if len(kept.WorldEvents) != 1 || kept.WorldEvents[0].Type != "give_item_to_player" {
+		t.Fatalf("kept %+v", kept.WorldEvents)
+	}
+	if len(dropped) != 1 || !strings.Contains(dropped[0], "already exists") {
+		t.Fatalf("dropped %v", dropped)
+	}
+}

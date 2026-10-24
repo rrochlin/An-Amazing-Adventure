@@ -477,6 +477,28 @@
       "location_id": "family_cottage",
       "scene_map": "cottage_interior",
       "title": "Briarwell Burns",
+      "stage_directions": {
+        "focus": "terror and confusion in the dark; the child's one choice in the middle of it",
+        "setting": "The cottage at night, filling with smoke and torchlight; bandits breaking in at the door.",
+        "must_not_reveal": ["whether Father, Mother or Ros live or die"],
+        "boundaries": [
+          "Nobody dies or is shown dead on screen. Father is driven back, knocked aside or lost from sight in the smoke, never struck down for certain.",
+          "Mother and Ros are gone out the back before the player can reach them; the player may glimpse them, never find them.",
+          "The player is a small child: a fight ends with them knocked aside or hurt, never winning.",
+          "One response settles the raid: when the player has hidden, fought or gone after Mother and Ros, the night ends."
+        ],
+        "tone": ["frightening but not gory", "fairy-tale dread, never grimdark"]
+      },
+      "beats": [
+        {
+          "key": "raid_response", "kind": "label", "description": "What the child does when the bandits break in",
+          "outcomes": [
+            { "value": "hid", "meaning": "The player hides (under the bed, in the woodpile, anywhere) and stays hidden." },
+            { "value": "fought", "meaning": "The player attacks or stands against the bandits, even briefly." },
+            { "value": "searched_family", "meaning": "The player goes out after Mother and Ros." }
+          ]
+        }
+      ],
       "summary": "Night. Red Corwin's bandits torch the village. Father falls defending the door; Mother and Ros vanish in the chaos. The child must decide what to do.",
       "intro_text": "You wake to screaming. Orange light flickers through the shutters and the air is thick with smoke. Father is at the door with his woodaxe, shouting for Mother to take Ros out the back. Then the door splinters: Red Corwin's bandits are in Briarwell. You can hide, fight, or go looking for Mother and Ros.",
       "objective_text": "Survive the night: hide, fight, or search for Mother and Ros.",

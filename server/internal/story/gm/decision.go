@@ -107,6 +107,10 @@ func Validate(node *campaigns.StoryNode, g *game.Game, d Decision) (Decision, []
 			dropped = append(dropped, fmt.Sprintf("move_player: the player is already in %s", room))
 			continue
 		}
+		if where, ok := alreadyExists(g, ev); ok {
+			dropped = append(dropped, fmt.Sprintf("create_item: %v already exists (%s); give_item_to_player picks it up", ev.Input["name"], where))
+			continue
+		}
 		kept.WorldEvents = append(kept.WorldEvents, ev)
 	}
 
@@ -265,4 +269,37 @@ func ParseDecision(raw string) (Decision, []string, error) {
 		return Decision{}, notes, err
 	}
 	return d, notes, nil
+}
+
+// alreadyExists reports a create_item for a thing that is already in the
+// player's room or pack (playtest 6: the doll lying in the meadow was
+// created again when the player picked it up, and they carried two).
+func alreadyExists(g *game.Game, ev WorldEvent) (string, bool) {
+	if g == nil || ev.Type != "create_item" {
+		return "", false
+	}
+	name, _ := ev.Input["name"].(string)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", false
+	}
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return "", false
+	}
+	same := func(ids []string) bool {
+		for _, id := range ids {
+			if it, ok := g.Items[id]; ok && strings.EqualFold(it.Name, name) {
+				return true
+			}
+		}
+		return false
+	}
+	if same(owner.Inventory) {
+		return "the player carries it", true
+	}
+	if room, err := g.GetRoom(owner.LocationID); err == nil && same(room.Items) {
+		return "it is here in " + room.Name, true
+	}
+	return "", false
 }
