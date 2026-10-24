@@ -21,6 +21,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.56.1
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.2
 	github.com/aws/smithy-go v1.24.2
+	github.com/coder/websocket v1.8.12
 	github.com/google/uuid v1.6.0
 	google.golang.org/protobuf v1.35.1
 )

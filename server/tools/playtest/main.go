@@ -36,6 +36,7 @@ import (
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 	"github.com/rrochlin/an-amazing-adventure/internal/lambdas/wschat"
 	"github.com/rrochlin/an-amazing-adventure/internal/lambdas/wsgameaction"
+	"github.com/rrochlin/an-amazing-adventure/internal/localstack"
 )
 
 const (
@@ -108,11 +109,20 @@ func splitCommand(line string) []string {
 
 type player struct {
 	dir   string
-	store *memStore
-	n     int // turns played
+	store *localstack.Store
+	game  string // the session ID
+	n     int    // turns played
 }
 
 func (p *player) path(name string) string { return filepath.Join(p.dir, name) }
+
+// open puts a save in a fresh in-memory store, with the player connected.
+func (p *player) open(save game.SaveState) {
+	p.store = localstack.NewStore()
+	must(p.store.PutSession(save))
+	p.store.Connect(connID, userID, save.SessionID)
+	p.game = save.SessionID
+}
 
 func (p *player) newGame(campaignID, name string) error {
 	reg, err := campaigns.LoadEmbeddedRegistry()
@@ -136,7 +146,7 @@ func (p *player) newGame(campaignID, name string) error {
 	if err := os.MkdirAll(p.path("traces"), 0o755); err != nil {
 		return err
 	}
-	p.store = newMemStore(g.ToSaveState(nil, history))
+	p.open(g.ToSaveState(nil, history))
 	if err := p.save(); err != nil {
 		return err
 	}
@@ -164,12 +174,12 @@ func (p *player) load() error {
 		return err
 	}
 	p.n = f.Turns
-	p.store = newMemStore(f.Save)
+	p.open(f.Save)
 	return nil
 }
 
 func (p *player) save() error {
-	s, err := p.store.GetGame(context.Background(), "")
+	s, err := p.store.GetGame(context.Background(), p.game)
 	if err != nil {
 		return err
 	}
@@ -260,7 +270,7 @@ func (p *player) turn(ctx context.Context, verb, arg string) error {
 		func(context.Context) (wsgameaction.Sender, error) { return sender, nil },
 	)
 
-	before, err := p.store.GetGame(ctx, "")
+	before, err := p.store.GetGame(ctx, p.game)
 	if err != nil {
 		return err
 	}
@@ -284,7 +294,7 @@ func (p *player) turn(ctx context.Context, verb, arg string) error {
 		call = wsgameaction.Handler
 	}
 
-	p.store.traces = nil
+	p.store.Traces() // forget earlier turns' traces
 	started := time.Now()
 	resp, err := call(ctx, events.APIGatewayWebsocketProxyRequest{
 		Body:           body,
@@ -295,7 +305,7 @@ func (p *player) turn(ctx context.Context, verb, arg string) error {
 		return err
 	}
 	p.n++
-	after, err := p.store.GetGame(ctx, "")
+	after, err := p.store.GetGame(ctx, p.game)
 	if err != nil {
 		return err
 	}
@@ -304,7 +314,7 @@ func (p *player) turn(ctx context.Context, verb, arg string) error {
 	fmt.Fprintf(&b, "## Turn %d: %s\n\n", p.n, label)
 	fmt.Fprintf(&b, "- handler status %d, %.1fs\n", resp.StatusCode, elapsed.Seconds())
 	fmt.Fprintf(&b, "- frames: %s\n", sender.summary())
-	for _, tr := range p.store.traces {
+	for _, tr := range p.store.Traces() {
 		raw, _ := json.MarshalIndent(tr, "", " ")
 		name := fmt.Sprintf("%03d.json", p.n)
 		_ = os.WriteFile(p.path(filepath.Join("traces", name)), raw, 0o644)
@@ -354,7 +364,7 @@ func pickChoice(s game.SaveState, arg string) (int, string, error) {
 }
 
 func (p *player) stateSummary() string {
-	s, err := p.store.GetGame(context.Background(), "")
+	s, err := p.store.GetGame(context.Background(), p.game)
 	if err != nil {
 		return err.Error()
 	}
