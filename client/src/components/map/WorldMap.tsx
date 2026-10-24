@@ -588,8 +588,15 @@ export function markTile(
       for (let x = x0; x < x0 + w; x++) {
          if ((art.objects[y]?.[x] ?? ' ') !== ' ' || art.ground[y]?.[x] === '_' || taken.has(`${x},${y}`)) continue;
          if (x === px && y === py) continue;
-         // Distance, then in front (below) of it, then left to right.
-         const score = Math.abs(x - px) + Math.abs(y - py) + (y > py ? 0 : 0.5) + (x - px) * 0.01;
+         // Distance, then not boxed in (playtest 9: the long grass stood the
+         // player in a pocket open on one side), then in front (below) of
+         // it, then left to right.
+         const open = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => {
+            const nx = x + dx;
+            const ny = y + dy;
+            return nx >= x0 && nx < x0 + w && ny >= y0 && ny < y0 + h && (art.objects[ny]?.[nx] ?? ' ') === ' ' && art.ground[ny]?.[nx] !== '_';
+         }).length;
+         const score = Math.abs(x - px) + Math.abs(y - py) + (open < 2 ? 1.5 : 0) + (y > py ? 0 : 0.5) + (x - px) * 0.01;
          if (score < bestScore) {
             bestScore = score;
             best = [x, y];

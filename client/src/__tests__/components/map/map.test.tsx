@@ -183,6 +183,17 @@ describe('marks', () => {
       expect(Math.abs(bess.x - wx) <= 1 && Math.abs(bess.y - wy) <= 1).toBe(true);
    });
 
+   it('stands people somewhere they can walk away from, not in a pocket', () => {
+      const tokens = placeTokens(BRIARWELL_ART, rooms, 'village_square', 'Wren', 1, [], {});
+      const meadow = { ...rooms.meadow, discovered: true, occupants: [{ ...person('bully', 'Dunstan'), mark: 'long_grass' }] } as RoomView;
+      const placed = placeTokens(BRIARWELL_ART, { ...rooms, meadow }, 'village_square', 'Wren', 1, tokens);
+      const d = placed.find((t) => t.id === 'bully')!;
+      const free = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => (BRIARWELL_ART.objects[d.y + dy]?.[d.x + dx] ?? ' ') === ' ');
+      expect(free.length).toBeGreaterThanOrEqual(2);
+      const [gx, gy] = BRIARWELL_ART.points_of_interest.long_grass;
+      expect(Math.abs(d.x - gx) + Math.abs(d.y - gy)).toBeLessThanOrEqual(3);
+   });
+
    it("ignores a mark that isn't in the room", () => {
       const tokens = placeTokens(BRIARWELL_ART, rooms, 'village_square', 'Wren', 1, [], { bess: 'old_oak' });
       const [x, y, w, h] = BRIARWELL_ART.rooms.village_square;
