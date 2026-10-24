@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/KirkDiggler/rpg-toolkit/events"
 	dnd5echar "github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/character"
@@ -198,20 +199,23 @@ type Game struct {
 	DnDPlayers map[string]*dnd5echar.Character // keyed by userID — full D&D 5e characters (v3+)
 	// storedPlayersData is the character data the save held, so saving a
 	// game whose characters weren't loaded keeps them instead of erasing them.
-	storedPlayersData    map[string]*dnd5echar.Data
-	PartySize            int                  // max party members (default 4)
-	InviteCode           string               // active invite code, if any
-	Rooms                map[string]Area      // keyed by room ID
-	Items                map[string]Item      // keyed by item ID — global item registry
-	NPCs                 map[string]Character // keyed by character ID
-	Ready                bool
-	NeedsCharacterReset  bool                    // set on v1/v2 migration when characters can't be rebuilt
-	Version              int                     // optimistic locking counter, mirrors SaveState.Version
-	Title                string                  // adventure title for the generated world
-	Theme                string                  // world theme for the generated world
-	QuestGoal            string                  // win condition for the generated world
-	TotalTokens          int                     // cumulative Bedrock tokens used
-	ConversationCount    int                     // number of completed narrator turns
+	storedPlayersData   map[string]*dnd5echar.Data
+	PartySize           int                  // max party members (default 4)
+	InviteCode          string               // active invite code, if any
+	Rooms               map[string]Area      // keyed by room ID
+	Items               map[string]Item      // keyed by item ID — global item registry
+	NPCs                map[string]Character // keyed by character ID
+	Ready               bool
+	NeedsCharacterReset bool   // set on v1/v2 migration when characters can't be rebuilt
+	Version             int    // optimistic locking counter, mirrors SaveState.Version
+	Title               string // adventure title for the generated world
+	Theme               string // world theme for the generated world
+	QuestGoal           string // win condition for the generated world
+	TotalTokens         int    // cumulative Bedrock tokens used
+	ConversationCount   int    // number of completed narrator turns
+	// TurnStartedAt (unix ms) is set while a story turn is running: a second
+	// turn waits rather than racing it (see TurnInProgress).
+	TurnStartedAt        int64
 	CreationParams       CharacterCreationData   // player-supplied setup choices (v3+)
 	LegacyCreationParams AdventureCreationParams // preserved for v1/v2 records
 	Campaign             *CampaignRuntimeState   // authored campaign progression (v5+)
@@ -852,6 +856,7 @@ type SaveState struct {
 	QuestGoal            string                     `json:"quest_goal,omitempty" dynamodbav:"quest_goal,omitempty"`
 	TotalTokens          int                        `json:"total_tokens,omitempty" dynamodbav:"total_tokens,omitempty"`
 	ConversationCount    int                        `json:"conversation_count,omitempty" dynamodbav:"conversation_count,omitempty"`
+	TurnStartedAt        int64                      `json:"turn_started_at,omitempty" dynamodbav:"turn_started_at,omitempty"`
 	CreationParams       CharacterCreationData      `json:"creation_params,omitempty" dynamodbav:"creation_params,omitempty"`               // v3+
 	LegacyCreationParams AdventureCreationParams    `json:"legacy_creation_params,omitempty" dynamodbav:"legacy_creation_params,omitempty"` // v1/v2 only
 	Campaign             *CampaignRuntimeState      `json:"campaign,omitempty" dynamodbav:"campaign,omitempty"`
@@ -899,6 +904,15 @@ type WorldEvent struct {
 	// stage can show it on them.
 	Amount int    `json:"amount,omitempty" dynamodbav:"amount,omitempty"`
 	Item   string `json:"item,omitempty" dynamodbav:"item,omitempty"`
+}
+
+// TurnLockTTL is how long a running turn holds the session: longer than any
+// turn takes, short enough that a turn that died doesn't lock the game.
+const TurnLockTTL = 2 * time.Minute
+
+// TurnInProgress reports whether a story turn is running for this session.
+func (g *Game) TurnInProgress(now time.Time) bool {
+	return g.TurnStartedAt != 0 && now.Sub(time.UnixMilli(g.TurnStartedAt)) < TurnLockTTL
 }
 
 // PlayerRef names the player's own character in an event or cue.
@@ -1035,6 +1049,7 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 		QuestGoal:            g.QuestGoal,
 		TotalTokens:          g.TotalTokens,
 		ConversationCount:    g.ConversationCount,
+		TurnStartedAt:        g.TurnStartedAt,
 		CreationParams:       g.CreationParams,
 		LegacyCreationParams: g.LegacyCreationParams,
 		Campaign:             g.Campaign,
@@ -1084,6 +1099,7 @@ func FromSaveState(s SaveState) (*Game, error) {
 		QuestGoal:            s.QuestGoal,
 		TotalTokens:          s.TotalTokens,
 		ConversationCount:    s.ConversationCount,
+		TurnStartedAt:        s.TurnStartedAt,
 		CreationParams:       s.CreationParams,
 		LegacyCreationParams: s.LegacyCreationParams,
 		Campaign:             s.Campaign,
