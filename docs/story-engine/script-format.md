@@ -36,6 +36,38 @@ tags:
 | `cast` | Who may act in this scene: `actor_id`, `tier` (overrides the default), `part` (what they're doing here), `wants` (what they want from this scene), `knows` (scene-specific knowledge). Characters not in the cast don't act. |
 | `beats` | The story conditions the scene can settle, with **meanings written out**. Label beats list `outcomes` (`value` and `meaning`); flag beats have a `meaning`. |
 
+Scenes also take `location_id` (where it happens), `scene_map` (an interior, see [[scene-maps]]) and
+`mood` (`dawn`, `dusk`, `night`, `fire` or `ashes`: the map's light).
+
+## Objectives (`objectives.<id>`)
+
+| Field | Meaning |
+|---|---|
+| `success_when` | Conditions that complete it. Checked first. |
+| `on_success` | Actions when it completes: the coin a deed pays, the doll handed back. |
+| `fail_when` | Conditions that fail it: the player got it wrong, and it can't be done now. |
+| `unfinished_when` | Conditions that close it as **left unfinished**: the story moved on before the player closed it out. Nothing went wrong; it stays incomplete (the journal shows ○, not crossed out). |
+| `quest_items` | Item name patterns (`"rag doll\|doll"`, matched like `take_item`) that only matter to this quest. When it closes without success (failed or unfinished) they leave the player's pack and the world, and the player is told. |
+
+### Moving on, now or after a free-roam pause
+
+A completion rule moves the story as soon as its conditions hold. To leave the player a stretch of
+free roam first, add a condition the player meets by acting, such as `player_in_room`:
+
+```json
+"completion_rules": [{
+  "conditions": [
+    { "type": "label_in", "key": "deed_doll", "values": ["returned", "kept"] },
+    { "type": "label_in", "key": "deed_bully", "values": ["stopped", "joined"] },
+    { "type": "player_in_room", "room_id": "market_lane" }
+  ],
+  "next_node_id": "gift_stall"
+}]
+```
+
+Until the player walks to Market Lane, the scene stays open and the other deeds can still be done.
+Briarwell moves on at once; `TestFreeRoamBufferBeforeTheNextScene` shows the paused version.
+
 ### Rules the loader enforces
 
 - A controlled scene needs exact lines (a Yarn dialogue) or `stage_directions.must_happen`.

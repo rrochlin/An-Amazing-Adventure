@@ -231,7 +231,8 @@
       "description": "Little Bess has lost her rag doll somewhere in the village.",
       "optional": true,
       "success_when": [{ "type": "label_in", "key": "deed_doll", "values": ["returned", "kept"] }],
-      "fail_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
+      "quest_items": ["rag doll|doll"],
+      "unfinished_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
     },
     "miller_secret": {
       "on_success": [
@@ -241,7 +242,7 @@
       "description": "Hob the Miller is up to something behind the barn.",
       "optional": true,
       "success_when": [{ "type": "label_in", "key": "deed_miller", "values": ["told_wife", "took_bribe"] }],
-      "fail_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
+      "unfinished_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
     },
     "meadow_bully": {
       "on_success": [
@@ -251,7 +252,7 @@
       "description": "Dunstan is picking on the smaller children again.",
       "optional": true,
       "success_when": [{ "type": "label_in", "key": "deed_bully", "values": ["stopped", "joined"] }],
-      "fail_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
+      "unfinished_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
     },
     "buy_gift": {
       "title": "Buy Ros a Gift",

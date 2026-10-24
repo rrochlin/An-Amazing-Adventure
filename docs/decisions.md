@@ -9,6 +9,19 @@ force are summarised at the end of this file.
 
 ---
 
+## 2026-10-24 — A quest the story moves past stays unfinished
+
+**Decision:** When a phase moves on with a quest half-done, the quest is left **unfinished** (a status of
+its own, not failed), and items that only mattered to it are removed from the player and the world.
+Whether a phase moves on at once or after a stretch of free roam is the campaign's choice: completion
+rules can wait on the player (`player_in_room`). Briarwell moves on at once.
+
+**Why:** Playtest 6 (#166): the player held Bess's doll when the second coin ended the deeds; the quest was
+marked failed and the doll stayed in their pack for the rest of the run. Rob: the situation is common, the
+quest should stay incomplete, dead quest items can go, and moving on should be configurable.
+
+---
+
 ## 2026-10-23 — Briarwell runs on the game master
 
 **Decision:** Briarwell turns run on one game master call (`"story_pipeline": "game_master"`) instead of

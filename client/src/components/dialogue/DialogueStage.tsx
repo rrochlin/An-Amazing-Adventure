@@ -28,10 +28,11 @@ const NOTICE_LABELS: Record<string, string> = {
    campaign_progress: 'New objective',
    objective_completed: 'Objective complete',
    objective_failed: 'Objective missed',
+   objective_unfinished: 'Left unfinished',
 };
 
 const noticeText = (e: WorldEvent) =>
-   e.message.replace(/^Objective (updated|complete|missed):\s*/, '');
+   e.message.replace(/^(Objective (updated|complete|missed)|Left unfinished):\s*/, '');
 
 interface DialogueStageProps {
    messages: ChatMessage[];
@@ -614,7 +615,13 @@ export function DialogueStage({
             sx={{ position: 'absolute', pointerEvents: 'auto' }}
          >
             <Alert
-               severity={toasts[0]?.type === 'objective_failed' ? 'warning' : 'success'}
+               severity={
+                  toasts[0]?.type === 'objective_failed'
+                     ? 'warning'
+                     : toasts[0]?.type === 'objective_unfinished'
+                       ? 'info'
+                       : 'success'
+               }
                variant="filled"
                onClose={() => setToasts((t) => t.slice(1))}
             >
