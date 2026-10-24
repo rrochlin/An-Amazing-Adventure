@@ -89,6 +89,19 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 		g.Rooms[area.ID] = area
 	}
 
+	// Authored items, where the campaign says they lie.
+	for authoredID, room := range def.Map.Rooms {
+		for _, it := range room.Items {
+			item := game.NewItem(it.Name, it.Description)
+			if err := g.AddItem(item); err != nil {
+				return nil, nil, fmt.Errorf("room %q item %q: %w", authoredID, it.Name, err)
+			}
+			if err := g.PlaceItemInRoom(item.ID, roomIDMap[authoredID]); err != nil {
+				return nil, nil, fmt.Errorf("room %q item %q: %w", authoredID, it.Name, err)
+			}
+		}
+	}
+
 	for _, actorID := range def.Party.CompanionIDs {
 		a, ok := def.Actors[actorID]
 		if !ok {

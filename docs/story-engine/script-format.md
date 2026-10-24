@@ -22,7 +22,7 @@ tags:
 | `backstory` | Their history, for whoever plays them. |
 | `motivations` | What drives them. |
 | `relationships` | Actor ID, or `"player"`, → how they see that character. |
-| `knows` | Things they know, secrets included. Agents only get what they need (need-to-know). |
+| `knows` | Things they know, secrets included. The game master is told what the characters in the player's room know (with what the scene's cast entry adds), so they can answer as themselves; nothing about those elsewhere (need-to-know). |
 | `default_tier` | `actor` (default) or `player`: how much freedom the agent playing them has. |
 | `start_location_id` | The room they start in, as a real character in the world. |
 | `appears_in` | Scenes they can appear in. A scene can't cast them otherwise. |
@@ -35,6 +35,10 @@ tags:
 | `stage_directions` | `focus`, `setting`, `must_mention`, `must_happen` (in order), `must_not_reveal`, `boundaries`, `tone`. Replaces `narrator_contract`; the old key is still read. |
 | `cast` | Who may act in this scene: `actor_id`, `tier` (overrides the default), `part` (what they're doing here), `wants` (what they want from this scene), `knows` (scene-specific knowledge). Characters not in the cast don't act. |
 | `beats` | The story conditions the scene can settle, with **meanings written out**. Label beats list `outcomes` (`value` and `meaning`); flag beats have a `meaning`. |
+
+Rooms (`map.rooms.<id>`) can hold `items`: things lying there when the run begins (`name`,
+`description`), so a lost doll is somewhere rather than wherever the story improvises it. The game master
+sees the items in the player's room.
 
 Scenes also take `location_id` (where it happens), `scene_map` (an interior, see [[scene-maps]]) and
 `mood` (`dawn`, `dusk`, `night`, `fire` or `ashes`: the map's light).

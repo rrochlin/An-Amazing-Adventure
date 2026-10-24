@@ -305,3 +305,17 @@ func TestStartSession_QuickStartBuildsTheCharacter(t *testing.T) {
 		t.Fatalf("view %d/%d, want %d/%d", view.Self.Health, view.Self.MaxHealth, max, max)
 	}
 }
+
+// Playtest 7: the doll's whereabouts were improvised each run, and a search
+// of the meadow could turn up nothing. Authored items lie where the
+// campaign says.
+func TestBriarwell_TheDollLiesInTheMeadow(t *testing.T) {
+	_, g, _ := bootstrapBriarwell(t)
+	var found bool
+	for _, id := range g.Rooms["meadow"].Items {
+		found = found || g.Items[id].Name == "Bess's rag doll"
+	}
+	if !found {
+		t.Fatalf("the meadow should hold Bess's doll, items %v", g.Rooms["meadow"].Items)
+	}
+}

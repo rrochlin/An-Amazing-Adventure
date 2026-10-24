@@ -42,6 +42,9 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 		line("\n%s", strings.TrimSpace(campaignBrief))
 	}
 	line("\n%s", strings.TrimSpace(worldSlice(g)))
+	if known := whatTheyKnow(def, g, node); known != "" {
+		line("%s", known)
+	}
 	if c := g.Campaign; c != nil && c.Conversation != nil {
 		line("\nThe player is in a conversation with %s, who is right beside them. Play %s's side of it: answer, react, ask back. The conversation goes on until the player leaves it.", c.Conversation.Name, c.Conversation.Name)
 	}
@@ -219,4 +222,40 @@ func completedBy(conds []campaigns.Condition, key string) bool {
 		}
 	}
 	return false
+}
+
+// whatTheyKnow is what the characters beside the player know (their sheet,
+// and what this scene adds), so they can answer as themselves: need to know,
+// so only those who are here.
+func whatTheyKnow(def *campaigns.CampaignDefinition, g *game.Game, node *campaigns.StoryNode) string {
+	if def == nil {
+		return ""
+	}
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return ""
+	}
+	room, err := g.GetRoom(owner.LocationID)
+	if err != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, id := range room.Occupants {
+		actor, ok := def.Actors[id]
+		if !ok {
+			continue
+		}
+		knows := append([]string(nil), actor.Knows...)
+		if node != nil {
+			for _, m := range node.Cast {
+				if m.ActorID == id {
+					knows = append(knows, m.Knows...)
+				}
+			}
+		}
+		if len(knows) > 0 {
+			fmt.Fprintf(&b, "%s knows: %s\n", actor.Name, strings.Join(knows, " "))
+		}
+	}
+	return b.String()
 }
