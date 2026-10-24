@@ -52,10 +52,12 @@ are instant.
 
 ## Still open
 
-- #166: the doll quest fails silently while the player holds the doll (story decision).
-- #167: the single ending ignores the player's choices.
-- #168: ws-game-action tests make real AWS calls.
-- #169: campaign sessions drop the wizard's D&D character.
+- #166 (fixed): a quest the story moves past is left unfinished (not failed), its quest items are
+  removed, and `player_in_room` lets a campaign pause for free roam before moving on.
+- #167: a choice-aware ending is content. Endings already take conditions and their own dialogue.
+- #168 (fixed): tests that only passed because AWS was unreachable are gone.
+- #169 (fixed): every session builds the player's character and stats (the quick start uses the preset),
+  and health is that character's hit points.
 - The game master still gives a few unscripted characters names ("Tommy Weaver"); a rule now asks it not to.
 - When asked to search for a doll it had already found, it narrated finding it again.
 - Narration sometimes runs to 5–6 paragraphs, which pushed one turn past 10s.
