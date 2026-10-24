@@ -671,6 +671,25 @@ func (g *Game) MovePlayer(direction string) (Area, error) {
 	return g.MoveCharacter(g.OwnerID, direction)
 }
 
+// MoveToRoom moves a player to a room connected to the one they're in: free
+// movement walks across the map to a room rather than naming a direction.
+func (g *Game) MoveToRoom(userID, roomID string) (Area, error) {
+	player, ok := g.GetPlayerCharacter(userID)
+	if !ok {
+		return Area{}, fmt.Errorf("player %s not found in game", userID)
+	}
+	current, err := g.GetRoom(player.LocationID)
+	if err != nil {
+		return Area{}, fmt.Errorf("player has no current room: %w", err)
+	}
+	for direction, dest := range current.Connections {
+		if dest == roomID {
+			return g.MoveCharacter(userID, direction)
+		}
+	}
+	return Area{}, fmt.Errorf("%s doesn't lead to %q", current.Name, roomID)
+}
+
 // MoveCharacter moves a specific player's character to an adjacent room.
 // Returns the destination room and an error if the direction has no exit.
 func (g *Game) MoveCharacter(userID, direction string) (Area, error) {
