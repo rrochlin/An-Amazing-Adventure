@@ -27,6 +27,4 @@ first all the way to the ending, the second to the first scene change, checking 
 
 ## Still open
 
-- A mark tile can be a pocket (the long grass): reachable, but boxed in on three sides.
-- Speech bubbles over the speaker (#183) are the natural next step now that lines name a speaker.
 - The game master still tries to hand out coins (dropped by validation every time).
