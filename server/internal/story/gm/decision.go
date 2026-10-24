@@ -23,6 +23,9 @@ type Decision struct {
 	// Beats settles the scene's beats this turn: label key → one of its
 	// outcomes, flag key → true. Keys the scene doesn't define are dropped.
 	Beats map[string]any `json:"beats"`
+	// Staging is who walks to which mark and who reacts, on which
+	// paragraph of the narration.
+	Staging []Cue `json:"staging,omitempty"`
 	// OffScript says how the game master handled an action the script
 	// didn't cover, if it did.
 	OffScript *OffScript `json:"off_script,omitempty"`
@@ -162,6 +165,9 @@ func Validate(node *campaigns.StoryNode, g *game.Game, d Decision) (Decision, []
 			dropped = append(dropped, fmt.Sprintf("beat %q (%s) can't be settled by the game master", key, spec.Type))
 		}
 	}
+	staging, notes := validateStaging(g, d.Staging)
+	kept.Staging = staging
+	dropped = append(dropped, notes...)
 	if d.OffScript != nil {
 		switch d.OffScript.Kind {
 		case OffScriptImprovised, OffScriptSteered, OffScriptRefused:
@@ -252,7 +258,7 @@ func ParseDecision(raw string) (Decision, []string, error) {
 		return Decision{}, nil, err
 	}
 	var notes []string
-	for _, key := range []string{"world_events", "beats", "off_script"} {
+	for _, key := range []string{"world_events", "beats", "staging", "off_script"} {
 		v, ok := fields[key]
 		if !ok {
 			continue

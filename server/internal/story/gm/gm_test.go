@@ -268,3 +268,70 @@ func TestBriefSaysWhatTheCharactersHereKnow(t *testing.T) {
 		t.Fatal("need to know: not when Bess isn't here")
 	}
 }
+
+func TestStagingKeepsWhatTheRoomAllows(t *testing.T) {
+	def, g := briarwell(t)
+	if err := g.PlaceCharacter(g.OwnerID, "village_square"); err != nil {
+		t.Fatal(err)
+	}
+	d := gm.Decision{Staging: []gm.Cue{
+		{Line: 1, Who: "Little Bess", MoveTo: "stone_well"},
+		{Line: 2, Who: "player", Emote: "bow"},
+		{Line: 0, Who: "Dunstan", Emote: "laugh"},         // in the meadow, not here
+		{Line: 0, Who: "Little Bess", MoveTo: "hearth"},   // a mark of another room
+		{Line: 0, Who: "Little Bess", Emote: "pirouette"}, // no such emote
+		{Line: -3, Who: "little bess", Emote: "hop"},      // any case; line clamped
+	}}
+	kept, dropped := gm.Validate(node(def, "village_deeds"), g, d)
+	if len(kept.Staging) != 3 {
+		t.Fatalf("kept %+v (dropped %v)", kept.Staging, dropped)
+	}
+	if kept.Staging[0].Who != "bess" || kept.Staging[0].MoveTo != "stone_well" {
+		t.Errorf("Bess's cue should name her ID: %+v", kept.Staging[0])
+	}
+	if kept.Staging[1].Who != gm.PlayerCue || kept.Staging[2].Line != 0 {
+		t.Errorf("player cue and clamped line: %+v", kept.Staging[1:])
+	}
+	if len(dropped) != 3 {
+		t.Errorf("dropped %v", dropped)
+	}
+
+	events := gm.ApplyStaging(g, kept.Staging, 2)
+	if bess := g.NPCs["bess"]; bess.MarkHere() != "stone_well" {
+		t.Errorf("Bess should stand at the well, got %q", bess.MarkHere())
+	}
+	if len(events) != 3 || events[0].Type != "cue" || events[0].Character != "bess" || events[0].Mark != "stone_well" {
+		t.Fatalf("cue events %+v", events)
+	}
+	if events[1].Line != 1 {
+		t.Errorf("a cue past the last paragraph plays on the last: %+v", events[1])
+	}
+	if !strings.Contains(gm.Brief(def, g), "Little Bess at stone_well") {
+		t.Error("the brief should say where people stand")
+	}
+
+	// Moving her anywhere leaves the mark behind.
+	if err := g.MoveNPC("bess", "meadow"); err != nil {
+		t.Fatal(err)
+	}
+	if m := g.NPCs["bess"].MarkHere(); m != "" {
+		t.Errorf("a mark only holds in its room, got %q", m)
+	}
+}
+
+func TestSchemaStagesOnlyWhoIsHere(t *testing.T) {
+	def, g := briarwell(t)
+	if err := g.PlaceCharacter(g.OwnerID, "village_square"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(gm.Schema(node(def, "village_deeds"), g))
+	s := string(raw)
+	for _, want := range []string{`"staging"`, `"Little Bess"`, `"stone_well"`, `"startle"`} {
+		if !strings.Contains(s, want) {
+			t.Errorf("schema should offer %s", want)
+		}
+	}
+	if strings.Contains(s, `"Dunstan"`) || strings.Contains(s, `"hearth"`) {
+		t.Error("only who and what is here")
+	}
+}

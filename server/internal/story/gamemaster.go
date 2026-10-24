@@ -95,6 +95,10 @@ func (p GameMaster) RunTurn(ctx context.Context, in TurnInput) (TurnOutput, erro
 		})
 	}
 
+	// Staging: everyone stands where the narration sent them, and the stage
+	// gets the cues to play.
+	out.NarrativeEvents = append(out.NarrativeEvents, gm.ApplyStaging(g, kept.Staging, gm.Paragraphs(out.Narrative))...)
+
 	// Campaign progress from the settled beats.
 	if in.Campaign != nil {
 		resolution := gm.Resolution(kept)

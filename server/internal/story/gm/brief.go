@@ -42,6 +42,9 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 		line("\n%s", strings.TrimSpace(campaignBrief))
 	}
 	line("\n%s", strings.TrimSpace(worldSlice(g)))
+	if staging := stagingBrief(g); staging != "" {
+		line("%s", strings.TrimSpace(staging))
+	}
 	if known := whatTheyKnow(def, g, node); known != "" {
 		line("%s", known)
 	}

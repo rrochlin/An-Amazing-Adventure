@@ -49,7 +49,7 @@ func Schema(node *campaigns.StoryNode, g *game.Game) map[string]any {
 		"properties": map[string]any{
 			"narration": map[string]any{
 				"type":        "string",
-				"description": "The turn's prose, 2-4 paragraphs: what the player experiences. Write this first. It ends on the moment itself (a line of dialogue, a sight, a question): no list of what the player could do next, no recap of errands or places still open.",
+				"description": "The turn's prose, 2-4 paragraphs: what the player experiences. Write this first. A spoken line is its own paragraph, as \"Name: words\". It ends on the moment itself (a line of dialogue, a sight, a question): no list of what the player could do next, no recap of errands or places still open.",
 			},
 			"world_events": map[string]any{
 				"type":        "array",
@@ -62,6 +62,7 @@ func Schema(node *campaigns.StoryNode, g *game.Game) map[string]any {
 				"properties":           beats,
 				"additionalProperties": false,
 			},
+			"staging": stagingSchema(g),
 			"off_script": map[string]any{
 				"type":        "object",
 				"description": "Only about THIS turn, and present only when the player's action this turn wasn't covered by the script. Leave it out otherwise.",

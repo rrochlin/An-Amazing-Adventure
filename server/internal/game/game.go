@@ -860,8 +860,15 @@ type NarrativeBlock struct {
 // occurred during a narrator turn. Events are only produced when the player
 // can observe the change (see visibility table in docs/TODO.md).
 type WorldEvent struct {
-	Type    string `json:"type" dynamodbav:"type"`       // "damage","heal","death","revive","item_gained","item_lost","item_appeared","character_arrived","character_departed"
+	Type    string `json:"type" dynamodbav:"type"`       // "damage","heal","death","revive","item_gained","item_lost","item_appeared","character_arrived","character_departed","cue"
 	Message string `json:"message" dynamodbav:"message"` // human-readable, player's perspective
+	// A "cue" is staging for the scene: Character (an NPC ID, or "player")
+	// walks to Mark and/or plays Emote when the narration reaches Line (its
+	// paragraph, from 0). Message is empty: the stage shows it, nobody reads it.
+	Character string `json:"character,omitempty" dynamodbav:"character,omitempty"`
+	Mark      string `json:"mark,omitempty" dynamodbav:"mark,omitempty"`
+	Emote     string `json:"emote,omitempty" dynamodbav:"emote,omitempty"`
+	Line      int    `json:"line,omitempty" dynamodbav:"line,omitempty"`
 }
 
 // MutationEntry is a durable audit log record written to the mutations table
@@ -1206,7 +1213,9 @@ type CharacterView struct {
 	MaxHealth   int    `json:"max_health"` // always populated; falls back to 100 for legacy characters
 	Friendly    bool   `json:"friendly"`
 	// Scale is height relative to an adult; 0 means 1.
-	Scale     float64       `json:"scale,omitempty"`
+	Scale float64 `json:"scale,omitempty"`
+	// Mark is the point of interest they stand at in their room, if any.
+	Mark      string        `json:"mark,omitempty"`
 	Inventory []ItemView    `json:"inventory"`
 	Equipment EquipmentView `json:"equipment"`
 	// D&D 5e stats — populated when character was created via CharacterCreationData
@@ -1273,6 +1282,7 @@ func (g *Game) buildCharacterViewWithDnD(c Character, dnd *dnd5echar.Character) 
 		MaxHealth:   100, // legacy default; overwritten below when DnD character is present
 		Friendly:    c.Friendly,
 		Scale:       c.Scale,
+		Mark:        c.MarkHere(),
 		Inventory:   resolveItems(c.Inventory),
 		Equipment: EquipmentView{
 			Head:  resolveSlot(c.Equipment.Head),
