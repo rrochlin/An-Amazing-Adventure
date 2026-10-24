@@ -201,6 +201,24 @@ export function WorldMap({
                   }}
                />
 
+               {mode !== 'scene' && (
+                  // One fog over the whole map with a hole for each room the
+                  // party has found: ground between rooms (or past them) is
+                  // fogged too, so only found places show.
+                  <svg
+                     data-testid="map-fog"
+                     width={px(art.width)}
+                     height={px(art.height)}
+                     style={{ position: 'absolute', left: 0, top: 0, pointerEvents: 'none' }}
+                  >
+                     <path
+                        fillRule="evenodd"
+                        fill="rgba(12, 8, 16, 0.88)"
+                        d={fogPath(art, rooms, currentRoomId, px)}
+                     />
+                  </svg>
+               )}
+
                {Object.entries(art.rooms).map(([id, [x, y, w, h]]) => {
                   const room = rooms[id];
                   const current = id === currentRoomId;
@@ -220,12 +238,10 @@ export function WorldMap({
                            width: px(w),
                            height: px(h),
                            boxSizing: 'border-box',
-                           bgcolor: discovered ? 'transparent' : 'rgba(12, 8, 16, 0.88)',
                            // The current room: a gold outline with a soft glow.
                            boxShadow: current && mode !== 'scene'
                               ? `inset 0 0 0 ${Math.max(2, scale)}px #f5d77a, inset 0 0 ${8 * scale}px rgba(201,169,98,0.45)`
                               : 'none',
-                           transition: 'background-color 0.6s ease',
                            pointerEvents: 'none',
                         }}
                      >
@@ -415,6 +431,22 @@ export function cameraOffset(
       x: axis(view.w, mapW, (x + w / 2) * TILE * scale),
       y: axis(view.h, mapH, (y + h / 2) * TILE * scale),
    };
+}
+
+/**
+ * The fog's outline: the whole map, then a hole (evenodd) for each found
+ * room and the one the player stands in.
+ */
+export function fogPath(
+   art: MapArt,
+   rooms: Record<string, RoomView>,
+   currentRoomId: string | undefined,
+   px: (tiles: number) => number,
+): string {
+   const holes = Object.entries(art.rooms)
+      .filter(([id]) => id === currentRoomId || rooms[id]?.discovered)
+      .map(([, [x, y, w, h]]) => `M${px(x)} ${px(y)}h${px(w)}v${px(h)}h${-px(w)}Z`);
+   return [`M0 0H${px(art.width)}V${px(art.height)}H0Z`, ...holes].join(' ');
 }
 
 /** Object characters that continue beyond the map's edge: forest. */

@@ -7,7 +7,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { AppTheme } from '@/theme/theme';
 import { BRIARWELL_ART } from '@/components/map/art/briarwell';
 import { GROUND_TILES, OBJECT_TILES, mapArtFor, sceneArt } from '@/components/map/mapArt';
-import { WorldMap, cameraOffset, mapScale, placeTokens } from '@/components/map/WorldMap';
+import { WorldMap, cameraOffset, fogPath, mapScale, placeTokens } from '@/components/map/WorldMap';
 import type { CharacterView, RoomView } from '@/types/types';
 
 interface CampaignJSON {
@@ -157,6 +157,19 @@ describe('WorldMap', () => {
       expect(screen.getByLabelText('Wren')).toBeInTheDocument();
       expect(screen.queryByLabelText('Dunstan')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Stone well')).toBeInTheDocument();
+   });
+
+   it('fogs everything but the rooms found, ground between rooms included', () => {
+      // Rob, 2026-10-24: patches outside any room (the map's corners, the
+      // meadow's sides) showed bright on the world map as if discovered.
+      const d = fogPath(BRIARWELL_ART, rooms, 'village_square', (t) => t * 16);
+      const parts = d.split('M').filter(Boolean);
+      // The whole map, then one hole each for the square (current) and the
+      // cottage (found); none for the unfound meadow.
+      expect(parts[0]).toBe(`0 0H${26 * 16}V${30 * 16}H0Z `);
+      expect(parts).toHaveLength(3);
+      const [x, y] = BRIARWELL_ART.rooms.meadow;
+      expect(d).not.toContain(`M${x * 16} ${y * 16}h`);
    });
 });
 
