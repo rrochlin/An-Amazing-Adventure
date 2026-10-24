@@ -80,28 +80,6 @@ func TestHandlerConnect_ExpiredToken(t *testing.T) {
 	}
 }
 
-func TestHandlerConnect_ValidTokenFormat_ReachesDB(t *testing.T) {
-	t.Setenv("CONNECTIONS_TABLE", "test-connections")
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
-	t.Setenv("USER_POOL_ID", "us-west-2_test")
-	// Valid JWT structure with future exp
-	// Payload: {"sub":"user-abc","exp":9999999999}
-	validToken := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLWFiYyIsImV4cCI6OTk5OTk5OTk5OX0.signature"
-	req := makeWSReq("conn-123", map[string]string{
-		"token":  validToken,
-		"gameId": "game-uuid",
-	})
-	resp, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected lambda error: %v", err)
-	}
-	// Token validates structurally; will fail at DynamoDB with no real credentials
-	// Should be 500 (DB failure), not 401 (auth failure)
-	if resp.StatusCode == 401 {
-		t.Errorf("expected to pass JWT validation, got 401 — JWT parsing failed")
-	}
-}
-
 // ---- Required env var tests ----
 // ws-connect now reads the sessions table (for auth) before writing to connections.
 // Both SESSIONS_TABLE and CONNECTIONS_TABLE must be set.

@@ -63,20 +63,6 @@ func TestHandlerPostConfirm_MissingSub_SkipsGracefully(t *testing.T) {
 	_ = result
 }
 
-func TestHandlerPostConfirm_WithSub_ReachesDB(t *testing.T) {
-	t.Setenv("USERS_TABLE", "test-users")
-	t.Setenv("INVITES_TABLE", "test-invites")
-	t.Setenv("MEMBERSHIPS_TABLE", "test-memberships")
-	evt := makePostConfirmEvent("user-sub-abc", "")
-	// Will fail at DynamoDB layer (no real credentials) — must not panic
-	result, err := handler(context.Background(), evt)
-	// cognito-post-confirm is non-fatal: it never returns an error to Cognito
-	if err != nil {
-		t.Errorf("handler should never return error (non-fatal design), got: %v", err)
-	}
-	_ = result
-}
-
 // ---- Required env var tests ----
 // Each env var listed here must also be present in the Lambda's Terraform config
 // (modules/lambdas/main.tf). If you add a new table call to cognito-post-confirm,

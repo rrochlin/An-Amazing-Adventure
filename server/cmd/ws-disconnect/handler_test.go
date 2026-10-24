@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 )
@@ -40,12 +41,16 @@ func makeWSReq(connID string) events.APIGatewayWebsocketProxyRequest {
 }
 
 func TestHandlerDisconnect_AlwaysReturns200(t *testing.T) {
+	// No AWS in tests: a short deadline fails the calls at once instead of
+	// waiting seconds for credentials.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
 	// Disconnect must always return 200 — API GW ignores the response
 	// but a non-200 would cause unnecessary retries.
 	t.Setenv("CONNECTIONS_TABLE", "test-connections")
 	t.Setenv("SESSIONS_TABLE", "test-sessions")
 	req := makeWSReq("conn-to-clean-up")
-	resp, err := handler(context.Background(), req)
+	resp, err := handler(ctx, req)
 	if err != nil {
 		t.Fatalf("unexpected lambda error: %v", err)
 	}
@@ -66,10 +71,14 @@ func TestHandlerDisconnect_MissingCONNECTIONS_TABLE_Panics(t *testing.T) {
 }
 
 func TestHandlerDisconnect_EmptyConnID(t *testing.T) {
+	// No AWS in tests: a short deadline fails the calls at once instead of
+	// waiting seconds for credentials.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
 	t.Setenv("CONNECTIONS_TABLE", "test-connections")
 	t.Setenv("SESSIONS_TABLE", "test-sessions")
 	req := makeWSReq("")
-	resp, err := handler(context.Background(), req)
+	resp, err := handler(ctx, req)
 	if err != nil {
 		t.Fatalf("unexpected lambda error: %v", err)
 	}

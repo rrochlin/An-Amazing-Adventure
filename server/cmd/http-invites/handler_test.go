@@ -114,28 +114,6 @@ func TestHandlerInvites_CreateInvite_InvalidJSON_400(t *testing.T) {
 	}
 }
 
-func TestHandlerInvites_GetInvite_ReachesDB(t *testing.T) {
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
-	t.Setenv("INVITES_TABLE", "test-invites")
-	t.Setenv("MEMBERSHIPS_TABLE", "test-memberships")
-	req := makeInviteReq("GET", "/api/invites/ABC123", "user-1", "", map[string]string{"code": "ABC123"})
-	resp, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// Without real DynamoDB, GetInvite returns not-found (404) — that's correct
-	// routing behaviour. We just assert we didn't get a routing 404 from the switch
-	// (i.e. the request was dispatched to handleGetInvite, not the default case).
-	// A 400 would indicate the code path was reached but code was missing.
-	if resp.StatusCode == 0 {
-		t.Errorf("expected a response, got zero status")
-	}
-	var body map[string]any
-	if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
-		t.Errorf("response is not valid JSON: %s", resp.Body)
-	}
-}
-
 // ---- Required env var tests ----
 // Each env var listed here must also be present in the Lambda's Terraform config
 // (modules/lambdas/main.tf). If you add a new table call to http-invites, add

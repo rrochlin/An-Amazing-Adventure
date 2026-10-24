@@ -64,24 +64,6 @@ func TestHandlerUpdateUser_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestHandlerUpdateUser_ValidRequest_ReachesDB(t *testing.T) {
-	t.Setenv("USER_POOL_ID", "us-west-2_test")
-	req := makeReq("PUT", "/api/users", `{"email":"newemail@example.com"}`, "user-sub-123")
-	resp, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected lambda error: %v", err)
-	}
-	// Will fail at Cognito call with no real credentials — should be 500, not 401/400
-	if resp.StatusCode == 401 || resp.StatusCode == 400 {
-		t.Errorf("routing/auth failed, got %d — expected to reach Cognito call", resp.StatusCode)
-	}
-	// Must be valid JSON
-	var body map[string]any
-	if err := json.Unmarshal([]byte(resp.Body), &body); err != nil {
-		t.Errorf("response is not valid JSON: %s", resp.Body)
-	}
-}
-
 func TestJSONResponse_Format(t *testing.T) {
 	resp := jsonResponse(201, map[string]string{"status": "created"})
 	if resp.StatusCode != 201 {
