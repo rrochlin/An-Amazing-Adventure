@@ -874,6 +874,77 @@ type WorldEvent struct {
 	Mark      string `json:"mark,omitempty" dynamodbav:"mark,omitempty"`
 	Emote     string `json:"emote,omitempty" dynamodbav:"emote,omitempty"`
 	Line      int    `json:"line,omitempty" dynamodbav:"line,omitempty"`
+	// For damage, heal, death and item changes: who it happened to
+	// (Character, an NPC ID or PlayerRef), how much, and which item, so the
+	// stage can show it on them.
+	Amount int    `json:"amount,omitempty" dynamodbav:"amount,omitempty"`
+	Item   string `json:"item,omitempty" dynamodbav:"item,omitempty"`
+}
+
+// PlayerRef names the player's own character in an event or cue.
+const PlayerRef = "player"
+
+// InventoryChanges are the events for what came into and went out of the
+// player's pack between two lists of item names (counted, so two coins
+// paid out is one event of 2).
+func InventoryChanges(before, after []string) []WorldEvent {
+	count := func(names []string) map[string]int {
+		m := map[string]int{}
+		for _, n := range names {
+			m[n]++
+		}
+		return m
+	}
+	was, now := count(before), count(after)
+	names := map[string]bool{}
+	for n := range was {
+		names[n] = true
+	}
+	for n := range now {
+		names[n] = true
+	}
+	sorted := make([]string, 0, len(names))
+	for n := range names {
+		sorted = append(sorted, n)
+	}
+	sort.Strings(sorted)
+	var out []WorldEvent
+	for _, n := range sorted {
+		d := now[n] - was[n]
+		label := n
+		if d > 1 || d < -1 {
+			label = fmt.Sprintf("%d × %s", abs(d), n)
+		}
+		switch {
+		case d > 0:
+			out = append(out, WorldEvent{Type: "item_gained", Message: label + " added to your inventory.", Character: PlayerRef, Item: n, Amount: d})
+		case d < 0:
+			out = append(out, WorldEvent{Type: "item_lost", Message: label + " removed from your inventory.", Character: PlayerRef, Item: n, Amount: -d})
+		}
+	}
+	return out
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}
+
+// PackNames is the names of what the player carries.
+func (g *Game) PackNames() []string {
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(owner.Inventory))
+	for _, id := range owner.Inventory {
+		if it, ok := g.Items[id]; ok {
+			out = append(out, it.Name)
+		}
+	}
+	return out
 }
 
 // MutationEntry is a durable audit log record written to the mutations table

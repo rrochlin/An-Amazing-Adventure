@@ -321,3 +321,29 @@ func TestDialogueChoice_SendsEachMessagesStaging(t *testing.T) {
 		t.Errorf("saved with their messages: %+v / %+v", h[len(h)-2].Events, h[len(h)-1].Events)
 	}
 }
+
+func TestDialogueChoice_TellsWhatThePackGainedAndLost(t *testing.T) {
+	// The stall's commands take two coins and give the sweets: the player
+	// should see both, on the choice's own text.
+	def := briarwell(t)
+	store, sender := walkingSession(t, def)
+	g, _ := game.FromSaveState(store.save)
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"}}); err != nil {
+		t.Fatal(err)
+	}
+	g.Version++
+	store.save = g.ToSaveState(store.save.Narrative, store.save.ChatHistory)
+	body, _ := json.Marshal(actionRequest{Action: "game_action", SubAction: "dialogue_choice", Payload: "0"})
+	if _, err := handler(context.Background(), makeActionReq("conn-walk", string(body))); err != nil {
+		t.Fatal(err)
+	}
+	d := sender.deltas[len(sender.deltas)-1]
+	var lost, gained bool
+	for _, e := range d.Events {
+		lost = lost || (e.Type == "item_lost" && e.Item == "copper coin" && e.Amount == 2)
+		gained = gained || (e.Type == "item_gained" && e.Item == "honey sweets")
+	}
+	if !lost || !gained {
+		t.Fatalf("the choice's events: %+v", d.Events)
+	}
+}

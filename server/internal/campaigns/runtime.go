@@ -344,7 +344,7 @@ func removeQuestItems(g *game.Game, patterns []string) []game.WorldEvent {
 			if it, ok := g.Items[id]; ok && matches(it.Name) {
 				_ = owner.RemoveItemID(id)
 				delete(g.Items, id)
-				events = append(events, game.WorldEvent{Type: "item_lost", Message: it.Name + " is gone from your pack."})
+				events = append(events, game.WorldEvent{Type: "item_lost", Message: it.Name + " is gone from your pack.", Character: game.PlayerRef, Item: it.Name, Amount: 1})
 			}
 		}
 		g.Players[g.OwnerID] = owner
@@ -370,6 +370,34 @@ func OrchestrateTurn(def *CampaignDefinition, g *game.Game, resolution Condition
 	if def == nil || g == nil || g.Campaign == nil || g.Campaign.RunEnded() {
 		return TurnOrchestrationResult{}, nil
 	}
+	// What the story's rules put in or took from the pack (a deed's pay, a
+	// scene's commands) is told like any other item change.
+	before := g.PackNames()
+	result, err := orchestrateTurn(def, g, resolution)
+	if err == nil {
+		result.Events = append(result.Events, PackChanges(before, g.PackNames(), result.Events)...)
+	}
+	return result, err
+}
+
+// PackChanges is InventoryChanges less what events already told.
+func PackChanges(before, after []string, told []game.WorldEvent) []game.WorldEvent {
+	var out []game.WorldEvent
+	for _, e := range game.InventoryChanges(before, after) {
+		already := 0
+		for _, t := range told {
+			if t.Type == e.Type && t.Item == e.Item {
+				already += max(t.Amount, 1)
+			}
+		}
+		if e.Amount -= already; e.Amount > 0 {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func orchestrateTurn(def *CampaignDefinition, g *game.Game, resolution ConditionResolution) (TurnOrchestrationResult, error) {
 
 	// A party wipe ends the run before any story transition is considered.
 	if wiped, err := EndRunIfPartyWiped(def, g); err != nil || wiped.Transition.RunEnded {
