@@ -119,7 +119,7 @@ func TestGameMaster_AppliesWhatTheSceneAllowsAndAdvancesTheStory(t *testing.T) {
 	for _, e := range out.NarrativeEvents {
 		types = append(types, e.Type)
 	}
-	if strings.Join(types, ",") != "player_moved,objective_completed" {
+	if strings.Join(types, ",") != "player_moved,objective_completed,item_gained" { // the deed's coin
 		t.Fatalf("events %v", types)
 	}
 }

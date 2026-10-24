@@ -553,13 +553,16 @@ func handleDialogueChoice(
 		}
 	}
 
+	packBefore := g.PackNames()
 	choiceText, resumeErr := campaigns.ResumeDialogueWithChoice(campaignDef, g, choiceID)
 	if resumeErr != nil {
 		log.Printf("ws-game-action: dialogue_choice: resume: %v", resumeErr)
 		_ = ws.SendError(ctx, connID, resumeErr.Error())
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
-	choiceCues := campaigns.DrainStaging(g, choiceText)
+	// The choice's own events: its staging, and what its commands put in or
+	// took from the pack (two coins for the ribbon).
+	choiceCues := append(campaigns.DrainStaging(g, choiceText), campaigns.PackChanges(packBefore, g.PackNames(), nil)...)
 
 	// Build the per-connection broadcast list.
 	allConns, connsErr := dbClient.GetConnectionsByGameID(ctx, conn.GameID)

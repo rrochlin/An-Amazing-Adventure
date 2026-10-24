@@ -402,9 +402,9 @@ func execDamageCharacter(ctx context.Context, g *game.Game, in map[string]any) (
 		}
 		result := fmt.Sprintf("Damaged %q by %d", character.Name, amount)
 		if hp == 0 {
-			return result, &game.WorldEvent{Type: "death", Message: "You have fallen."}, nil
+			return result, &game.WorldEvent{Type: "death", Message: "You have fallen.", Character: game.PlayerRef, Amount: amount}, nil
 		}
-		return result, &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. ❤ %d/%d", amount, hp, max)}, nil
+		return result, &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. ❤ %d/%d", amount, hp, max), Character: game.PlayerRef, Amount: amount}, nil
 	}
 	wasAlive := character.Alive
 	if err := character.TakeDamage(amount); err != nil {
@@ -417,9 +417,9 @@ func execDamageCharacter(ctx context.Context, g *game.Game, in map[string]any) (
 		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), nil, nil
 	}
 	if !character.Alive && wasAlive {
-		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "death", Message: fmt.Sprintf("%s has been slain.", character.Name)}, nil
+		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "death", Message: fmt.Sprintf("%s has been slain.", character.Name), Character: character.ID, Amount: amount}, nil
 	}
-	return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("%s takes %d damage. ❤ %d/100", character.Name, amount, character.Health)}, nil
+	return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("%s takes %d damage. ❤ %d/100", character.Name, amount, character.Health), Character: character.ID, Amount: amount}, nil
 }
 
 func execHealCharacter(ctx context.Context, g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
@@ -438,7 +438,7 @@ func execHealCharacter(ctx context.Context, g *game.Game, in map[string]any) (st
 		if err != nil {
 			return "", nil, err
 		}
-		return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. ❤ %d/%d", amount, hp, max)}, nil
+		return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. ❤ %d/%d", amount, hp, max), Character: game.PlayerRef, Amount: amount}, nil
 	}
 	if err := character.Heal(amount); err != nil {
 		return "", nil, err
@@ -449,7 +449,7 @@ func execHealCharacter(ctx context.Context, g *game.Game, in map[string]any) (st
 	if character.LocationID != owner.LocationID {
 		return fmt.Sprintf("Healed %q by %d", character.Name, amount), nil, nil
 	}
-	return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("%s recovers %d health. ❤ %d/100", character.Name, amount, character.Health)}, nil
+	return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("%s recovers %d health. ❤ %d/100", character.Name, amount, character.Health), Character: character.ID, Amount: amount}, nil
 }
 
 func execSetCharacterScale(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
@@ -559,7 +559,7 @@ func execGiveItemToPlayer(g *game.Game, in map[string]any) (string, *game.WorldE
 		return "", nil, err
 	}
 	// Always visible — player receives item
-	ev := &game.WorldEvent{Type: "item_gained", Message: fmt.Sprintf("%s added to your inventory.", itemName)}
+	ev := &game.WorldEvent{Type: "item_gained", Message: fmt.Sprintf("%s added to your inventory.", item.Name), Character: game.PlayerRef, Item: item.Name, Amount: 1}
 	return fmt.Sprintf("Gave %q to player", itemName), ev, nil
 }
 
@@ -578,7 +578,7 @@ func execTakeItemFromPlayer(g *game.Game, in map[string]any) (string, *game.Worl
 		return "", nil, err
 	}
 	// Always visible — item removed from player
-	ev := &game.WorldEvent{Type: "item_lost", Message: fmt.Sprintf("%s removed from your inventory.", itemName)}
+	ev := &game.WorldEvent{Type: "item_lost", Message: fmt.Sprintf("%s removed from your inventory.", item.Name), Character: game.PlayerRef, Item: item.Name, Amount: 1}
 	return fmt.Sprintf("Took %q from player", itemName), ev, nil
 }
 

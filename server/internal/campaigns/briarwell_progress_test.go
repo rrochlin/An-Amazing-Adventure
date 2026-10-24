@@ -62,8 +62,10 @@ func TestBriarwell_DeedObjectivesTickOffAndUntouchedOneIsLeftUnfinished(t *testi
 	if objectiveStatus(g, "meadow_bully") != "completed" {
 		t.Fatalf("expected Trouble in the Meadow completed, got %q", objectiveStatus(g, "meadow_bully"))
 	}
-	if len(first.Events) != 1 || first.Events[0].Message != "Objective complete: Trouble in the Meadow" {
-		t.Fatalf("expected a completion event for the bully deed, got %#v", first.Events)
+	// The deed's pay is told too, as an item change.
+	if len(first.Events) != 2 || first.Events[0].Message != "Objective complete: Trouble in the Meadow" ||
+		first.Events[1].Type != "item_gained" || first.Events[1].Item != "copper coin" {
+		t.Fatalf("expected a completion event for the bully deed and its coin, got %#v", first.Events)
 	}
 
 	second, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{

@@ -664,3 +664,16 @@ func TestMarksSurviveASaveAndStayInTheirRoom(t *testing.T) {
 		t.Errorf("a mark doesn't follow them to another room, got %q", m)
 	}
 }
+
+func TestInventoryChangesCountWhatCameAndWent(t *testing.T) {
+	got := game.InventoryChanges([]string{"copper coin", "copper coin", "rag doll"}, []string{"cornflower ribbon", "rag doll"})
+	if len(got) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got[0].Type != "item_lost" || got[0].Item != "copper coin" || got[0].Amount != 2 || got[0].Message != "2 × copper coin removed from your inventory." {
+		t.Errorf("two coins paid out: %+v", got[0])
+	}
+	if got[1].Type != "item_gained" || got[1].Item != "cornflower ribbon" || got[1].Amount != 1 || got[1].Character != game.PlayerRef {
+		t.Errorf("the ribbon: %+v", got[1])
+	}
+}
