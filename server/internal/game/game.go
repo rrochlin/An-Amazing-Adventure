@@ -1220,7 +1220,9 @@ type CharacterView struct {
 	// Scale is height relative to an adult; 0 means 1.
 	Scale float64 `json:"scale,omitempty"`
 	// Mark is the point of interest they stand at in their room, if any.
-	Mark      string        `json:"mark,omitempty"`
+	Mark string `json:"mark,omitempty"`
+	// Called is what else spoken lines call them ("Father").
+	Called    []string      `json:"called,omitempty"`
 	Inventory []ItemView    `json:"inventory"`
 	Equipment EquipmentView `json:"equipment"`
 	// D&D 5e stats — populated when character was created via CharacterCreationData
@@ -1288,6 +1290,7 @@ func (g *Game) buildCharacterViewWithDnD(c Character, dnd *dnd5echar.Character) 
 		Friendly:    c.Friendly,
 		Scale:       c.Scale,
 		Mark:        c.MarkHere(),
+		Called:      c.Called,
 		Inventory:   resolveItems(c.Inventory),
 		Equipment: EquipmentView{
 			Head:  resolveSlot(c.Equipment.Head),

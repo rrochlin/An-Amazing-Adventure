@@ -28,8 +28,10 @@ type Character struct {
 	// well, the hearth), in MarkRoom. A mark only holds in its room, so
 	// moving the character anywhere leaves it behind without every move
 	// having to clear it.
-	Mark     string `json:"mark,omitempty" dynamodbav:"mark,omitempty"`
-	MarkRoom string `json:"mark_room,omitempty" dynamodbav:"mark_room,omitempty"`
+	Mark string `json:"mark,omitempty" dynamodbav:"mark,omitempty"`
+	// Called is what else the story calls them in a spoken line ("Father").
+	Called   []string `json:"called,omitempty" dynamodbav:"called,omitempty"`
+	MarkRoom string   `json:"mark_room,omitempty" dynamodbav:"mark_room,omitempty"`
 }
 
 // MarkHere is the mark the character stands at in their current room, if any.

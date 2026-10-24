@@ -183,5 +183,6 @@ func newActorCharacter(actorID string, actor ActorTemplate) game.Character {
 	npc.ID = actorID
 	npc.Friendly = actor.Kind != "antagonist"
 	npc.Scale = actor.Scale
+	npc.Called = append([]string(nil), actor.Called...)
 	return npc
 }

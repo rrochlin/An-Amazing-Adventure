@@ -48,6 +48,19 @@ func (d *CampaignDefinition) Validate() error {
 	if len(d.StoryNodes) == 0 {
 		return fmt.Errorf("story_nodes must contain at least one node")
 	}
+	called := map[string]string{}
+	for id, actor := range d.Actors {
+		for _, name := range actor.Called {
+			key := strings.ToLower(strings.TrimSpace(name))
+			if key == "" {
+				return fmt.Errorf("actor %q has an empty called name", id)
+			}
+			if other, ok := called[key]; ok && other != id {
+				return fmt.Errorf("actors %q and %q are both called %q", other, id, name)
+			}
+			called[key] = id
+		}
+	}
 	for id, actor := range d.Actors {
 		if actor.StartLocationID == "" {
 			continue
