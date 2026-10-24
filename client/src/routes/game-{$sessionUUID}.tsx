@@ -532,14 +532,21 @@ function GamePage() {
                rooms={gameState?.rooms ?? {}}
                currentRoomId={gameState?.current_room?.id}
                sceneMap={campaignState?.active_scene_map}
-               // Walk freely, except while the story talks or waits on a choice.
+               // Free roam, except in dialogue: the story talking, a choice
+               // open, or a conversation (Baldur's Gate style).
                controlsLocked={
                   isStreaming ||
                   narrationPlaying ||
                   !!pendingChoices?.length ||
+                  !!campaignState?.conversation ||
                   campaignState?.run_status === 'ended'
                }
                onWalkToRoom={(roomId) => sendAction('move_to_room', roomId)}
+               onTalkTo={(id, name) => {
+                  const said = `I go up to ${name} and talk to them.`;
+                  addChatMessage({ type: 'player', content: said });
+                  sendChat(said, id);
+               }}
                mood={campaignState?.active_mood}
                playerName={gameState?.self?.name}
                playerScale={gameState?.self?.scale || 1}
@@ -583,6 +590,8 @@ function GamePage() {
                   logOpen={logOpen}
                   onPanelHeight={onPanelHeight}
                   onCaughtUp={narrationCaughtUp}
+                  conversationWith={campaignState?.conversation?.name}
+                  onLeaveConversation={() => sendAction('end_conversation', '')}
                />
                )}
             />

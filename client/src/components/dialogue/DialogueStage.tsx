@@ -63,6 +63,10 @@ interface DialogueStageProps {
    logOpen?: boolean;
    /** In overlay mode, reports the docked text panel's height. */
    onPanelHeight?: (px: number) => void;
+   /** The character the player is talking to; the text box speaks to them. */
+   conversationWith?: string;
+   /** The player leaves the conversation (back to free roam). */
+   onLeaveConversation?: () => void;
    /** Called whenever the stage has shown the last line it has. */
    onCaughtUp?: () => void;
 }
@@ -95,6 +99,8 @@ export function DialogueStage({
    logOpen = false,
    onPanelHeight,
    onCaughtUp,
+   conversationWith,
+   onLeaveConversation,
 }: DialogueStageProps) {
    const beats = useMemo(
       () => buildBeats(messages, streamingMessage),
@@ -133,7 +139,7 @@ export function DialogueStage({
    if (index === -1 && beats.length) index = beats.length - 1;
    const current: Beat | undefined = beats[index];
    const hasNext = index < beats.length - 1;
-   const instant = !current || alreadyRead.current.has(current.id);
+   const instant = !current || alreadyRead.current.has(current.id) || !!current.arrival;
 
    const { visible, typing, complete } = useTypewriter(
       current?.kind === 'line' ? current.text : '',
@@ -150,9 +156,11 @@ export function DialogueStage({
    const hasChoices = !!pendingChoices?.length && !!onChoiceSelected;
    const showChoices = atEnd && hasChoices && !ending;
    const showEnding = atEnd && !!ending;
-   const showInput = atEnd && acknowledged && !hasChoices && !ending && !busy;
+   // Arrivals need no dismissing: the player is walking on.
+   const ack = acknowledged || !!current?.arrival;
+   const showInput = atEnd && ack && !hasChoices && !ending && !busy;
    // At rest: the player has finished everything on screen and is waiting.
-   const atRest = atEnd && (acknowledged || hasChoices || busy);
+   const atRest = atEnd && (ack || hasChoices || busy);
 
    const goNext = useCallback(() => {
       if (!hasNext) return;
@@ -268,7 +276,29 @@ export function DialogueStage({
       return () => observer.disconnect();
    }, [overlay, onPanelHeight]);
 
-   const showContinue = !!current && lineDone && current.kind === 'line' && (hasNext || !acknowledged) && !showChoices && !showEnding;
+   // Over the scene: Enter focuses the text box (free roam keeps the keys
+   // for walking); Esc leaves a conversation.
+   const inputRef = useRef<HTMLInputElement>(null);
+   // In a conversation the text box takes the keys as soon as it appears.
+   useEffect(() => {
+      if (showInput && conversationWith) inputRef.current?.focus();
+   }, [showInput, conversationWith]);
+   useEffect(() => {
+      if (!overlay) return;
+      const onKey = (e: KeyboardEvent) => {
+         const typing = document.activeElement === inputRef.current;
+         if (e.key === 'Enter' && showInput && !typing && !(document.activeElement instanceof HTMLButtonElement)) {
+            e.preventDefault();
+            inputRef.current?.focus();
+         } else if (e.key === 'Escape' && conversationWith && onLeaveConversation && atRest && !busy) {
+            onLeaveConversation();
+         }
+      };
+      window.addEventListener('keydown', onKey);
+      return () => window.removeEventListener('keydown', onKey);
+   }, [overlay, showInput, conversationWith, onLeaveConversation, atRest, busy]);
+
+   const showContinue = !!current && lineDone && current.kind === 'line' && (hasNext || !ack) && !showChoices && !showEnding;
 
    return (
       <Paper
@@ -502,7 +532,9 @@ export function DialogueStage({
                         fontFamily: 'Crimson Text, Georgia, serif',
                         fontSize: '1.3rem',
                         lineHeight: 1.6,
-                        color: 'text.primary',
+                        // Arriving somewhere reads as a caption, not a line.
+                        color: current.arrival ? 'text.secondary' : 'text.primary',
+                        fontStyle: current.arrival ? 'italic' : 'normal',
                         whiteSpace: 'pre-wrap',
                      }}
                   >
@@ -586,17 +618,31 @@ export function DialogueStage({
                   ) : (
                      <>
                         <TextField
-                           autoFocus
+                           // Over the scene, free roam leaves the keys to walking
+                           // (Enter focuses the box); a conversation takes them.
+                           autoFocus={!overlay || !!conversationWith}
+                           inputRef={inputRef}
                            fullWidth
                            size="small"
                            autoComplete="off"
-                           placeholder="What do you do?"
+                           placeholder={
+                              conversationWith
+                                 ? `Say something to ${conversationWith}…`
+                                 : overlay
+                                   ? 'Explore, or press Enter to say what you do'
+                                   : 'What do you do?'
+                           }
                            value={command}
                            onChange={(e) => setCommand(e.target.value)}
                         />
                         <Button type="submit" variant="contained" disabled={!command.trim()}>
-                           Act
+                           {conversationWith ? 'Say' : 'Act'}
                         </Button>
+                        {conversationWith && onLeaveConversation && (
+                           <Button variant="outlined" onClick={onLeaveConversation} aria-label={`leave the conversation with ${conversationWith}`}>
+                              Leave
+                           </Button>
+                        )}
                      </>
                   )}
                </Box>

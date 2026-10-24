@@ -29,6 +29,8 @@ export interface StageView {
    controlsLocked?: boolean;
    /** The player walked into another room. */
    onWalkToRoom?: (roomId: string) => void;
+   /** The player walked up to a character to talk to them. */
+   onTalkTo?: (characterId: string, name: string) => void;
 }
 
 /** How long a camera pan or a character's walk takes. */
@@ -66,6 +68,9 @@ export class StageScene extends Phaser.Scene {
    private walking = false;
    private path: Tile[] = [];
    private keys: Partial<Record<Direction, Phaser.Input.Keyboard.Key[]>> = {};
+   private talkKeys: Phaser.Input.Keyboard.Key[] = [];
+   /** Who the player is walking up to, to talk to once there. */
+   private goingToTalk?: string;
 
    constructor(view: StageView) {
       super('stage');
@@ -96,6 +101,7 @@ export class StageScene extends Phaser.Scene {
          // No key capture: arrow keys and WASD still type into the text box.
          const add = (...codes: number[]) => codes.map((c) => kb.addKey(c, false));
          this.keys = { up: add(K.UP, K.W), down: add(K.DOWN, K.S), left: add(K.LEFT, K.A), right: add(K.RIGHT, K.D) };
+         this.talkKeys = add(K.E, K.SPACE);
       }
       // Click or tap a tile: walk there.
       this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
@@ -105,14 +111,56 @@ export class StageScene extends Phaser.Scene {
          if (el instanceof HTMLElement && el !== document.body) el.blur();
          if (!this.view || this.view.controlsLocked || !this.playerTile) return;
          const to = { x: Math.floor(p.worldX / TILE), y: Math.floor(p.worldY / TILE) };
+         // Clicking someone walks up to them and talks.
+         const who = this.placed.find((t) => !t.isPlayer && t.roomId === this.roomShown(this.view!) && t.x === to.x && t.y === to.y);
+         if (who) {
+            this.walkUpTo(who);
+            return;
+         }
+         this.goingToTalk = undefined;
          this.path = findPath(this.view.art, this.view.rooms, this.playerTile, to, this.occupied());
       });
    }
 
+   /** Walk to a free tile next to someone, then talk to them. */
+   private walkUpTo(who: Token) {
+      const view = this.view!;
+      if (this.nextTo(this.playerTile!, who)) {
+         this.talkTo(who);
+         return;
+      }
+      const occupied = this.occupied();
+      let best: Tile[] | undefined;
+      for (const d of Object.values(STEPS)) {
+         const spot = { x: who.x + d.x, y: who.y + d.y };
+         const path = findPath(view.art, view.rooms, this.playerTile!, spot, occupied);
+         if (path.length && (!best || path.length < best.length)) best = path;
+      }
+      if (!best) return;
+      this.path = best;
+      this.goingToTalk = who.id;
+   }
+
+   private nextTo(a: Tile, b: Tile): boolean {
+      return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) === 1;
+   }
+
+   private talkTo(who: Token) {
+      this.goingToTalk = undefined;
+      this.path = [];
+      this.face(who.x < this.playerTile!.x ? 'left' : 'right');
+      this.view?.onTalkTo?.(who.id, who.name);
+   }
+
+   /** Whether the player is typing into the page (keys are theirs, not the scene's). */
+   private typingElsewhere(): boolean {
+      const el = document.activeElement;
+      return el instanceof HTMLElement && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
+   }
+
    /** The direction key held, unless the player is typing somewhere. */
    private heldDirection(): Direction | undefined {
-      const el = document.activeElement;
-      if (el instanceof HTMLElement && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return undefined;
+      if (this.typingElsewhere()) return undefined;
       return (Object.keys(this.keys) as Direction[]).find((d) => this.keys[d]?.some((k) => k.isDown));
    }
 
@@ -121,12 +169,29 @@ export class StageScene extends Phaser.Scene {
       if (!view || this.walking || !this.playerTile) return;
       if (view.controlsLocked) {
          this.path = [];
+         this.goingToTalk = undefined;
+         return;
+      }
+      // Arrived next to someone the player meant to talk to.
+      if (this.goingToTalk && !this.path.length) {
+         const who = this.placed.find((t) => t.id === this.goingToTalk);
+         if (who && this.nextTo(this.playerTile, who)) this.talkTo(who);
+         else this.goingToTalk = undefined;
          return;
       }
       const held = this.heldDirection();
+      // E or Space next to someone talks to them.
+      // (Not while typing, or while a button has focus: Space presses it.)
+      const buttonFocused = document.activeElement instanceof HTMLButtonElement;
+      if (!held && !this.typingElsewhere() && !buttonFocused && this.talkKeys.some((k) => Phaser.Input.Keyboard.JustDown(k))) {
+         const who = this.placed.find((t) => !t.isPlayer && t.roomId === this.roomShown(view) && this.nextTo(this.playerTile!, t));
+         if (who) this.talkTo(who);
+         return;
+      }
       let next: Tile | undefined;
       if (held) {
          this.path = [];
+         this.goingToTalk = undefined;
          next = { x: this.playerTile.x + STEPS[held].x, y: this.playerTile.y + STEPS[held].y };
       } else {
          next = this.path.shift();

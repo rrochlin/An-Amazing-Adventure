@@ -73,6 +73,8 @@ export interface CampaignStateView {
    active_scene_map?: SceneMapView | null;
    /** The current scene's light: dawn, dusk, night, fire or ashes; none is daylight. */
    active_mood?: string;
+   /** Who the player is talking to: while set, the game is in dialogue. */
+   conversation?: { with: string; name: string } | null;
    current_objective?: string;
    bool_flags?: Record<string, boolean>;
    labels?: Record<string, string>;
@@ -204,7 +206,8 @@ export interface WorldEvent {
 }
 
 export interface ChatMessage {
-   type: 'player' | 'narrative';
+   /** "arrival": the player walked into a room (shown without holding them up). */
+   type: 'player' | 'narrative' | 'arrival';
    content: string;
    events?: WorldEvent[]; // non-empty on narrative messages when world events occurred this turn
    /** ISO timestamp when the message was committed (client-side). Added on receive; absent for messages loaded from chat_history. */

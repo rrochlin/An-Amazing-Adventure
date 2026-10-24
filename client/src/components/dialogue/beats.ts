@@ -20,6 +20,8 @@ export interface Beat {
    notices?: WorldEvent[];
    /** True while the beat's message is still streaming in. */
    streaming?: boolean;
+   /** The player walked into a room: shown at once, nothing to dismiss. */
+   arrival?: boolean;
 }
 
 /** Event types announced as toasts rather than shown in the dialogue. */
@@ -62,6 +64,7 @@ function messageBeats(
          ...parseLine(line),
          // Only the final line of a streaming message can still be growing.
          streaming: streaming && i === lines.length - 1,
+         ...(msg.type === 'arrival' && { arrival: true }),
       });
    });
    if (notices.length && beats.length) {
@@ -120,7 +123,7 @@ export function buildTranscript(
 
    const items: TranscriptItem[] = [];
    const lastNarrative = messages.reduce(
-      (last, m, i) => (m.type === 'narrative' ? i : last),
+      (last, m, i) => (m.type !== 'player' ? i : last),
       -1,
    );
    messages.forEach((msg, i) => {
