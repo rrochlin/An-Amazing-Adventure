@@ -9,6 +9,19 @@ force are summarised at the end of this file.
 
 ---
 
+## 2026-10-24 — Every session has a real character; health is its hit points
+
+**Decision:** A campaign session always has the player's D&D character and stats, built from the
+campaign's preset on a quick start. A player's health is that character's hit points: the story's damage
+and healing act on them, and the game master sees them with their scale. Damage can't take anyone to 0
+unless the scene allows deaths (`set_character_alive`), because who dies is authored.
+
+**Why:** #169. The quick start is for a faster start, not a character without stats. Bootstrapping dropped
+the character, and attaching it naively would have split health in two (views on 5e hit points, damage on
+the old 0-100 scale).
+
+---
+
 ## 2026-10-24 — A quest the story moves past stays unfinished
 
 **Decision:** When a phase moves on with a quest half-done, the quest is left **unfinished** (a status of

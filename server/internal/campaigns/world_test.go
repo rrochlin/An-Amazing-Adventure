@@ -1,6 +1,7 @@
 package campaigns_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -262,5 +263,45 @@ func TestBriarwell_ScenesSetTheirLight(t *testing.T) {
 	bad.StoryNodes["rescue"] = n
 	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), `mood "disco"`) {
 		t.Fatalf("expected a mood error, got %v", err)
+	}
+}
+
+// #169: a quick start still gets a real character with stats.
+func TestStartSession_QuickStartBuildsTheCharacter(t *testing.T) {
+	reg, err := campaigns.LoadEmbeddedRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	def, _ := reg.Get("briarwell")
+	creation, err := def.CharacterCreation.Apply(game.CharacterCreationData{Name: "Pip"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, _, err := campaigns.StartSession(context.Background(), def, "s-quick", "u-quick", creation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dnd, ok := g.GetDnDCharacter("u-quick")
+	if !ok || dnd == nil {
+		t.Fatal("the quick start should build the player's D&D character from the preset")
+	}
+	hp, max := g.PlayerHitPoints("u-quick")
+	if max <= 0 || hp != max {
+		t.Fatalf("hit points %d/%d", hp, max)
+	}
+	if save := g.ToSaveState(nil, nil); save.PlayersData["u-quick"] == nil {
+		t.Fatal("the character should be saved with the session")
+	}
+
+	// One health: the story's damage and healing move the hit points the
+	// player sees.
+	if hp, _, err := g.DamagePlayer(context.Background(), "u-quick", 3); err != nil || hp != max-3 {
+		t.Fatalf("damage: %d %v", hp, err)
+	}
+	if hp, _, err := g.HealPlayer(context.Background(), "u-quick", 10); err != nil || hp != max {
+		t.Fatalf("heal caps at the maximum: %d %v", hp, err)
+	}
+	if view := g.BuildGameStateView("u-quick", nil); view.Self.Health != max || view.Self.MaxHealth != max {
+		t.Fatalf("view %d/%d, want %d/%d", view.Self.Health, view.Self.MaxHealth, max, max)
 	}
 }

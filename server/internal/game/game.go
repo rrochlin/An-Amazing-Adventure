@@ -151,16 +151,19 @@ type EndingView struct {
 // Game is the in-memory representation of a live game session.
 // It is never stored directly; SaveState is the DynamoDB-serialisable form.
 type Game struct {
-	ID                   string
-	OwnerID              string                          // session owner — only they can delete
-	UserID               string                          // preserved for backward compat (= OwnerID)
-	Players              map[string]Character            // keyed by userID — legacy (v1/v2) or stub for placement/items
-	DnDPlayers           map[string]*dnd5echar.Character // keyed by userID — full D&D 5e characters (v3+)
-	PartySize            int                             // max party members (default 4)
-	InviteCode           string                          // active invite code, if any
-	Rooms                map[string]Area                 // keyed by room ID
-	Items                map[string]Item                 // keyed by item ID — global item registry
-	NPCs                 map[string]Character            // keyed by character ID
+	ID         string
+	OwnerID    string                          // session owner — only they can delete
+	UserID     string                          // preserved for backward compat (= OwnerID)
+	Players    map[string]Character            // keyed by userID — legacy (v1/v2) or stub for placement/items
+	DnDPlayers map[string]*dnd5echar.Character // keyed by userID — full D&D 5e characters (v3+)
+	// storedPlayersData is the character data the save held, so saving a
+	// game whose characters weren't loaded keeps them instead of erasing them.
+	storedPlayersData    map[string]*dnd5echar.Data
+	PartySize            int                  // max party members (default 4)
+	InviteCode           string               // active invite code, if any
+	Rooms                map[string]Area      // keyed by room ID
+	Items                map[string]Item      // keyed by item ID — global item registry
+	NPCs                 map[string]Character // keyed by character ID
 	Ready                bool
 	NeedsCharacterReset  bool                    // set on v1/v2 migration when characters can't be rebuilt
 	Version              int                     // optimistic locking counter, mirrors SaveState.Version
@@ -854,8 +857,14 @@ func (g *Game) ToSaveState(narrative []NarrativeMessage, history []ChatMessage) 
 		npcs = append(npcs, n)
 	}
 
-	// Serialize DnD characters to Data for persistence
-	playersData := make(map[string]*dnd5echar.Data, len(g.DnDPlayers))
+	// Serialize DnD characters to Data for persistence. Characters the save
+	// held but this game never loaded are kept as they were.
+	playersData := make(map[string]*dnd5echar.Data, len(g.DnDPlayers)+len(g.storedPlayersData))
+	for uid, data := range g.storedPlayersData {
+		if data != nil {
+			playersData[uid] = data
+		}
+	}
 	for uid, char := range g.DnDPlayers {
 		if char != nil {
 			playersData[uid] = char.ToData()
@@ -965,6 +974,7 @@ func FromSaveState(s SaveState) (*Game, error) {
 			g.Players = make(map[string]Character)
 		}
 		// DnD characters are loaded lazily via LoadDnDCharacters() to bind event bus.
+		g.storedPlayersData = s.PlayersData
 	}
 
 	for _, r := range s.Rooms {

@@ -107,6 +107,18 @@ func Validate(node *campaigns.StoryNode, g *game.Game, d Decision) (Decision, []
 			dropped = append(dropped, fmt.Sprintf("move_player: the player is already in %s", room))
 			continue
 		}
+		if ev.Type == "damage_character" && !allowed["set_character_alive"] {
+			// Who dies is authored: damage can hurt, not kill, unless the
+			// scene allows deaths.
+			capped, note, keep := capDamage(g, ev)
+			if note != "" {
+				dropped = append(dropped, note)
+			}
+			if !keep {
+				continue
+			}
+			ev = capped
+		}
 		if where, ok := alreadyExists(g, ev); ok {
 			dropped = append(dropped, fmt.Sprintf("create_item: %v already exists (%s); give_item_to_player picks it up", ev.Input["name"], where))
 			continue
@@ -302,4 +314,55 @@ func alreadyExists(g *game.Game, ev WorldEvent) (string, bool) {
 		return "it is here in " + room.Name, true
 	}
 	return "", false
+}
+
+// capDamage keeps damage from taking anyone to 0: it is lowered to leave
+// them at 1, or dropped when they are already there. The note says what
+// changed, if anything.
+func capDamage(g *game.Game, ev WorldEvent) (WorldEvent, string, bool) {
+	if g == nil {
+		return ev, "", true
+	}
+	name, _ := ev.Input["character_name"].(string)
+	amount := 0
+	switch v := ev.Input["amount"].(type) {
+	case float64:
+		amount = int(v)
+	case int:
+		amount = v
+	}
+	hp, ok := currentHealth(g, name)
+	if !ok || amount < hp {
+		return ev, "", true
+	}
+	if hp <= 1 {
+		return ev, fmt.Sprintf("damage_character: %s is at %d; the scene doesn't allow deaths", name, hp), false
+	}
+	input := map[string]any{}
+	for k, v := range ev.Input {
+		input[k] = v
+	}
+	input["amount"] = float64(hp - 1)
+	return WorldEvent{Type: ev.Type, Input: input}, fmt.Sprintf("damage_character: %s's %d damage lowered to %d; the scene doesn't allow deaths", name, amount, hp-1), true
+}
+
+// currentHealth finds a character's health by name: the player's hit points,
+// or an NPC's health.
+func currentHealth(g *game.Game, name string) (int, bool) {
+	key := strings.ToLower(strings.TrimSpace(name))
+	owner, ok := g.OwnerCharacter()
+	if !ok {
+		return 0, false
+	}
+	switch key {
+	case "player", "you", "self", "owner", strings.ToLower(owner.Name):
+		hp, _ := g.PlayerHitPoints(g.OwnerID)
+		return hp, true
+	}
+	for _, npc := range g.NPCs {
+		if strings.ToLower(npc.Name) == key {
+			return npc.Health, true
+		}
+	}
+	return 0, false
 }
