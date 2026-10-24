@@ -497,7 +497,7 @@ export function DialogueStage({
                   <Typography
                      sx={{
                         fontFamily: 'Crimson Text, Georgia, serif',
-                        fontSize: '1.3rem',
+                        fontSize: { xs: '1.05rem', sm: '1.3rem' },
                         lineHeight: 1.6,
                         color: 'secondary.light',
                         fontStyle: 'italic',
@@ -546,7 +546,7 @@ export function DialogueStage({
                      data-testid="stage-text"
                      sx={{
                         fontFamily: 'Crimson Text, Georgia, serif',
-                        fontSize: '1.3rem',
+                        fontSize: { xs: '1.05rem', sm: '1.3rem' },
                         lineHeight: 1.6,
                         // Arriving somewhere reads as a caption, not a line.
                         color: current.arrival ? 'text.secondary' : 'text.primary',

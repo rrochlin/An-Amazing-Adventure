@@ -4,6 +4,7 @@ import MapIcon from '@mui/icons-material/Map';
 import HistoryEduIcon from '@mui/icons-material/HistoryEdu';
 import CloseIcon from '@mui/icons-material/Close';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import PersonIcon from '@mui/icons-material/Person';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ObjectiveStateView, RoomView, SceneMapView } from '@/types/types';
 import { QuestList } from './QuestList';
@@ -62,6 +63,8 @@ interface SceneScreenProps {
    onWalkToRoom?: (roomId: string) => void;
    /** The player walked up to a character to talk to them. */
    onTalkTo?: (characterId: string, name: string) => void;
+   /** On a narrow screen: open the character panel (it isn't beside the scene). */
+   onOpenCharacter?: () => void;
 }
 
 /**
@@ -88,6 +91,7 @@ export function SceneScreen({
    controlsLocked,
    onWalkToRoom,
    onTalkTo,
+   onOpenCharacter,
 }: SceneScreenProps) {
    const [logOpen, setLogOpen] = useState(false);
    const shown = sceneArt(art, sceneMap, currentRoomId);
@@ -233,7 +237,8 @@ export function SceneScreen({
                position: 'absolute',
                top: 0,
                left: 0,
-               maxWidth: '60%',
+               // Leaves room for the button bar on a narrow screen.
+               maxWidth: { xs: 'calc(100% - 200px)', sm: '60%' },
                px: 2,
                py: 0.75,
                bgcolor: '#140d1a',
@@ -289,6 +294,11 @@ export function SceneScreen({
             {art && overlayButton('World map', <MapIcon />, () => setWorldOpen(true), worldOpen)}
             {overlayButton('Log', <HistoryEduIcon />, () => setLogOpen((v) => !v), logOpen)}
             {onDetails && overlayButton('Adventure details', <InfoOutlinedIcon />, onDetails, false)}
+            {onOpenCharacter && (
+               <Box sx={{ display: { xs: 'inline-flex', md: 'none' } }}>
+                  {overlayButton('Character', <PersonIcon />, onOpenCharacter, false)}
+               </Box>
+            )}
          </Box>
 
          {journalOpen && (

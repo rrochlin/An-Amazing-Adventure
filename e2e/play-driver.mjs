@@ -62,6 +62,7 @@ http.createServer(async (req, res) => {
       case '/log': { const since = +p.since || 0; const out = log.filter((e) => e.t > since); if (p.clear) log = []; return reply(out); }
       case '/shot': { const f = `${OUT}/${p.name || 'shot'}.png`; await page.screenshot({ path: f }); return reply({ file: f }); }
       case '/click': if (p.sel) await page.click(p.sel, { timeout: 5000 }); else await page.mouse.click(+p.x, +p.y); await page.waitForTimeout(+p.wait || 300); return reply(await state());
+      case '/viewport': await page.setViewportSize({ width: +p.w, height: +p.h }); await page.waitForTimeout(+p.wait || 800); return reply(await state());
       case '/button': await page.getByRole('button', { name: p.name, exact: p.exact === '1' }).first().click({ timeout: 5000 }); await page.waitForTimeout(+p.wait || 300); return reply(await state());
       case '/text': await page.getByText(p.t, { exact: false }).first().click({ timeout: 5000 }); await page.waitForTimeout(+p.wait || 300); return reply(await state());
       case '/key': if (p.ms) { await page.keyboard.down(p.k); await page.waitForTimeout(+p.ms); await page.keyboard.up(p.k); } else await page.keyboard.press(p.k); await page.waitForTimeout(+p.wait || 300); return reply(await state());
