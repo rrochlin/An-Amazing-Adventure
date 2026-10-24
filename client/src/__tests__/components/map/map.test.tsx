@@ -346,6 +346,8 @@ describe('Briarwell interiors', () => {
       expect(inside?.cast.father).toEqual(BRIARWELL_ART.cast.father);
       expect(sceneArt(BRIARWELL_ART, cottage, 'meadow')).toBe(BRIARWELL_ART);
       expect(sceneArt(BRIARWELL_ART, null, 'family_cottage')).toBe(BRIARWELL_ART);
+      // The same object each time: the stage rebuilds on a new one.
+      expect(sceneArt(BRIARWELL_ART, { ...cottage }, 'family_cottage')).toBe(inside);
    });
 
    it('fits an interior whole instead of filling the view', () => {

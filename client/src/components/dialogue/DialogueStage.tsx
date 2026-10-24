@@ -164,6 +164,12 @@ export function DialogueStage({
    useEffect(() => {
       if (atEnd) onCaughtUp?.();
    }, [atEnd, beats.length, onCaughtUp]);
+   // So do they at a new scene's title card: what came before it has been
+   // read, and the scene plays where it happens (the player is home for the
+   // birthday as it starts, so its staging plays on the people there).
+   useEffect(() => {
+      if (current?.kind === 'scene') onCaughtUp?.();
+   }, [current?.id, current?.kind, onCaughtUp]);
    const hasChoices = !!pendingChoices?.length && !!onChoiceSelected;
    const showChoices = atEnd && hasChoices && !ending;
    const showEnding = atEnd && !!ending;
