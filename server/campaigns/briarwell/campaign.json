@@ -118,7 +118,11 @@
       "goal": "Teach his child that a coin earned honestly is worth more than one taken.",
       "description": "The player's father. A woodcutter, gentle but firm, who wants his child to grow up honest.",
       "start_location_id": "family_cottage",
-      "importance": "primary"
+      "importance": "primary",
+      "rail": { "steps": [
+          { "id": "home", "location_id": "family_cottage" },
+          { "id": "lost" }
+      ] }
     },
     "mother": {
       "name": "Elin",
@@ -126,7 +130,11 @@
       "goal": "Keep the household warm and the birthday a happy one.",
       "description": "The player's mother. Warm and practical; she runs the household and bakes for every birthday.",
       "start_location_id": "family_cottage",
-      "importance": "secondary"
+      "importance": "secondary",
+      "rail": { "steps": [
+          { "id": "home", "location_id": "family_cottage" },
+          { "id": "lost" }
+      ] }
     },
     "sister": {
       "name": "Ros",
@@ -135,7 +143,11 @@
       "description": "The player's little sister, turning seven today. Adores her older sibling.",
       "scale": 0.65,
       "start_location_id": "family_cottage",
-      "importance": "primary"
+      "importance": "primary",
+      "rail": { "steps": [
+          { "id": "home", "location_id": "family_cottage" },
+          { "id": "lost" }
+      ] }
     },
     "trader": {
       "name": "Old Garrick",
@@ -181,7 +193,8 @@
       "rail": {
         "steps": [
           { "id": "lurking", "location_id": "woods_edge" },
-          { "id": "raiding", "location_id": "village_square" }
+          { "id": "raiding", "location_id": "village_square" },
+          { "id": "fled" }
         ]
       }
     },
@@ -195,7 +208,7 @@
       "rail": {
         "steps": [
           { "id": "travelling" },
-          { "id": "arrived", "location_id": "woods_edge" }
+          { "id": "arrived", "location_id": "@player" }
         ]
       }
     }
@@ -477,7 +490,11 @@
           "actions": [
             { "type": "set_flag", "key": "stayed_hidden", "value": true },
             { "type": "complete_objective", "objective_id": "survive_raid" },
-            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" },
+            { "type": "move_actor_to_step", "actor_id": "father", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "mother", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "sister", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "bandit_leader", "step_id": "fled" }
           ]
         },
         {
@@ -486,7 +503,11 @@
           "actions": [
             { "type": "set_flag", "key": "wounded", "value": true },
             { "type": "complete_objective", "objective_id": "survive_raid" },
-            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" },
+            { "type": "move_actor_to_step", "actor_id": "father", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "mother", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "sister", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "bandit_leader", "step_id": "fled" }
           ]
         },
         {
@@ -495,7 +516,11 @@
           "actions": [
             { "type": "set_flag", "key": "saw_ros_taken", "value": true },
             { "type": "complete_objective", "objective_id": "survive_raid" },
-            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" },
+            { "type": "move_actor_to_step", "actor_id": "father", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "mother", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "sister", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "bandit_leader", "step_id": "fled" }
           ]
         }
       ],
@@ -511,7 +536,7 @@
       "dialogue_asset_id": "rescue",
       "dialogue_start_node": "Rescue",
       "title": "The Stranger in the Ashes",
-      "summary": "Master Holloway of the Heroes' Guild finds the child at the woods' edge and offers to take them away.",
+      "summary": "Master Holloway of the Heroes' Guild finds the child in the ashes and offers to take them away.",
       "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over what is left of Briarwell like snow.",
       "objective_text": "Answer the stranger.",
       "on_enter": [

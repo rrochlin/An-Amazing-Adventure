@@ -193,3 +193,46 @@ func TestValidateTiesSceneMapsToRooms(t *testing.T) {
 		}
 	}
 }
+
+func TestBriarwell_TheRaidChangesWhoIsWhere(t *testing.T) {
+	def, g, _ := bootstrapBriarwell(t)
+	advance := func(want string) {
+		t.Helper()
+		if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
+			t.Fatal(err)
+		}
+		if g.Campaign.ActiveNodeID != want {
+			t.Fatalf("expected %s, got %s", want, g.Campaign.ActiveNodeID)
+		}
+	}
+	g.Campaign.ActiveNodeID = "birthday"
+	g.Campaign.ActiveDialogue = nil
+	g.Campaign.BoolFlags["gift_given"] = true
+	advance("bandit_raid")
+	// Red Corwin arrives in the world with the raid (playtest 6: rail moves
+	// changed only his state, so no one could see him).
+	if c, ok := g.NPCs["bandit_leader"]; !ok || c.LocationID != "village_square" || !contains(g.Rooms["village_square"].Occupants, "bandit_leader") {
+		t.Fatalf("Red Corwin should be raiding the square, got %+v", g.NPCs["bandit_leader"])
+	}
+
+	g.Campaign.ActiveDialogue = nil
+	g.Campaign.Labels["raid_response"] = "hid"
+	advance("rescue")
+	owner, _ := g.OwnerCharacter()
+	here := g.Rooms[owner.LocationID]
+	// Holloway kneels beside the player wherever they are; the family is gone
+	// (the rescue must not reveal whether they live), and so are the bandits.
+	if !contains(here.Occupants, "guild_master") || g.NPCs["guild_master"].LocationID != owner.LocationID {
+		t.Fatalf("Holloway should be with the player in %s, occupants %v", owner.LocationID, here.Occupants)
+	}
+	for _, id := range []string{"father", "mother", "sister", "bandit_leader"} {
+		if loc := g.NPCs[id].LocationID; loc != "" {
+			t.Errorf("%s should be off-stage after the raid, is in %s", id, loc)
+		}
+		for roomID, r := range g.Rooms {
+			if contains(r.Occupants, id) {
+				t.Errorf("%s still listed in %s", id, roomID)
+			}
+		}
+	}
+}

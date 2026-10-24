@@ -119,15 +119,8 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 		if !ok {
 			return nil, nil, fmt.Errorf("actor %q starts in unknown room %q", actorID, actor.StartLocationID)
 		}
-		description := actor.Description
-		if description == "" {
-			description = actor.Goal
-		}
-		npc := game.NewCharacter(actor.Name, description)
-		npc.ID = actorID
+		npc := newActorCharacter(actorID, actor)
 		npc.LocationID = roomID
-		npc.Friendly = actor.Kind != "antagonist"
-		npc.Scale = actor.Scale
 		g.NPCs[npc.ID] = npc
 		room := g.Rooms[roomID]
 		_ = room.AddOccupant(npc.ID)
@@ -164,4 +157,18 @@ func BootstrapGame(def *CampaignDefinition, sessionID, userID string, player gam
 	}
 
 	return g, history, nil
+}
+
+// newActorCharacter is an actor as a character in the world, keyed by the
+// actor's ID; it isn't placed anywhere yet.
+func newActorCharacter(actorID string, actor ActorTemplate) game.Character {
+	description := actor.Description
+	if description == "" {
+		description = actor.Goal
+	}
+	npc := game.NewCharacter(actor.Name, description)
+	npc.ID = actorID
+	npc.Friendly = actor.Kind != "antagonist"
+	npc.Scale = actor.Scale
+	return npc
 }

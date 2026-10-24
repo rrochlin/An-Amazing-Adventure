@@ -121,7 +121,7 @@ func (d *CampaignDefinition) Validate() error {
 			if step.ID == "" {
 				return fmt.Errorf("actor %q rail step id is required", actorID)
 			}
-			if step.LocationID != "" {
+			if step.LocationID != "" && step.LocationID != PlayerLocation {
 				if _, ok := d.Map.Rooms[step.LocationID]; !ok {
 					return fmt.Errorf("actor %q rail step %q references unknown room %q", actorID, step.ID, step.LocationID)
 				}
