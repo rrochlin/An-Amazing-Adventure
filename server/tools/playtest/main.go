@@ -543,4 +543,3 @@ func discardUnless(show bool) interface{ Write([]byte) (int, error) } {
 	}
 	return discard{}
 }
-
