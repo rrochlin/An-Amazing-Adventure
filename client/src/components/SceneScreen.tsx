@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ObjectiveStateView, RoomView, SceneMapView } from '@/types/types';
 import { QuestList } from './QuestList';
 import { WorldMap } from './map/WorldMap';
+import { PhaserStage } from './stage/PhaserStage';
 import { sceneArt, type MapArt } from './map/mapArt';
 
 /**
@@ -176,16 +177,12 @@ export function SceneScreen({
                data-mood={light ? mood : 'day'}
                sx={{ flex: 1, minWidth: 0, display: 'flex', position: 'relative', filter: light?.filter, transition: 'filter 1.2s ease' }}
             >
-               <WorldMap
-                  // A new map (stepping inside or out) starts fresh: no pan
-                  // across from where the other map left off.
-                  key={indoors ? `inside:${sceneMap?.id}` : 'outside'}
+               <PhaserStage
                   art={shown}
                   rooms={rooms}
                   currentRoomId={currentRoomId}
                   playerName={playerName}
                   playerScale={playerScale}
-                  mode="scene"
                   insetTop={chipHeight}
                   insetBottom={framedPanel}
                />

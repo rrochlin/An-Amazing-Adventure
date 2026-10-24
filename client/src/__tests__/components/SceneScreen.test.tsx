@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider } from '@mui/material/styles';
 import { AppTheme } from '@/theme/theme';
 import { SceneScreen } from '@/components/SceneScreen';
@@ -8,6 +8,15 @@ import { BRIARWELL_ART } from '@/components/map/art/briarwell';
 import type { ObjectiveStateView, RoomView } from '@/types/types';
 
 vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+
+// Phaser needs WebGL; here the stage records what it is handed.
+const stage = vi.hoisted(() => ({ views: [] as unknown[] }));
+vi.mock('@/components/stage/StageScene', () => ({
+   createStage: (_parent: HTMLElement, view: unknown) => {
+      stage.views.push(view);
+      return { game: { destroy: () => {} }, scene: { setView: (v: unknown) => stage.views.push(v) } };
+   },
+}));
 
 const rooms = {
    village_square: { id: 'village_square', name: 'Village Square', discovered: true, occupants: [], points_of_interest: [] },
@@ -43,7 +52,18 @@ describe('SceneScreen', () => {
       setup();
       expect(screen.getByTestId('scene-chip')).toHaveTextContent('Village Square· Good Turns and BadEarn two coins');
       expect(screen.getByTestId('stage')).toHaveTextContent('log closed');
-      expect(screen.getByTestId('scene-window')).toBeInTheDocument();
+      expect(screen.getByTestId('phaser-stage')).toBeInTheDocument();
+   });
+
+   it('hands the Phaser stage the room, the cast and the framing', async () => {
+      stage.views.length = 0;
+      setup();
+      await act(() => Promise.resolve());
+      const view = stage.views.at(-1) as { currentRoomId: string; art: unknown; insetTop: number; insetBottom: number };
+      expect(view.currentRoomId).toBe('village_square');
+      expect(view.art).toBe(BRIARWELL_ART);
+      expect(typeof view.insetTop).toBe('number');
+      expect(typeof view.insetBottom).toBe('number');
    });
 
    it('opens the log over the scene', () => {
@@ -133,7 +153,7 @@ describe('scene light', () => {
       const light = screen.getByTestId('scene-light');
       expect(light).toHaveAttribute('data-mood', 'ashes');
       expect(getComputedStyle(light).filter).toContain('grayscale');
-      expect(light).toContainElement(screen.getByTestId('world-map'));
+      expect(light).toContainElement(screen.getByTestId('phaser-stage'));
       expect(light).not.toContainElement(screen.getByTestId('scene-chip'));
    });
 

@@ -21,6 +21,7 @@
       "@tanstack/router-plugin": "^1.121.2",
       "amazon-cognito-identity-js": "^6.3.16",
       "axios": "^1.11.0",
+      "phaser": "4.2.1",
       "react": "^19.0.0",
       "react-dom": "^19.0.0",
       "react-konva": "^19.0.7",
