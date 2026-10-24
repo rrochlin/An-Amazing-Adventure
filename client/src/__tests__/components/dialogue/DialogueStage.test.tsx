@@ -340,4 +340,21 @@ describe('free roam and dialogue', () => {
       update({ messages: [...messages], onCues });
       expect(onCues).toHaveBeenCalledTimes(2);
    });
+
+   it("reports whose line is on screen, and nobody's once the story is done", () => {
+      const onSpeaking = vi.fn();
+      const { update } = setup(inProgress, { onSpeaking });
+      update({
+         messages: [...inProgress, { type: 'player', content: 'hi' }, { type: 'narrative', content: 'Bess looks up.\nLittle Bess: You came!' }],
+         onSpeaking,
+      });
+      tick(100);
+      expect(onSpeaking).toHaveBeenLastCalledWith(null); // narration: nobody
+      fireEvent.click(stage());
+      fireEvent.click(stage());
+      expect(onSpeaking).toHaveBeenLastCalledWith(expect.objectContaining({ speaker: 'Little Bess', text: 'You came!' }));
+      tick(5000);
+      fireEvent.click(stage()); // read: back to walking
+      expect(onSpeaking).toHaveBeenLastCalledWith(null);
+   });
 });

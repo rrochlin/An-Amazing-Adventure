@@ -160,6 +160,8 @@ export interface CharacterView {
    scale?: number;
    /** The point of interest they stand at in their room, if any. */
    mark?: string;
+   /** What else spoken lines call them ("Father"). */
+   called?: string[];
    inventory: ItemView[];
    equipment: EquipmentView;
    dnd?: DnDStatsView; // present for v3+ characters

@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import type { RoomView } from '@/types/types';
-import type { StageCue } from '../dialogue/beats';
+import type { SpokenLine, StageCue } from '../dialogue/beats';
 import { DUNGEON_SHEET, TILE, TOWN_SHEET, type MapArt } from '../map/mapArt';
 import { placeTokens, type Token } from '../map/WorldMap';
 import {
    DUNGEON_GID,
    STEPS,
    canStep,
+   bubbleText,
    findPath,
    roomAt,
    sceneLayers,
@@ -14,6 +15,7 @@ import {
    standPoint,
    type Direction,
    type Tile,
+   whoSpeaks,
 } from './stageModel';
 
 /** What the stage shows: React hands this in on every change. */
@@ -27,6 +29,8 @@ export interface StageView {
    playerMark?: string;
    /** Staging the story has reached, oldest first; each plays once. */
    cues?: StageCue[];
+   /** The spoken line on screen: a bubble over the speaker. */
+   speaking?: SpokenLine | null;
    /** Pixels covered at the top (the location sign) and bottom (the text panel). */
    insetTop: number;
    insetBottom: number;
@@ -90,6 +94,8 @@ export class StageScene extends Phaser.Scene {
    private storyPath: Tile[] = [];
    /** Reactions waiting for their character to stop walking. */
    private emotes: { id: string; emote: string }[] = [];
+   /** The speech bubble on screen, over whoever is speaking. */
+   private bubble?: { line: string; who: string; box: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text; panel: Phaser.GameObjects.Graphics };
 
    constructor(view: StageView) {
       super('stage');
@@ -184,6 +190,7 @@ export class StageScene extends Phaser.Scene {
    }
 
    update() {
+      this.placeBubble();
       const view = this.view;
       if (!view || this.walking || !this.playerTile) return;
       // The story walks the player first, whatever the controls.
@@ -300,6 +307,7 @@ export class StageScene extends Phaser.Scene {
       this.syncPlaces(view, room);
       this.syncCharacters(view, room);
       this.playEmotes();
+      this.syncBubble(view, room);
       this.drawShade(view, room);
       // Pan only when the player has moved to another room.
       this.frame(this.framedRoom !== undefined && this.framedRoom !== room);
@@ -313,6 +321,8 @@ export class StageScene extends Phaser.Scene {
       this.layers = [];
       this.sprites.forEach((s) => s.destroy());
       this.sprites.clear();
+      this.bubble?.box.destroy();
+      this.bubble = undefined;
       this.placed = [];
       this.framedRoom = undefined;
       this.playerTile = undefined;
@@ -576,6 +586,78 @@ export class StageScene extends Phaser.Scene {
             this.tweens.add({ targets: sprite, scaleY: sy * 0.92, duration: 400, yoyo: true, hold: 600, ease: 'Sine.easeInOut', onComplete: done });
             break;
       }
+   }
+
+   /**
+    * The spoken line in a bubble over the speaker, while they're on screen:
+    * short lines whole, a long one as "…" (the panel below has it all).
+    */
+   private syncBubble(view: StageView, room: string | undefined) {
+      const line = view.speaking;
+      const people = this.placed.filter((t) => !t.isPlayer && t.roomId === room).map((t) => {
+         const c = view.rooms[t.roomId]?.occupants?.find((o) => o.id === t.id);
+         return { id: t.id, name: t.name, called: c?.called };
+      });
+      const who = line ? whoSpeaks(line.speaker, people, view.playerName) : undefined;
+      if (!line || !who || !this.sprites.has(who)) {
+         this.bubble?.box.destroy();
+         this.bubble = undefined;
+         return;
+      }
+      const words = bubbleText(line.text);
+      if (this.bubble && this.bubble.line === line.id && this.bubble.who === who) {
+         if (this.bubble.text.text !== words) this.drawBubble(words);
+         return;
+      }
+      this.bubble?.box.destroy();
+      const text = this.add.text(0, 0, '', {
+         fontFamily: '"Crimson Text", Georgia, serif',
+         fontSize: '13px',
+         color: '#2a1f14',
+         // Narrow, so it covers as few of the people behind as it can.
+         wordWrap: { width: 140, useAdvancedWrap: true },
+         align: 'center',
+      });
+      text.setOrigin(0.5, 1);
+      const panel = this.add.graphics();
+      const box = this.add.container(0, 0, [panel, text]).setDepth(102);
+      this.bubble = { line: line.id, who, box, text, panel };
+      this.drawBubble(words);
+      this.placeBubble();
+      // A small pop as it appears.
+      const s = 1 / this.cameras.main.zoom;
+      box.setScale(s * 0.6).setAlpha(0);
+      this.tweens.add({ targets: box, scale: s, alpha: 1, duration: 140, ease: 'Back.easeOut' });
+   }
+
+   /** The bubble's panel and tail, drawn around its text (in screen pixels). */
+   private drawBubble(words: string) {
+      if (!this.bubble) return;
+      const { text, panel } = this.bubble;
+      text.setText(words);
+      const pad = 5;
+      const w = Math.max(text.width + pad * 2, 28);
+      const h = text.height + pad * 2;
+      const tail = 7;
+      text.setPosition(0, -tail - pad);
+      panel.clear();
+      panel.fillStyle(0xf3e9d2, 0.93);
+      panel.lineStyle(2, 0x2a1f14, 1);
+      panel.fillRoundedRect(-w / 2, -tail - h, w, h, 6);
+      panel.strokeRoundedRect(-w / 2, -tail - h, w, h, 6);
+      panel.fillTriangle(-5, -tail - 1, 5, -tail - 1, 0, 0);
+      panel.lineBetween(-5, -tail, 0, 0);
+      panel.lineBetween(5, -tail, 0, 0);
+   }
+
+   /** Keep the bubble over its speaker's head, at a constant size on screen. */
+   private placeBubble() {
+      if (!this.bubble) return;
+      const sprite = this.sprites.get(this.bubble.who);
+      if (!sprite) return;
+      const zoom = this.cameras.main.zoom;
+      this.bubble.box.setPosition(sprite.x, sprite.y - sprite.displayHeight - 1);
+      if (!this.tweens.isTweening(this.bubble.box)) this.bubble.box.setScale(1 / zoom);
    }
 
    /** A "!" over someone's head for a moment. */

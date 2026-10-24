@@ -148,3 +148,30 @@ export function findPath(
    }
    return [];
 }
+
+/**
+ * Whose line it is: the character on screen the speaker's name means, by
+ * name, by what else lines call them ("Father"), or by one word of their
+ * name ("Bess" for Little Bess). "player" when it's the player's own line.
+ */
+export function whoSpeaks(
+   speaker: string,
+   people: { id: string; name: string; called?: string[] }[],
+   playerName?: string,
+): string | undefined {
+   const said = speaker.trim().toLowerCase();
+   if (!said) return undefined;
+   if (playerName && said === playerName.trim().toLowerCase()) return 'player';
+   const exact = people.find((p) => p.name.toLowerCase() === said || p.called?.some((c) => c.toLowerCase() === said));
+   if (exact) return exact.id;
+   return people.find((p) => p.name.toLowerCase().split(/\s+/).includes(said))?.id;
+}
+
+/** A bubble shows lines up to this long; a longer one shows "…" (the panel has it). */
+export const BUBBLE_CHARS = 70;
+
+/** What a speech bubble says for a line. */
+export function bubbleText(text: string): string {
+   const t = text.trim();
+   return t.length <= BUBBLE_CHARS ? t : '…';
+}

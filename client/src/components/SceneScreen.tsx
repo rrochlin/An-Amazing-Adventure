@@ -11,7 +11,7 @@ import { QuestList } from './QuestList';
 import { WorldMap } from './map/WorldMap';
 import { PhaserStage } from './stage/PhaserStage';
 import { sceneArt, type MapArt } from './map/mapArt';
-import type { StageCue } from './dialogue/beats';
+import type { SpokenLine, StageCue } from './dialogue/beats';
 
 /**
  * How each scene light tints the map: a filter on the art and a wash over
@@ -49,6 +49,8 @@ interface SceneScreenProps {
    playerMark?: string;
    /** Staging the story has reached, oldest first: the scene plays each once. */
    cues?: StageCue[];
+   /** The spoken line on screen: shown in a bubble over the speaker. */
+   speaking?: SpokenLine | null;
    location?: string;
    sceneTitle?: string;
    objective?: string;
@@ -88,6 +90,7 @@ export function SceneScreen({
    playerScale,
    playerMark,
    cues,
+   speaking,
    location,
    sceneTitle,
    objective,
@@ -208,6 +211,7 @@ export function SceneScreen({
                   playerScale={playerScale}
                   playerMark={playerMark}
                   cues={cues}
+                  speaking={speaking}
                   insetTop={chipHeight}
                   insetBottom={framedPanel}
                   // An open overlay (journal, map, log) holds the player still too.
