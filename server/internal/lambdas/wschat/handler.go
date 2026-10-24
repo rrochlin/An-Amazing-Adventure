@@ -72,6 +72,9 @@ var (
 type chatRequest struct {
 	Action  string `json:"action"`
 	Content string `json:"content"`
+	// TalkTo opens a conversation with a character in the player's room
+	// (the player walked up to them); Content may then be empty.
+	TalkTo string `json:"talk_to,omitempty"`
 }
 
 // Handler is the ws-chat Lambda: a player's free-form line runs a story turn.
@@ -119,7 +122,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		log.Printf("ws-chat: bad body conn=%s: %v", connID, err)
 		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
 	}
-	if msg.Content == "" {
+	if msg.Content == "" && msg.TalkTo == "" {
 		return events.APIGatewayProxyResponse{StatusCode: 400}, nil
 	}
 
@@ -274,6 +277,19 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		sendError("dialogue_choice_required")
 		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 	}
+	// Walking up to someone opens a conversation with them.
+	if msg.TalkTo != "" && g.Campaign != nil {
+		npc, ok := g.NPCs[msg.TalkTo]
+		owner, _ := g.OwnerCharacter()
+		if !ok || !npc.Alive || npc.LocationID != owner.LocationID {
+			sendError("not_here")
+			return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+		}
+		g.Campaign.Conversation = &game.ConversationView{With: npc.ID, Name: npc.Name}
+		if msg.Content == "" {
+			msg.Content = "I go up to " + npc.Name + " and talk to them."
+		}
+	}
 
 	// Steps 1-3: run the story pipeline. Narration streams to every party
 	// member as it arrives; narrative_end goes out as soon as it's complete,
@@ -314,6 +330,10 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	}
 	if turn.Transition != nil {
 		tr.Transition = *turn.Transition
+		// A new scene ends whatever conversation the player was in.
+		if turn.Transition.Transitioned && g.Campaign != nil {
+			g.Campaign.Conversation = nil
+		}
 	}
 	if err != nil {
 		log.Printf("ws-chat: %v", err)

@@ -181,3 +181,48 @@ func TestMoveToRoom_ArrivingCanStartAScene(t *testing.T) {
 		t.Fatalf("the scene should join the log with its events, got %+v", last)
 	}
 }
+
+// Walking somewhere with no scene still updates the story: an arrival line
+// joins the log (not broadcast as narration, so it doesn't hold the player)
+// and the game master's history.
+func TestMoveToRoom_ArrivalUpdatesTheStory(t *testing.T) {
+	store, sender := walkingSession(t, briarwell(t))
+	before := len(store.save.Narrative)
+	walk(t, "village_square")
+	last := store.save.ChatHistory[len(store.save.ChatHistory)-1]
+	if last.Type != "arrival" || !strings.HasPrefix(last.Content, "Village Square.") || !strings.Contains(last.Content, "Little Bess is here.") {
+		t.Fatalf("arrival line: %+v", last)
+	}
+	if len(store.save.Narrative) != before+1 || store.save.Narrative[before].Content[0].Text != last.Content {
+		t.Fatal("the game master's history should learn where the player went")
+	}
+	for _, f := range sender.frames {
+		if f.Type == wsutil.FrameNarrativeChunk {
+			t.Fatalf("an arrival isn't streamed as narration: %+v", f)
+		}
+	}
+}
+
+func TestConversation_LocksWalkingUntilThePlayerLeaves(t *testing.T) {
+	store, sender := walkingSession(t, briarwell(t))
+	g, _ := game.FromSaveState(store.save)
+	g.Campaign.Conversation = &game.ConversationView{With: "father", Name: "Tomas"}
+	store.save = g.ToSaveState(store.save.Narrative, store.save.ChatHistory)
+
+	walk(t, "village_square")
+	if len(sender.errors) != 1 || sender.errors[0] != "in_conversation" || playerRoom(t, store.save) != "family_cottage" {
+		t.Fatalf("errors %v, player in %q", sender.errors, playerRoom(t, store.save))
+	}
+
+	body, _ := json.Marshal(actionRequest{Action: "game_action", SubAction: "end_conversation"})
+	if _, err := handler(context.Background(), makeActionReq("conn-walk", string(body))); err != nil {
+		t.Fatal(err)
+	}
+	if store.save.Campaign.Conversation != nil {
+		t.Fatal("leaving should close the conversation")
+	}
+	walk(t, "village_square")
+	if playerRoom(t, store.save) != "village_square" {
+		t.Fatal("free roam again: the player can walk")
+	}
+}

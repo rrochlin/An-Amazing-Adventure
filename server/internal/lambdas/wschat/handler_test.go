@@ -166,6 +166,7 @@ type fakeAIClient struct {
 	narratorCalls int
 	engineerCalls int
 	resolverCalls int
+	gmRequests    []ai.GameMasterRequest
 }
 
 func (f *fakeAIClient) NarrateStream(_ context.Context, _ *game.Game, _ []game.NarrativeMessage, _ string, _ *campaigns.CampaignDefinition, onChunk func(string)) (ai.NarratorResult, error) {
@@ -179,8 +180,9 @@ func (f *fakeAIClient) EngineerScan(context.Context, *game.Game, string) (ai.Eng
 	f.engineerCalls++
 	return f.engineer, nil
 }
-func (f *fakeAIClient) GameMasterTurn(context.Context, ai.GameMasterRequest) (ai.GameMasterResult, error) {
-	return ai.GameMasterResult{}, nil
+func (f *fakeAIClient) GameMasterTurn(_ context.Context, req ai.GameMasterRequest) (ai.GameMasterResult, error) {
+	f.gmRequests = append(f.gmRequests, req)
+	return ai.GameMasterResult{Narrative: "Tomas looks up from the table.", Decision: `{"world_events":[],"beats":{}}`}, nil
 }
 func (f *fakeAIClient) ResolveCampaignConditions(context.Context, *game.Game, *campaigns.CampaignDefinition, string, string) (ai.CampaignConditionResolutionResult, error) {
 	f.resolverCalls++

@@ -42,6 +42,9 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 		line("\n%s", strings.TrimSpace(campaignBrief))
 	}
 	line("\n%s", strings.TrimSpace(worldSlice(g)))
+	if c := g.Campaign; c != nil && c.Conversation != nil {
+		line("\nThe player is in a conversation with %s, who is right beside them. Play %s's side of it: answer, react, ask back. The conversation goes on until the player leaves it.", c.Conversation.Name, c.Conversation.Name)
+	}
 	if node != nil && node.SceneMap != "" {
 		if sm, ok := def.Map.SceneMaps[node.SceneMap]; ok && owner.LocationID == sm.RoomID {
 			line("Indoors: %s. %s", sm.Name, sm.Description)

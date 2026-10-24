@@ -3,6 +3,8 @@ package game
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/KirkDiggler/rpg-toolkit/events"
 	dnd5echar "github.com/KirkDiggler/rpg-toolkit/rulebooks/dnd5e/character"
@@ -40,7 +42,10 @@ type CampaignRuntimeState struct {
 	// ActiveSceneMap is the interior the current scene is played on, if any.
 	ActiveSceneMap *SceneMapView `json:"active_scene_map,omitempty" dynamodbav:"active_scene_map,omitempty"`
 	// ActiveMood is the current scene's light ("" is daylight).
-	ActiveMood       string                       `json:"active_mood,omitempty" dynamodbav:"active_mood,omitempty"`
+	ActiveMood string `json:"active_mood,omitempty" dynamodbav:"active_mood,omitempty"`
+	// Conversation is who the player is talking to. While it is open the
+	// game is in dialogue: the player can't walk.
+	Conversation     *ConversationView            `json:"conversation,omitempty" dynamodbav:"conversation,omitempty"`
 	CurrentObjective string                       `json:"current_objective,omitempty" dynamodbav:"current_objective,omitempty"`
 	PreviousNodeIDs  []string                     `json:"previous_node_ids,omitempty" dynamodbav:"previous_node_ids,omitempty"`
 	BoolFlags        map[string]bool              `json:"bool_flags,omitempty" dynamodbav:"bool_flags,omitempty"`
@@ -123,6 +128,21 @@ type SceneMapView struct {
 	Name   string `json:"name" dynamodbav:"name"`
 }
 
+// ConversationView is the character the player is talking to.
+type ConversationView struct {
+	With string `json:"with" dynamodbav:"with"` // the character's ID
+	Name string `json:"name" dynamodbav:"name"`
+}
+
+// InDialogue reports whether the game is in dialogue: a choice is open or
+// the player is in a conversation. The player can't walk then.
+func (s *CampaignRuntimeState) InDialogue() bool {
+	if s == nil {
+		return false
+	}
+	return s.Conversation != nil || (s.ActiveDialogue != nil && s.ActiveDialogue.AwaitingChoice)
+}
+
 type CampaignStateView struct {
 	CampaignID       string             `json:"campaign_id"`
 	CampaignVersion  string             `json:"campaign_version"`
@@ -130,6 +150,7 @@ type CampaignStateView struct {
 	ActiveNodeTitle  string             `json:"active_node_title,omitempty"`
 	ActiveSceneMap   *SceneMapView      `json:"active_scene_map,omitempty"`
 	ActiveMood       string             `json:"active_mood,omitempty"`
+	Conversation     *ConversationView  `json:"conversation,omitempty"`
 	CurrentObjective string             `json:"current_objective,omitempty"`
 	BoolFlags        map[string]bool    `json:"bool_flags,omitempty"`
 	Labels           map[string]string  `json:"labels,omitempty"`
@@ -856,7 +877,7 @@ type MutationEntry struct {
 
 // ChatMessage is the player-facing chat log entry shown in the UI.
 type ChatMessage struct {
-	Type    string       `json:"type" dynamodbav:"type"` // "player" | "narrative"
+	Type    string       `json:"type" dynamodbav:"type"` // "player" | "narrative" | "arrival" (walked into a room)
 	Content string       `json:"content" dynamodbav:"content"`
 	Events  []WorldEvent `json:"events,omitempty" dynamodbav:"events,omitempty"` // non-nil on narrative messages when world events occurred
 }
@@ -1025,6 +1046,7 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 		ActiveNodeTitle:  g.Campaign.ActiveNodeTitle,
 		ActiveSceneMap:   g.Campaign.ActiveSceneMap,
 		ActiveMood:       g.Campaign.ActiveMood,
+		Conversation:     g.Campaign.Conversation,
 		CurrentObjective: g.Campaign.CurrentObjective,
 		BoolFlags:        copyBoolMap(g.Campaign.BoolFlags),
 		Labels:           copyStringMap(g.Campaign.Labels),
@@ -1389,4 +1411,32 @@ type StateDelta struct {
 	UpdatedRooms map[string]RoomView `json:"updated_rooms,omitempty"`
 	Campaign     *CampaignStateView  `json:"campaign,omitempty"`
 	Events       []WorldEvent        `json:"events,omitempty"` // player-visible world events this turn
+}
+
+// ArrivalLine is what the player sees on walking into a room: its name, its
+// description and who is there. Written from the world, no model call.
+func (g *Game) ArrivalLine(roomID string) string {
+	room, err := g.GetRoom(roomID)
+	if err != nil {
+		return ""
+	}
+	var people []string
+	for _, id := range room.Occupants {
+		if npc, ok := g.NPCs[id]; ok && npc.Alive {
+			people = append(people, npc.Name)
+		}
+	}
+	sort.Strings(people)
+	line := room.Name + "."
+	if d := strings.TrimSpace(room.Description); d != "" {
+		line += " " + d
+	}
+	switch len(people) {
+	case 0:
+	case 1:
+		line += " " + people[0] + " is here."
+	default:
+		line += " " + strings.Join(people[:len(people)-1], ", ") + " and " + people[len(people)-1] + " are here."
+	}
+	return line
 }

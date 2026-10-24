@@ -40,7 +40,7 @@ var getCampaignRegistry = func() (*campaigns.Registry, error) {
 
 type actionRequest struct {
 	Action    string `json:"action"`
-	SubAction string `json:"sub_action"` // "move" | "move_to_room" | "pick_up" | "drop" | "equip" | "unequip" | "attack" | "dialogue_choice"
+	SubAction string `json:"sub_action"` // "move" | "move_to_room" | "end_conversation" | "pick_up" | "drop" | "equip" | "unequip" | "attack" | "dialogue_choice"
 	Payload   string `json:"payload"`    // direction, item name, target monster ID, or choice ID
 	// WeaponID is optional — used only for "attack" sub_action.
 	// If empty the character's equipped main-hand weapon is used.
@@ -213,11 +213,21 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	case "move":
 		// MovePlayer also marks the destination discovered (fog of war).
 		_, actionErr = g.MovePlayer(msg.Payload)
+	case "end_conversation":
+		// The player leaves the conversation: back to free roam. No model call.
+		if g.Campaign != nil {
+			g.Campaign.Conversation = nil
+		}
 	case "move_to_room":
 		// Free movement: the player walked across the map into a connected
 		// room. No model call; the campaign's rules run below.
-		if d := g.Campaign.ActiveDialogue; d != nil && d.AwaitingChoice {
-			_ = sender.SendError(ctx, connID, "dialogue_choice_required")
+		// In dialogue (a choice open, a conversation) the player stays put.
+		if g.Campaign.InDialogue() {
+			reason := "in_conversation"
+			if g.Campaign.Conversation == nil {
+				reason = "dialogue_choice_required"
+			}
+			_ = sender.SendError(ctx, connID, reason)
 			return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 		}
 		_, actionErr = g.MoveToRoom(userID, msg.Payload)
@@ -672,7 +682,17 @@ func walkInto(ctx context.Context, dbClient dbClient, ws dialogueChoiceSender, c
 	if turn.Transition.Transitioned {
 		text = turn.Transition.DialogueText
 	}
-	if text == "" && len(turn.Events) == 0 {
+	if text == "" {
+		// No scene here: the story still learns where the player went. The
+		// arrival line joins the log (shown without holding the player up) and
+		// the story so far, so the game master knows too.
+		owner, _ := g.OwnerCharacter()
+		arrival := g.ArrivalLine(owner.LocationID)
+		saveState.ChatHistory = append(saveState.ChatHistory, game.ChatMessage{Type: "arrival", Content: arrival, Events: turn.Events})
+		saveState.Narrative = append(saveState.Narrative, game.NarrativeMessage{
+			Role:    "assistant",
+			Content: []game.NarrativeBlock{{Type: "text", Text: arrival}},
+		})
 		return
 	}
 	if text != "" {

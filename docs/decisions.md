@@ -9,6 +9,22 @@ force are summarised at the end of this file.
 
 ---
 
+## 2026-10-24 — Free roam and dialogue, Baldur's Gate style
+
+**Decision:** The game has two modes. In **free roam** the player walks freely and nothing waits on them.
+In **dialogue** (a story beat playing, a choice open, or a conversation with someone) the player's
+character is locked; the server refuses movement then too. Talking to someone (clicking them, or a key
+when standing next to them) walks up to them and opens a conversation, which lasts until the player leaves
+it. Walking into a room either starts the scene that room holds, or adds a short arrival line to the story
+(written from the room and who is there, no model call), so the story always knows where the player is.
+Combat, when it comes, is turn-based. No live co-op movement: the backend stays serverless.
+
+**Why:** Rob, after playing the Phaser build: the narration dropped the player off and asked what they
+wanted to do, but they could walk to the next zone and the story never caught up. Turn-based play with
+locked dialogue is how Baldur's Gate handles this, and it needs no real-time server.
+
+---
+
 ## 2026-10-24 — The scene moves to Phaser 4; the player can walk
 
 **Decision:** The scene view becomes a Phaser 4 game embedded in the React app (React keeps the UI: text
