@@ -110,3 +110,26 @@ describe('buildTranscript', () => {
       ]);
    });
 });
+
+describe('staging cues', () => {
+   it('ride on the line they play with, the last if past the end', () => {
+      const msgs: ChatMessage[] = [
+         { type: 'player', content: 'Hello' },
+         {
+            type: 'narrative',
+            content: 'Bess looks up.\n\nLittle Bess: You came!',
+            events: [
+               { type: 'cue', message: '', character: 'bess', emote: 'hop', line: 1 },
+               { type: 'cue', message: '', character: 'bess', mark: 'stone_well' },
+               { type: 'cue', message: '', character: 'player', emote: 'bow', line: 9 },
+            ],
+         },
+      ];
+      const beats = buildBeats(msgs);
+      expect(beats.map((b) => b.cues?.map((c) => c.character + ':' + (c.mark ?? c.emote)))).toEqual([
+         ['bess:stone_well'],
+         ['bess:hop', 'player:bow'],
+      ]);
+      expect(beats[1].cues![0].id).toBe('1-C0');
+   });
+});

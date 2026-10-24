@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { RoomView } from '@/types/types';
+import type { StageCue } from '../dialogue/beats';
 import { DUNGEON_SHEET, TILE, TOWN_SHEET, type MapArt } from '../map/mapArt';
 import { placeTokens, type Token } from '../map/WorldMap';
 import {
@@ -22,6 +23,10 @@ export interface StageView {
    currentRoomId?: string;
    playerName?: string;
    playerScale?: number;
+   /** The mark the server has the player standing at, if any. */
+   playerMark?: string;
+   /** Staging the story has reached, oldest first; each plays once. */
+   cues?: StageCue[];
    /** Pixels covered at the top (the location sign) and bottom (the text panel). */
    insetTop: number;
    insetBottom: number;
@@ -37,6 +42,10 @@ export interface StageView {
 const GLIDE_MS = 800;
 /** One step of the player's walk. */
 const STEP_MS = 170;
+/** One step of a character's walk (a little slower than the player's). */
+const NPC_STEP_MS = 220;
+/** A longer walk than this glides instead (it's going somewhere far off). */
+const MAX_WALK = 30;
 /** How long the screen trusts a walk into another room before the server agrees. */
 const AGREE_MS = 3000;
 const SHADE = 0x08050c;
@@ -71,6 +80,16 @@ export class StageScene extends Phaser.Scene {
    private talkKeys: Phaser.Input.Keyboard.Key[] = [];
    /** Who the player is walking up to, to talk to once there. */
    private goingToTalk?: string;
+   /** Cues already played. */
+   private played = new Set<string>();
+   /** Marks the story has sent people to, ahead of the server's say-so. */
+   private marks = new Map<string, { mark: string; room?: string }>();
+   /** The story is walking the player to their mark (computed on the next sync). */
+   private playerToMark = false;
+   /** The story's walk for the player: plays even while the controls are locked. */
+   private storyPath: Tile[] = [];
+   /** Reactions waiting for their character to stop walking. */
+   private emotes: { id: string; emote: string }[] = [];
 
    constructor(view: StageView) {
       super('stage');
@@ -167,6 +186,13 @@ export class StageScene extends Phaser.Scene {
    update() {
       const view = this.view;
       if (!view || this.walking || !this.playerTile) return;
+      // The story walks the player first, whatever the controls.
+      if (this.storyPath.length) {
+         const next = this.storyPath.shift()!;
+         if (canStep(view.art, view.rooms, this.playerTile, next, this.occupied())) this.step(next);
+         else this.storyPath = [];
+         return;
+      }
       if (view.controlsLocked) {
          this.path = [];
          this.goingToTalk = undefined;
@@ -226,6 +252,7 @@ export class StageScene extends Phaser.Scene {
       this.walking = true;
       const arrived = () => {
          this.walking = false;
+         if (!this.storyPath.length) this.playEmotes();
          // The view as it is now: the server may have answered mid-step.
          const now = this.view ?? view;
          const room = roomAt(now.art, next);
@@ -245,7 +272,8 @@ export class StageScene extends Phaser.Scene {
    /** State for browser checks. */
    probe() {
       const p = this.sprites.get('player');
-      return { tile: this.playerTile, room: this.roomShown(this.view!), walking: this.walking, sprite: p && { x: p.x, y: p.y } };
+      const tiles = Object.fromEntries([...this.sprites].map(([id, s]) => [id, s.getData('tile') as Tile | undefined]));
+      return { tile: this.playerTile, room: this.roomShown(this.view!), walking: this.walking, sprite: p && { x: p.x, y: p.y }, tiles, played: this.played.size };
    }
 
    /** The room on screen: the one the player walked into, until the server agrees. */
@@ -267,8 +295,10 @@ export class StageScene extends Phaser.Scene {
          this.walkedInto = undefined;
       }
       const room = this.roomShown(view);
+      this.takeCues(view, room);
       this.syncPlaces(view, room);
       this.syncCharacters(view, room);
+      this.playEmotes();
       this.drawShade(view, room);
       // Pan only when the player has moved to another room.
       this.frame(this.framedRoom !== undefined && this.framedRoom !== room);
@@ -287,6 +317,8 @@ export class StageScene extends Phaser.Scene {
       this.playerTile = undefined;
       this.walkedInto = undefined;
       this.path = [];
+      this.storyPath = [];
+      this.marks.clear();
       const { pad, ground, objects } = sceneLayers(art);
       for (const [i, grid] of [ground, objects].entries()) {
          const map = this.make.tilemap({ data: grid, tileWidth: TILE, tileHeight: TILE });
@@ -334,7 +366,7 @@ export class StageScene extends Phaser.Scene {
 
    /** Characters in the room: placed where they stand, walking when they move. */
    private syncCharacters(view: StageView, room: string | undefined) {
-      this.placed = placeTokens(view.art, view.rooms, view.currentRoomId, view.playerName ?? 'You', view.playerScale ?? 1, this.placed);
+      this.placed = placeTokens(view.art, view.rooms, view.currentRoomId, view.playerName ?? 'You', view.playerScale ?? 1, this.placed, this.markRecord(view));
       const here = this.placed.filter((t) => t.isPlayer || t.roomId === room);
       const seen = new Set<string>();
       for (const t of here) {
@@ -343,6 +375,14 @@ export class StageScene extends Phaser.Scene {
             // The player stays where they walked while they're in the room on
             // screen; the story moving them elsewhere puts them in their new
             // room's place.
+            if (this.playerToMark && this.playerTile && roomAt(view.art, this.playerTile) === room) {
+               // The story sends the player to their mark: they walk there.
+               this.playerToMark = false;
+               const others = new Set(this.placed.filter((o) => !o.isPlayer).map((o) => `${o.x},${o.y}`));
+               this.storyPath = findPath(view.art, view.rooms, this.playerTile, { x: t.x, y: t.y }, others);
+               this.path = [];
+               this.goingToTalk = undefined;
+            }
             if (this.playerTile && roomAt(view.art, this.playerTile) === room) {
                t.x = this.playerTile.x;
                t.y = this.playerTile.y;
@@ -357,15 +397,17 @@ export class StageScene extends Phaser.Scene {
          }
          const at = standPoint(t.x, t.y);
          let sprite = this.sprites.get(t.id);
+         const was = sprite?.getData('tile') as Tile | undefined;
          if (!sprite) {
             sprite = this.add.sprite(at.x, at.y, 'dungeon', t.sprite).setOrigin(0.5, 1).setDepth(10);
             sprite.setInteractive();
             this.nameOnHover(sprite, t.name);
             if (t.isPlayer) this.glow(sprite);
             this.sprites.set(t.id, sprite);
-         } else if (sprite.x !== at.x || sprite.y !== at.y) {
-            this.tweens.add({ targets: sprite, x: at.x, y: at.y, duration: GLIDE_MS, ease: 'Sine.easeInOut' });
+         } else if (t.isPlayer ? sprite.x !== at.x || sprite.y !== at.y : !was || was.x !== t.x || was.y !== t.y) {
+            this.moveSprite(sprite, was, t, view);
          }
+         sprite.setData('tile', { x: t.x, y: t.y });
          sprite.setFrame(t.sprite).setScale(t.scale || 1);
          sprite.setData('name', t.name);
       }
@@ -375,6 +417,136 @@ export class StageScene extends Phaser.Scene {
             this.sprites.delete(id);
          }
       }
+   }
+
+   /**
+    * A character moves to their new tile: they walk there step by step when
+    * there's a way within reach, and glide otherwise (the player, put
+    * somewhere by the story, glides too).
+    */
+   private moveSprite(sprite: Phaser.GameObjects.Sprite, from: Tile | undefined, to: Token, view: StageView) {
+      const at = standPoint(to.x, to.y);
+      const path = from && !to.isPlayer ? findPath(view.art, view.rooms, from, { x: to.x, y: to.y }, new Set()) : [];
+      this.tweens.killTweensOf(sprite);
+      sprite.setScale(to.scale || 1).setAngle(0);
+      if (!path.length || path.length > MAX_WALK) {
+         this.tweens.add({ targets: sprite, x: at.x, y: at.y, duration: GLIDE_MS, ease: 'Sine.easeInOut', onComplete: () => this.playEmotes() });
+         return;
+      }
+      sprite.setData('walking', true);
+      let prev = from!;
+      const steps = path.map((p) => {
+         const stepFrom = prev;
+         prev = p;
+         const point = standPoint(p.x, p.y);
+         return {
+            x: point.x,
+            y: point.y,
+            duration: NPC_STEP_MS,
+            ease: 'Linear',
+            onStart: () => {
+               if (p.x !== stepFrom.x) sprite.setFlipX(p.x < stepFrom.x);
+            },
+         };
+      });
+      this.tweens.chain({
+         targets: sprite,
+         tweens: steps,
+         onComplete: () => {
+            sprite.setData('walking', false);
+            this.playEmotes();
+         },
+      });
+   }
+
+   /** New cues: marks to stand at (walked on the next sync) and reactions to play. */
+   private takeCues(view: StageView, room: string | undefined) {
+      for (const cue of view.cues ?? []) {
+         if (this.played.has(cue.id)) continue;
+         this.played.add(cue.id);
+         if (cue.mark) {
+            this.marks.set(cue.character, { mark: cue.mark, room: cue.character === 'player' ? room : this.roomOf(view, cue.character) });
+            if (cue.character === 'player') this.playerToMark = true;
+         }
+         if (cue.emote) this.emotes.push({ id: cue.character, emote: cue.emote });
+      }
+   }
+
+   private roomOf(view: StageView, id: string): string | undefined {
+      return Object.values(view.rooms).find((r) => r.occupants?.some((c) => c.id === id))?.id;
+   }
+
+   /**
+    * Who stands at which mark: the story's cues, while the person is still in
+    * the room the cue sent them across; otherwise the server's marks (which
+    * placeTokens reads from the room itself).
+    */
+   private markRecord(view: StageView): Record<string, string> {
+      const out: Record<string, string> = {};
+      if (view.playerMark) out.player = view.playerMark;
+      for (const [id, m] of this.marks) {
+         const now = id === 'player' ? this.roomShown(view) : this.roomOf(view, id);
+         if (now && now === m.room) out[id] = m.mark;
+         else this.marks.delete(id);
+      }
+      return out;
+   }
+
+   /** Reactions whose character is standing still (on screen, not walking). */
+   private playEmotes() {
+      const waiting: typeof this.emotes = [];
+      for (const e of this.emotes) {
+         const sprite = this.sprites.get(e.id);
+         const busy = e.id === 'player' ? this.walking || this.storyPath.length > 0 : sprite?.getData('walking');
+         if (!sprite) continue; // not on screen: nothing to see
+         if (busy || this.tweens.isTweening(sprite)) {
+            waiting.push(e);
+            continue;
+         }
+         this.emote(sprite, e.emote);
+      }
+      this.emotes = waiting;
+   }
+
+   /** A reaction, played on the art we have: a hop, a shake, a bow. */
+   private emote(sprite: Phaser.GameObjects.Sprite, emote: string) {
+      const y = sprite.y;
+      const x = sprite.x;
+      const sy = sprite.scaleY;
+      const done = () => sprite.setPosition(x, y).setScale(sprite.scaleX, sy).clearTint();
+      switch (emote) {
+         case 'hop':
+            this.tweens.add({ targets: sprite, y: y - 5, duration: 130, yoyo: true, repeat: 1, ease: 'Sine.easeOut', onComplete: done });
+            break;
+         case 'laugh':
+            this.tweens.add({ targets: sprite, y: y - 2, duration: 90, yoyo: true, repeat: 3, ease: 'Sine.easeInOut', onComplete: done });
+            break;
+         case 'shake':
+            this.tweens.add({ targets: sprite, x: x + 1.5, duration: 50, yoyo: true, repeat: 5, ease: 'Linear', onComplete: done });
+            break;
+         case 'startle':
+            this.bang(sprite);
+            this.tweens.add({ targets: sprite, y: y - 6, duration: 90, yoyo: true, ease: 'Quad.easeOut', onComplete: done });
+            break;
+         case 'bow':
+            this.tweens.add({ targets: sprite, scaleY: sy * 0.8, duration: 260, yoyo: true, hold: 200, ease: 'Sine.easeInOut', onComplete: done });
+            break;
+         case 'cry':
+            sprite.setTint(0x9fb8ff);
+            this.tweens.add({ targets: sprite, scaleY: sy * 0.92, duration: 400, yoyo: true, hold: 600, ease: 'Sine.easeInOut', onComplete: done });
+            break;
+      }
+   }
+
+   /** A "!" over someone's head for a moment. */
+   private bang(sprite: Phaser.GameObjects.Sprite) {
+      const zoom = this.cameras.main.zoom;
+      const mark = this.add
+         .text(sprite.x, sprite.y - sprite.displayHeight - 1, '!', { fontFamily: 'Georgia, serif', fontSize: '14px', fontStyle: 'bold', color: '#f5d77a', stroke: '#0c0810', strokeThickness: 3 })
+         .setOrigin(0.5, 1)
+         .setScale(1 / zoom)
+         .setDepth(101);
+      this.tweens.add({ targets: mark, y: mark.y - 3, alpha: 0, delay: 500, duration: 300, onComplete: () => mark.destroy() });
    }
 
    private glow(sprite: Phaser.GameObjects.Sprite) {

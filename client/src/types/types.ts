@@ -158,6 +158,8 @@ export interface CharacterView {
    friendly: boolean;
    /** Height relative to an adult (1); absent means 1. */
    scale?: number;
+   /** The point of interest they stand at in their room, if any. */
+   mark?: string;
    inventory: ItemView[];
    equipment: EquipmentView;
    dnd?: DnDStatsView; // present for v3+ characters
@@ -201,8 +203,16 @@ export interface GameStateView {
 }
 
 export interface WorldEvent {
-   type: string; // "damage","heal","death","revive","item_gained","item_lost","item_appeared","character_arrived","character_departed"
+   type: string; // "damage","heal","death","revive","item_gained","item_lost","item_appeared","character_arrived","character_departed","cue"
    message: string; // human-readable, player's perspective
+   /**
+    * A "cue" stages the scene: `character` (an NPC id, or "player") walks to
+    * `mark` and/or plays `emote` when the narration reaches paragraph `line`.
+    */
+   character?: string;
+   mark?: string;
+   emote?: string;
+   line?: number;
 }
 
 export interface ChatMessage {

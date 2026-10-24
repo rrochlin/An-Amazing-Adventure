@@ -11,6 +11,7 @@ import { QuestList } from './QuestList';
 import { WorldMap } from './map/WorldMap';
 import { PhaserStage } from './stage/PhaserStage';
 import { sceneArt, type MapArt } from './map/mapArt';
+import type { StageCue } from './dialogue/beats';
 
 /**
  * How each scene light tints the map: a filter on the art and a wash over
@@ -44,6 +45,10 @@ interface SceneScreenProps {
    mood?: string;
    playerName?: string;
    playerScale?: number;
+   /** The mark the player stands at, if the story put them at one. */
+   playerMark?: string;
+   /** Staging the story has reached, oldest first: the scene plays each once. */
+   cues?: StageCue[];
    location?: string;
    sceneTitle?: string;
    objective?: string;
@@ -81,6 +86,8 @@ export function SceneScreen({
    mood,
    playerName,
    playerScale,
+   playerMark,
+   cues,
    location,
    sceneTitle,
    objective,
@@ -199,6 +206,8 @@ export function SceneScreen({
                   currentRoomId={currentRoomId}
                   playerName={playerName}
                   playerScale={playerScale}
+                  playerMark={playerMark}
+                  cues={cues}
                   insetTop={chipHeight}
                   insetBottom={framedPanel}
                   // An open overlay (journal, map, log) holds the player still too.

@@ -28,7 +28,10 @@ function sameChatMessage(left: ChatMessage, right: ChatMessage): boolean {
    return leftEvents.every(
       (event, index) =>
          event.type === rightEvents[index]?.type &&
-         event.message === rightEvents[index]?.message,
+         event.message === rightEvents[index]?.message &&
+         event.character === rightEvents[index]?.character &&
+         event.mark === rightEvents[index]?.mark &&
+         event.emote === rightEvents[index]?.emote,
    );
 }
 

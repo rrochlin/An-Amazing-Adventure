@@ -140,6 +140,41 @@ describe('placeTokens', () => {
    });
 });
 
+describe('marks', () => {
+   it('stands someone at a mark beside it, ahead of everyone else', () => {
+      const at = { ...rooms.village_square, occupants: [{ ...person('bess', 'Little Bess'), mark: 'stone_well' }] } as RoomView;
+      const tokens = placeTokens(BRIARWELL_ART, { ...rooms, village_square: at }, 'village_square', 'Wren');
+      const [wx, wy] = BRIARWELL_ART.points_of_interest.stone_well;
+      const bess = tokens.find((t) => t.id === 'bess')!;
+      expect(Math.abs(bess.x - wx) + Math.abs(bess.y - wy)).toBe(1);
+   });
+
+   it("takes the story's marks over the server's, the player's included", () => {
+      const tokens = placeTokens(BRIARWELL_ART, rooms, 'village_square', 'Wren', 1, [], { player: 'market_benches', bess: 'stone_well' });
+      const near = (id: string, poi: string) => {
+         const t = tokens.find((k) => k.id === id)!;
+         const [px, py] = BRIARWELL_ART.points_of_interest[poi];
+         return Math.abs(t.x - px) + Math.abs(t.y - py);
+      };
+      expect(near('player', 'market_benches')).toBe(1);
+      expect(near('bess', 'stone_well')).toBe(1);
+   });
+
+   it("ignores a mark that isn't in the room", () => {
+      const tokens = placeTokens(BRIARWELL_ART, rooms, 'village_square', 'Wren', 1, [], { bess: 'old_oak' });
+      const [x, y, w, h] = BRIARWELL_ART.rooms.village_square;
+      const bess = tokens.find((t) => t.id === 'bess')!;
+      expect(bess.x >= x && bess.x < x + w && bess.y >= y && bess.y < y + h).toBe(true);
+   });
+
+   it('never stands two people on one tile at the same mark', () => {
+      const crowd = { ...rooms.village_square, occupants: [person('a', 'A'), person('b', 'B')].map((c) => ({ ...c, mark: 'stone_well' })) } as RoomView;
+      const tokens = placeTokens(BRIARWELL_ART, { ...rooms, village_square: crowd }, 'village_square', 'Wren');
+      const tiles = tokens.filter((t) => t.roomId === 'village_square').map((t) => `${t.x},${t.y}`);
+      expect(new Set(tiles).size).toBe(tiles.length);
+   });
+});
+
 describe('WorldMap', () => {
    // jsdom has no canvas; the tile layers are checked in the browser.
    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
