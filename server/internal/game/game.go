@@ -872,6 +872,7 @@ type WorldEvent struct {
 	// paragraph, from 0). Message is empty: the stage shows it, nobody reads it.
 	Character string `json:"character,omitempty" dynamodbav:"character,omitempty"`
 	Mark      string `json:"mark,omitempty" dynamodbav:"mark,omitempty"`
+	Toward    string `json:"toward,omitempty" dynamodbav:"toward,omitempty"` // walks up to this character
 	Emote     string `json:"emote,omitempty" dynamodbav:"emote,omitempty"`
 	Line      int    `json:"line,omitempty" dynamodbav:"line,omitempty"`
 	// For damage, heal, death and item changes: who it happened to

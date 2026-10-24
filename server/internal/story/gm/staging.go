@@ -20,6 +20,9 @@ type Cue struct {
 	Who string `json:"who"`
 	// MoveTo is a mark (point of interest) in the room, by ID.
 	MoveTo string `json:"move_to,omitempty"`
+	// Toward is someone here (by name, or "player") they walk up to.
+	// Validation turns a name into the character's ID.
+	Toward string `json:"toward,omitempty"`
 	// Emote is one of Emotes.
 	Emote string `json:"emote,omitempty"`
 }
@@ -53,6 +56,7 @@ func stagingSchema(g *game.Game) map[string]any {
 	if len(marks) > 0 {
 		cue["move_to"] = map[string]any{"type": "string", "enum": marks, "description": "A mark in this room: they walk there."}
 	}
+	cue["toward"] = map[string]any{"type": "string", "enum": who, "description": "Someone here: they walk up beside them."}
 	return map[string]any{
 		"type":        "array",
 		"description": "How the scene is staged, in order: who walks to which mark, and who reacts, on which paragraph. Only what the narration shows. Leave it empty when nobody moves or reacts.",
@@ -99,11 +103,26 @@ func validateStaging(g *game.Game, cues []Cue) ([]Cue, []string) {
 			dropped = append(dropped, fmt.Sprintf("staging: %s has no mark %q", room.Name, c.MoveTo))
 			c.MoveTo = ""
 		}
+		if c.Toward != "" {
+			to := strings.TrimSpace(c.Toward)
+			switch npc, ok := presentNamed(g, to); {
+			case strings.EqualFold(to, PlayerCue):
+				c.Toward = PlayerCue
+			case ok:
+				c.Toward = npc.ID
+			default:
+				dropped = append(dropped, fmt.Sprintf("staging: %q is not here to walk up to", to))
+				c.Toward = ""
+			}
+			if c.Toward == c.Who {
+				c.Toward = ""
+			}
+		}
 		if c.Emote != "" && !known[c.Emote] {
 			dropped = append(dropped, fmt.Sprintf("staging: no emote %q", c.Emote))
 			c.Emote = ""
 		}
-		if c.MoveTo == "" && c.Emote == "" {
+		if c.MoveTo == "" && c.Emote == "" && c.Toward == "" {
 			continue
 		}
 		if c.Line < 0 {
@@ -135,7 +154,7 @@ func ApplyStaging(g *game.Game, cues []Cue, paragraphs int) []game.WorldEvent {
 		if paragraphs > 0 && line >= paragraphs {
 			line = paragraphs - 1
 		}
-		events = append(events, game.WorldEvent{Type: "cue", Character: c.Who, Mark: c.MoveTo, Emote: c.Emote, Line: line})
+		events = append(events, game.WorldEvent{Type: "cue", Character: c.Who, Mark: c.MoveTo, Toward: c.Toward, Emote: c.Emote, Line: line})
 	}
 	return events
 }
@@ -176,7 +195,7 @@ func stagingBrief(g *game.Game) string {
 	if len(where) > 0 {
 		fmt.Fprintf(&b, "Standing: %s.\n", strings.Join(where, ", "))
 	}
-	b.WriteString("Stage the scene: when the narration puts someone somewhere in this room (at the barn, by the well), has them walk there, or shows them react (the player and the people they meet alike), add a staging cue for the paragraph that shows it, counting paragraphs from 0 (move_to a mark; emote one of " + strings.Join(Emotes, ", ") + "). Put each spoken line on its own paragraph as Name: words, with no quotation marks, so it comes from that character on the stage.\n")
+	b.WriteString("Stage the scene: when the narration puts someone somewhere in this room (at the barn, by the well), has them walk there or up to someone (toward), or shows them react (the player and the people they meet alike), add a staging cue for the paragraph that shows it, counting paragraphs from 0 (move_to a mark; emote one of " + strings.Join(Emotes, ", ") + "). Put each spoken line on its own paragraph as Name: words, with no quotation marks, so it comes from that character on the stage.\n")
 	return b.String()
 }
 
