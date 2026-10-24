@@ -261,8 +261,9 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 }
 
 // EvaluateObjectives closes active objectives whose authored success_when
-// (checked first) or fail_when conditions now hold, and returns an event for
-// each one so the player sees the change.
+// (checked first), fail_when or unfinished_when conditions now hold, and
+// returns an event for each one so the player sees the change. An objective
+// closed without success takes its quest items with it.
 func EvaluateObjectives(def *CampaignDefinition, g *game.Game) ([]game.WorldEvent, error) {
 	var events []game.WorldEvent
 	for i := range g.Campaign.ActiveObjectives {
@@ -297,10 +298,72 @@ func EvaluateObjectives(def *CampaignDefinition, g *game.Game) ([]game.WorldEven
 			if matched {
 				o.Status = "failed"
 				events = append(events, game.WorldEvent{Type: "objective_failed", Message: "Objective missed: " + title})
+				events = append(events, removeQuestItems(g, tmpl.QuestItems)...)
+				continue
+			}
+		}
+		if len(tmpl.UnfinishedWhen) > 0 {
+			matched, err := conditionsMatch(def, g, tmpl.UnfinishedWhen)
+			if err != nil {
+				return nil, fmt.Errorf("objective %q unfinished_when: %w", o.ID, err)
+			}
+			if matched {
+				o.Status = ObjectiveUnfinished
+				events = append(events, game.WorldEvent{Type: "objective_unfinished", Message: "Left unfinished: " + title})
+				events = append(events, removeQuestItems(g, tmpl.QuestItems)...)
 			}
 		}
 	}
 	return events, nil
+}
+
+// ObjectiveUnfinished is the status of an objective the story moved past.
+const ObjectiveUnfinished = "unfinished"
+
+// removeQuestItems takes every item matching the patterns out of the
+// player's pack and the rooms, with an event for what the player loses.
+func removeQuestItems(g *game.Game, patterns []string) []game.WorldEvent {
+	var events []game.WorldEvent
+	matches := func(name string) bool {
+		name = strings.ToLower(name)
+		for _, p := range patterns {
+			for _, want := range strings.Split(p, "|") {
+				want = strings.ToLower(strings.TrimSpace(want))
+				if want != "" && strings.Contains(name, want) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if len(patterns) == 0 {
+		return nil
+	}
+	if owner, ok := g.OwnerCharacter(); ok {
+		for _, id := range append([]string(nil), owner.Inventory...) {
+			if it, ok := g.Items[id]; ok && matches(it.Name) {
+				_ = owner.RemoveItemID(id)
+				delete(g.Items, id)
+				events = append(events, game.WorldEvent{Type: "item_lost", Message: it.Name + " is gone from your pack."})
+			}
+		}
+		g.Players[g.OwnerID] = owner
+	}
+	for roomID, room := range g.Rooms {
+		kept := room.Items[:0:0]
+		for _, id := range room.Items {
+			if it, ok := g.Items[id]; ok && matches(it.Name) {
+				delete(g.Items, id)
+				continue
+			}
+			kept = append(kept, id)
+		}
+		if len(kept) != len(room.Items) {
+			room.Items = kept
+			g.Rooms[roomID] = room
+		}
+	}
+	return events
 }
 
 func OrchestrateTurn(def *CampaignDefinition, g *game.Game, resolution ConditionResolution) (TurnOrchestrationResult, error) {
@@ -598,6 +661,9 @@ func conditionMatches(def *CampaignDefinition, g *game.Game, cond Condition) (bo
 	case "actor_in_room":
 		actorState, ok := state.ActorStates[cond.ActorID]
 		return ok && actorState.CurrentLocationID == cond.RoomID, nil
+	case "player_in_room":
+		owner, ok := g.OwnerCharacter()
+		return ok && owner.LocationID == cond.RoomID, nil
 	case "objective_status":
 		for _, objective := range state.ActiveObjectives {
 			if objective.ID == cond.ObjectiveID {
@@ -671,6 +737,9 @@ func applyActions(def *CampaignDefinition, g *game.Game, actions []Action) error
 			setObjectiveStatus(def, state, action.ObjectiveID, "completed")
 		case "fail_objective":
 			setObjectiveStatus(def, state, action.ObjectiveID, "failed")
+			if def != nil {
+				removeQuestItems(g, def.Objectives[action.ObjectiveID].QuestItems)
+			}
 		case "move_actor_to_step":
 			actorState := state.ActorStates[action.ActorID]
 			actorState.ActorID = action.ActorID

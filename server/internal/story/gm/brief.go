@@ -113,7 +113,13 @@ func worldSlice(g *game.Game) string {
 	line := func(format string, args ...any) { fmt.Fprintf(&b, format+"\n", args...) }
 	owner, _ := g.OwnerCharacter()
 	line("## The world right now")
-	line("Player: %s, health %d, carrying: %s", owner.Name, owner.Health, names(g, owner.Inventory, "nothing"))
+	hp, max := g.PlayerHitPoints(g.OwnerID)
+	health := fmt.Sprintf("health %d of 100", hp)
+	if _, ok := g.GetDnDCharacter(g.OwnerID); ok {
+		// D&D hit points: damage_character amounts are on this scale.
+		health = fmt.Sprintf("hit points %d of %d (D&D: a shove or a fall is 1-2, a punch or a club 1-4, a blade 1-8)", hp, max)
+	}
+	line("Player: %s, %s, carrying: %s", owner.Name, health, names(g, owner.Inventory, "nothing"))
 	room, err := g.GetRoom(owner.LocationID)
 	if err != nil {
 		return b.String()

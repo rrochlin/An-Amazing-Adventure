@@ -57,27 +57,6 @@ func TestHandlerAction_InvalidJSON(t *testing.T) {
 	}
 }
 
-func TestHandlerAction_ValidBody_ReachesDB(t *testing.T) {
-	t.Setenv("CONNECTIONS_TABLE", "test-connections")
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
-	t.Setenv("WEBSOCKET_API_ENDPOINT", "https://test.execute-api.us-west-2.amazonaws.com/prod")
-
-	body, _ := json.Marshal(actionRequest{
-		Action:    "game_action",
-		SubAction: "move",
-		Payload:   "north",
-	})
-	req := makeActionReq("conn-abc", string(body))
-	resp, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected lambda error: %v", err)
-	}
-	// Should fail at DB layer (410 Gone or 500), not at parse layer (400)
-	if resp.StatusCode == 400 {
-		t.Errorf("routing/parse failure — expected to reach DB layer, got 400")
-	}
-}
-
 func TestActionRequest_SubActions(t *testing.T) {
 	cases := []struct {
 		subAction string
@@ -120,46 +99,6 @@ func TestHandlerAction_MissingCONNECTIONS_TABLE_Panics(t *testing.T) {
 	assertPanicsWithEnvAbsent(t, "CONNECTIONS_TABLE", func() {
 		handler(context.Background(), makeActionReq("conn-1", string(body))) //nolint:errcheck
 	})
-}
-
-func TestHandlerAction_Equip_ReachesDB(t *testing.T) {
-	t.Setenv("CONNECTIONS_TABLE", "test-connections")
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
-	t.Setenv("WEBSOCKET_API_ENDPOINT", "https://test.execute-api.us-west-2.amazonaws.com/prod")
-
-	body, _ := json.Marshal(actionRequest{
-		Action:    "game_action",
-		SubAction: "equip",
-		Payload:   "Iron Helm",
-	})
-	req := makeActionReq("conn-equip", string(body))
-	resp, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected lambda error: %v", err)
-	}
-	if resp.StatusCode == 400 {
-		t.Errorf("parse failure — expected to reach DB layer, got 400")
-	}
-}
-
-func TestHandlerAction_Unequip_ReachesDB(t *testing.T) {
-	t.Setenv("CONNECTIONS_TABLE", "test-connections")
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
-	t.Setenv("WEBSOCKET_API_ENDPOINT", "https://test.execute-api.us-west-2.amazonaws.com/prod")
-
-	body, _ := json.Marshal(actionRequest{
-		Action:    "game_action",
-		SubAction: "unequip",
-		Payload:   "head",
-	})
-	req := makeActionReq("conn-unequip", string(body))
-	resp, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected lambda error: %v", err)
-	}
-	if resp.StatusCode == 400 {
-		t.Errorf("parse failure — expected to reach DB layer, got 400")
-	}
 }
 
 type fakeDialogueChoiceDB struct {

@@ -163,7 +163,16 @@ type ObjectiveTemplate struct {
 	VisibleWhen []Condition `json:"visible_when,omitempty"`
 	SuccessWhen []Condition `json:"success_when,omitempty"`
 	FailWhen    []Condition `json:"fail_when,omitempty"`
-	Optional    bool        `json:"optional,omitempty"`
+	// UnfinishedWhen closes the objective as left unfinished: the story
+	// moved on before the player closed it out. Unlike failing, nothing
+	// went wrong; it just stays incomplete.
+	UnfinishedWhen []Condition `json:"unfinished_when,omitempty"`
+	// QuestItems are "|"-separated name patterns (as take_item) for items
+	// that only matter to this objective. When it closes without success
+	// they are removed from the player and the world: nothing later uses
+	// them.
+	QuestItems []string `json:"quest_items,omitempty"`
+	Optional   bool     `json:"optional,omitempty"`
 	// OnSuccess runs when the objective completes: the deterministic side
 	// of a deed (the coin it pays, the doll handed back), so it doesn't
 	// depend on the narration being read correctly.

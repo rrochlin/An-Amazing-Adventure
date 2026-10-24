@@ -27,6 +27,7 @@ export const NOTICE_EVENT_TYPES = new Set([
    'campaign_progress',
    'objective_completed',
    'objective_failed',
+   'objective_unfinished',
 ]);
 
 // "Old Garrick: Sweets for the sweet." → speaker "Old Garrick". Capitalised,

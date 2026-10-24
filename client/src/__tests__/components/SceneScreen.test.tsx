@@ -69,6 +69,23 @@ describe('SceneScreen', () => {
       expect(screen.queryByRole('dialog', { name: 'Journal' })).not.toBeInTheDocument();
    });
 
+   it('lists a quest the story moved past as unfinished, not crossed out', () => {
+      setup([
+         { id: 'return_doll', status: 'unfinished', visible_text: "Bess's Lost Doll" },
+         { id: 'miller_secret', status: 'failed', visible_text: "The Miller's Secret" },
+         { id: 'meadow_bully', status: 'completed', visible_text: 'The Meadow Bully' },
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'Journal' }));
+      const items = screen.getAllByRole('listitem');
+      expect(items.map((li) => li.getAttribute('aria-label'))).toEqual([
+         'The Meadow Bully (completed)',
+         "Bess's Lost Doll (unfinished)",
+         "The Miller's Secret (failed)",
+      ]);
+      expect(items[1]).toHaveTextContent('○');
+      expect(items[1]).not.toHaveStyle({ textDecoration: 'line-through' });
+   });
+
    it('opens the adventure details from the button bar', () => {
       const onDetails = vi.fn();
       render(

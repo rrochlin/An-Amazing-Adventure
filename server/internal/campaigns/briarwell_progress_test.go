@@ -46,7 +46,7 @@ func objectiveStatus(g *game.Game, id string) string {
 	return ""
 }
 
-func TestBriarwell_DeedObjectivesTickOffAndUntouchedOneIsMissed(t *testing.T) {
+func TestBriarwell_DeedObjectivesTickOffAndUntouchedOneIsLeftUnfinished(t *testing.T) {
 	def, g, _ := bootstrapBriarwell(t)
 	chooseOption(t, def, g, "I'll do it", "village_deeds")
 
@@ -75,7 +75,7 @@ func TestBriarwell_DeedObjectivesTickOffAndUntouchedOneIsMissed(t *testing.T) {
 	if second.Transition.ToNodeID != "gift_stall" {
 		t.Fatalf("expected two deeds to move on to the gift stall, got %#v", second.Transition)
 	}
-	for id, want := range map[string]string{"miller_secret": "completed", "return_doll": "failed", "earn_coins": "completed"} {
+	for id, want := range map[string]string{"miller_secret": "completed", "return_doll": "unfinished", "earn_coins": "completed"} {
 		if got := objectiveStatus(g, id); got != want {
 			t.Errorf("objective %s = %q, want %q", id, got, want)
 		}
@@ -85,9 +85,103 @@ func TestBriarwell_DeedObjectivesTickOffAndUntouchedOneIsMissed(t *testing.T) {
 		messages = append(messages, e.Message)
 	}
 	joined := strings.Join(messages, " | ")
-	for _, want := range []string{"Objective complete: The Miller's Secret", "Objective missed: Bess's Lost Doll", "Objective updated: Choose a gift"} {
+	for _, want := range []string{"Objective complete: The Miller's Secret", "Left unfinished: Bess's Lost Doll", "Objective updated: Choose a gift"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("expected event %q, got %s", want, joined)
 		}
+	}
+}
+
+// Playtest 6: the player found Bess's doll, then the second deed moved the
+// story on. The doll quest is left unfinished (not failed), and the doll,
+// which nothing later uses, leaves the player's pack and the world.
+func TestBriarwell_UnfinishedQuestTakesItsItems(t *testing.T) {
+	def, g, _ := bootstrapBriarwell(t)
+	chooseOption(t, def, g, "I'll do it", "village_deeds")
+	owner, _ := g.OwnerCharacter()
+	give := func(id, name string) {
+		g.Items[id] = game.Item{ID: id, Name: name}
+		owner.Inventory = append(owner.Inventory, id)
+	}
+	give("doll-1", "Marta the Rag Doll")
+	give("bread-1", "Heel of Bread")
+	g.Players[g.OwnerID] = owner
+	g.Items["doll-2"] = game.Item{ID: "doll-2", Name: "Rag Doll"}
+	meadow := g.Rooms["meadow"]
+	meadow.Items = append(meadow.Items, "doll-2")
+	g.Rooms["meadow"] = meadow
+
+	turn, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{
+		Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turn.Transition.ToNodeID != "gift_stall" || objectiveStatus(g, "return_doll") != "unfinished" {
+		t.Fatalf("node %q, return_doll %q", g.Campaign.ActiveNodeID, objectiveStatus(g, "return_doll"))
+	}
+	owner, _ = g.OwnerCharacter()
+	var carried []string
+	for _, id := range owner.Inventory {
+		carried = append(carried, g.Items[id].Name)
+	}
+	if strings.Contains(strings.ToLower(strings.Join(carried, ",")), "doll") || !contains(carried, "Heel of Bread") {
+		t.Fatalf("the doll should go and the bread stay, carrying %v", carried)
+	}
+	if _, ok := g.Items["doll-2"]; ok || len(g.Rooms["meadow"].Items) != 0 {
+		t.Fatalf("the doll in the meadow should be gone too, meadow %v", g.Rooms["meadow"].Items)
+	}
+	var lost bool
+	for _, e := range turn.Events {
+		lost = lost || (e.Type == "item_lost" && strings.Contains(e.Message, "Marta the Rag Doll"))
+	}
+	if !lost {
+		t.Fatalf("the player should be told the doll is gone, events %+v", turn.Events)
+	}
+}
+
+// The platform lets a campaign pause before moving on: with player_in_room
+// in the completion rules, the stall waits until the player walks to Market
+// Lane, and an unfinished deed can still be finished on the way.
+func TestFreeRoamBufferBeforeTheNextScene(t *testing.T) {
+	def, g, _ := bootstrapBriarwell(t)
+	buffered := *def
+	buffered.StoryNodes = map[string]campaigns.StoryNode{}
+	for id, n := range def.StoryNodes {
+		buffered.StoryNodes[id] = n
+	}
+	deeds := buffered.StoryNodes["village_deeds"]
+	deeds.CompletionRules = append([]campaigns.TransitionRule(nil), deeds.CompletionRules...)
+	for i := range deeds.CompletionRules {
+		r := deeds.CompletionRules[i]
+		r.Conditions = append(append([]campaigns.Condition(nil), r.Conditions...), campaigns.Condition{Type: "player_in_room", RoomID: "market_lane"})
+		deeds.CompletionRules[i] = r
+	}
+	buffered.StoryNodes["village_deeds"] = deeds
+	if err := buffered.Validate(); err != nil {
+		t.Fatalf("a buffered campaign should validate: %v", err)
+	}
+	def = &buffered
+
+	chooseOption(t, def, g, "I'll do it", "village_deeds")
+	turn, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{
+		Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"},
+	})
+	if err != nil || turn.Transition.Transitioned {
+		t.Fatalf("two deeds alone shouldn't move on yet: %+v %v", turn.Transition, err)
+	}
+	// Free roam: the doll can still be returned, and pays.
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_doll": "returned"}}); err != nil {
+		t.Fatal(err)
+	}
+	if objectiveStatus(g, "return_doll") != "completed" || g.Campaign.ActiveNodeID != "village_deeds" {
+		t.Fatalf("the doll should still count during the buffer: %q in %s", objectiveStatus(g, "return_doll"), g.Campaign.ActiveNodeID)
+	}
+	if err := g.PlaceCharacter(g.OwnerID, "market_lane"); err != nil {
+		t.Fatal(err)
+	}
+	turn, err = campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{})
+	if err != nil || turn.Transition.ToNodeID != "gift_stall" {
+		t.Fatalf("arriving at Market Lane should open the stall: %+v %v", turn.Transition, err)
 	}
 }

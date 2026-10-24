@@ -1,9 +1,10 @@
 import { Box, Typography } from '@mui/material';
 import type { ObjectiveStateView } from '@/types/types';
 
-// Quests: active first, then completed and missed, each with a status mark.
-const QUEST_ORDER: Record<string, number> = { active: 0, completed: 1, failed: 2 };
-const QUEST_MARK: Record<string, string> = { active: '◆', completed: '✓', failed: '✗' };
+// Quests: active first, then completed, left unfinished and missed, each
+// with a status mark. Unfinished isn't a failure: it's just not crossed out.
+const QUEST_ORDER: Record<string, number> = { active: 0, completed: 1, unfinished: 2, failed: 3 };
+const QUEST_MARK: Record<string, string> = { active: '◆', completed: '✓', unfinished: '○', failed: '✗' };
 
 export function QuestList({ objectives }: { objectives: ObjectiveStateView[] }) {
    if (!objectives.length) {
@@ -14,7 +15,7 @@ export function QuestList({ objectives }: { objectives: ObjectiveStateView[] }) 
       );
    }
    const sorted = [...objectives].sort(
-      (a, b) => (QUEST_ORDER[a.status] ?? 3) - (QUEST_ORDER[b.status] ?? 3),
+      (a, b) => (QUEST_ORDER[a.status] ?? 4) - (QUEST_ORDER[b.status] ?? 4),
    );
    return (
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>

@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -272,34 +273,17 @@ func handleCreateGame(ctx context.Context, req events.APIGatewayV2HTTPRequest, u
 	log.Printf("http-games POST: user=%s role=%s ai_enabled=true", userID, userRecord.Role)
 
 	sessionID := game.NewSessionID()
-
-	playerName := creation.Name
-	if playerName == "" {
-		playerName = "Adventurer"
+	// The run, with the player's character and stats built under the hood
+	// (from the campaign's preset on a quick start).
+	g, history, err := campaigns.StartSession(ctx, selectedCampaign, sessionID, userID, creation)
+	if errors.Is(err, campaigns.ErrCharacterCreation) {
+		log.Printf("http-games POST: %v", err)
+		return jsonResponse(400, map[string]string{"error": err.Error()}), nil
 	}
-
-	player := game.NewCharacter(playerName, creation.Backstory)
-	g := game.NewGame(sessionID, userID)
-	g.SetPlayerCharacter(userID, player)
-	g.CreationParams = creation
-
-	// Build the full D&D character if we have enough data
-	if creation.ClassID != "" && creation.RaceID != "" && len(creation.AbilityScores) == 6 {
-		dndChar, err := game.BuildDnDCharacter(ctx, creation)
-		if err != nil {
-			log.Printf("http-games POST: BuildDnDCharacter error: %v", err)
-			return jsonResponse(400, map[string]string{"error": fmt.Sprintf("character creation failed: %v", err)}), nil
-		}
-		g.SetDnDCharacter(userID, dndChar)
-	}
-
-	bootstrapped, openingHistory, bootErr := campaigns.BootstrapGame(selectedCampaign, sessionID, userID, player, creation)
-	if bootErr != nil {
-		log.Printf("http-games POST: BootstrapGame error: %v", bootErr)
+	if err != nil {
+		log.Printf("http-games POST: StartSession error: %v", err)
 		return serverError(), nil
 	}
-	g = bootstrapped
-	history := openingHistory
 
 	// Save the initial authored campaign session. Campaign-backed sessions are
 	// ready immediately after bootstrap.

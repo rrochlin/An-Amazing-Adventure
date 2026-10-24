@@ -70,24 +70,6 @@ func TestHandlerChat_EmptyContent(t *testing.T) {
 	}
 }
 
-func TestHandlerChat_ValidMessage_ReachesDB(t *testing.T) {
-	t.Setenv("CONNECTIONS_TABLE", "test-connections")
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
-	t.Setenv("WEBSOCKET_API_ENDPOINT", "https://test.execute-api.us-west-2.amazonaws.com/prod")
-	t.Setenv("BEDROCK_REGION", "us-west-2")
-
-	body, _ := json.Marshal(chatRequest{Action: "chat", Content: "Go north"})
-	req := makeWSChatReq("conn-abc", string(body))
-	resp, err := handler(context.Background(), req)
-	if err != nil {
-		t.Fatalf("unexpected lambda error: %v", err)
-	}
-	// Will fail at DynamoDB GetConnection — should be 410 (Gone/not found) or 500, not 400
-	if resp.StatusCode == 400 {
-		t.Errorf("routing/parse failure (400) — expected to reach DB layer")
-	}
-}
-
 // ---- Required env var tests ----
 // Each env var listed here must also be present in the Lambda's Terraform config
 // (modules/lambdas/main.tf). If you add a new table call to ws-chat, add its

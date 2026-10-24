@@ -255,6 +255,7 @@ const STORY_EVENT_LABELS: Record<string, { label: string; prefix: RegExp }> = {
    campaign_progress: { label: 'New objective', prefix: /^Objective updated:\s*/ },
    objective_completed: { label: 'Objective complete', prefix: /^Objective complete:\s*/ },
    objective_failed: { label: 'Objective missed', prefix: /^Objective missed:\s*/ },
+   objective_unfinished: { label: 'Left unfinished', prefix: /^Left unfinished:\s*/ },
    campaign_ended: { label: 'Ending', prefix: /^$/ },
 };
 

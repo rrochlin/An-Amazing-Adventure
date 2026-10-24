@@ -186,9 +186,9 @@ func DispatchTool(ctx context.Context, g *game.Game, name string, input map[stri
 	case "move_character":
 		result, event, err = execMoveCharacter(g, input)
 	case "damage_character":
-		result, event, err = execDamageCharacter(g, input)
+		result, event, err = execDamageCharacter(ctx, g, input)
 	case "heal_character":
-		result, event, err = execHealCharacter(g, input)
+		result, event, err = execHealCharacter(ctx, g, input)
 	case "set_character_alive":
 		result, event, err = execSetCharacterAlive(g, input)
 	case "set_character_scale":
@@ -383,7 +383,7 @@ func execMoveCharacter(g *game.Game, in map[string]any) (string, *game.WorldEven
 	return fmt.Sprintf("Moved %q to %q", charName, roomName), ev, nil
 }
 
-func execDamageCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+func execDamageCharacter(ctx context.Context, g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	charName := strArg(in, "character_name")
 	amount := int(numArg(in, "amount"))
 	if amount <= 0 {
@@ -393,38 +393,36 @@ func execDamageCharacter(g *game.Game, in map[string]any) (string, *game.WorldEv
 	character, isPlayer, ownerID, err := resolveCharacterByName(g, charName)
 	if err != nil {
 		return "", nil, err
+	}
+	if isPlayer {
+		// The player's hit points: their D&D character's when they have one.
+		hp, max, err := g.DamagePlayer(ctx, ownerID, amount)
+		if err != nil {
+			return "", nil, err
+		}
+		result := fmt.Sprintf("Damaged %q by %d", character.Name, amount)
+		if hp == 0 {
+			return result, &game.WorldEvent{Type: "death", Message: "You have fallen."}, nil
+		}
+		return result, &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. ❤ %d/%d", amount, hp, max)}, nil
 	}
 	wasAlive := character.Alive
 	if err := character.TakeDamage(amount); err != nil {
 		return "", nil, err
 	}
-
-	if isPlayer {
-		g.SetPlayerCharacter(ownerID, character)
-	} else {
-		g.NPCs[character.ID] = character
-	}
+	g.NPCs[character.ID] = character
 
 	owner, _ := g.OwnerCharacter()
-	visible := isPlayer || character.LocationID == owner.LocationID
-	if !visible {
+	if character.LocationID != owner.LocationID {
 		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), nil, nil
 	}
-
 	if !character.Alive && wasAlive {
-		if isPlayer {
-			return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "death", Message: "You have fallen."}, nil
-		}
 		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "death", Message: fmt.Sprintf("%s has been slain.", character.Name)}, nil
-	}
-
-	if isPlayer {
-		return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("You take %d damage. ❤ %d/100", amount, character.Health)}, nil
 	}
 	return fmt.Sprintf("Damaged %q by %d", character.Name, amount), &game.WorldEvent{Type: "damage", Message: fmt.Sprintf("%s takes %d damage. ❤ %d/100", character.Name, amount, character.Health)}, nil
 }
 
-func execHealCharacter(g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
+func execHealCharacter(ctx context.Context, g *game.Game, in map[string]any) (string, *game.WorldEvent, error) {
 	charName := strArg(in, "character_name")
 	amount := int(numArg(in, "amount"))
 	if amount <= 0 {
@@ -435,24 +433,21 @@ func execHealCharacter(g *game.Game, in map[string]any) (string, *game.WorldEven
 	if err != nil {
 		return "", nil, err
 	}
+	if isPlayer {
+		hp, max, err := g.HealPlayer(ctx, ownerID, amount)
+		if err != nil {
+			return "", nil, err
+		}
+		return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. ❤ %d/%d", amount, hp, max)}, nil
+	}
 	if err := character.Heal(amount); err != nil {
 		return "", nil, err
 	}
-
-	if isPlayer {
-		g.SetPlayerCharacter(ownerID, character)
-	} else {
-		g.NPCs[character.ID] = character
-	}
+	g.NPCs[character.ID] = character
 
 	owner, _ := g.OwnerCharacter()
-	visible := isPlayer || character.LocationID == owner.LocationID
-	if !visible {
+	if character.LocationID != owner.LocationID {
 		return fmt.Sprintf("Healed %q by %d", character.Name, amount), nil, nil
-	}
-
-	if isPlayer {
-		return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("You recover %d health. ❤ %d/100", amount, character.Health)}, nil
 	}
 	return fmt.Sprintf("Healed %q by %d", character.Name, amount), &game.WorldEvent{Type: "heal", Message: fmt.Sprintf("%s recovers %d health. ❤ %d/100", character.Name, amount, character.Health)}, nil
 }

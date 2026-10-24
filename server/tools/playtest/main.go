@@ -123,9 +123,13 @@ func (p *player) newGame(campaignID, name string) error {
 	if !ok {
 		return fmt.Errorf("unknown campaign %q", campaignID)
 	}
-	// As http-games creates a campaign session.
-	creation := game.CharacterCreationData{Name: name}
-	g, history, err := campaigns.BootstrapGame(def, game.NewSessionID(), userID, game.NewCharacter(name, ""), creation)
+	// As http-games creates a campaign session: a quick start (just a name)
+	// with the campaign's creation rules applied.
+	creation, err := def.CharacterCreation.Apply(game.CharacterCreationData{Name: name})
+	if err != nil {
+		return err
+	}
+	g, history, err := campaigns.StartSession(context.Background(), def, game.NewSessionID(), userID, creation)
 	if err != nil {
 		return err
 	}
@@ -202,7 +206,7 @@ func (p *player) views() error {
 		if err := json.Unmarshal(raw, &f); err != nil {
 			return err
 		}
-		g, err := game.FromSaveState(f.Save)
+		g, err := loadGame(f.Save)
 		if err != nil {
 			return err
 		}
@@ -360,7 +364,7 @@ func (p *player) stateSummary() string {
 // stateFor is what the player can see: where they are, who is there, what
 // they carry, the scene, the objectives and any choice waiting.
 func (p *player) stateFor(s game.SaveState) string {
-	g, err := game.FromSaveState(s)
+	g, err := loadGame(s)
 	if err != nil {
 		return err.Error()
 	}
@@ -381,7 +385,8 @@ func (p *player) stateFor(s game.SaveState) string {
 	for _, it := range view.Self.Inventory {
 		carried = append(carried, it.Name)
 	}
-	fmt.Fprintf(&b, "- carrying: %s\n", orNone(carried))
+	hp, max := g.PlayerHitPoints(userID)
+	fmt.Fprintf(&b, "- health: %d of %d; carrying: %s\n", hp, max, orNone(carried))
 	if c := g.BuildCampaignStateView(); c != nil {
 		scene := c.ActiveNodeID
 		if c.ActiveSceneMap != nil {
@@ -427,8 +432,8 @@ func renderHistory(h []game.ChatMessage) string {
 // diff lists what changed in the world between two saves.
 func diff(before, after game.SaveState) string {
 	var lines []string
-	gb, _ := game.FromSaveState(before)
-	ga, _ := game.FromSaveState(after)
+	gb, _ := loadGame(before)
+	ga, _ := loadGame(after)
 	if gb == nil || ga == nil {
 		return "- (could not load saves)\n"
 	}
@@ -466,8 +471,10 @@ func diff(before, after game.SaveState) string {
 			lines = append(lines, "player lost "+count(c-ia[n], n))
 		}
 	}
-	if pb.Health != pa.Health {
-		lines = append(lines, fmt.Sprintf("player health %d → %d", pb.Health, pa.Health))
+	if hb, _ := gb.PlayerHitPoints(userID); true {
+		if ha, max := ga.PlayerHitPoints(userID); ha != hb {
+			lines = append(lines, fmt.Sprintf("player health %d → %d of %d", hb, ha, max))
+		}
 	}
 	for id, nb := range gb.NPCs {
 		na, ok := ga.NPCs[id]
@@ -590,4 +597,19 @@ func discardUnless(show bool) interface{ Write([]byte) (int, error) } {
 		return os.Stderr
 	}
 	return discard{}
+}
+
+// loadGame opens a save the way the handlers do: the game, then its
+// players' D&D characters.
+func loadGame(s game.SaveState) (*game.Game, error) {
+	g, err := game.FromSaveState(s)
+	if err != nil {
+		return nil, err
+	}
+	if s.PlayersData != nil {
+		if _, err := g.LoadDnDCharacters(context.Background(), s.PlayersData); err != nil {
+			return nil, err
+		}
+	}
+	return g, nil
 }

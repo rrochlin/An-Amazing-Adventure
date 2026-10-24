@@ -226,3 +226,28 @@ func TestValidateDropsCreatingWhatIsAlreadyHere(t *testing.T) {
 		t.Fatalf("dropped %v", dropped)
 	}
 }
+
+func TestDamageHurtsButDoesNotKillUnlessTheSceneAllowsIt(t *testing.T) {
+	def, g := briarwell(t)
+	dmg := func(who string, amount float64) gm.WorldEvent {
+		return gm.WorldEvent{Type: "damage_character", Input: map[string]any{"character_name": who, "amount": amount}}
+	}
+	kept, dropped := gm.Validate(node(def, "bandit_raid"), g, gm.Decision{WorldEvents: []gm.WorldEvent{
+		dmg("player", 150), dmg("Tomas", 30), dmg("Tomas", 500),
+	}})
+	if len(kept.WorldEvents) != 3 || kept.WorldEvents[0].Input["amount"] != float64(99) ||
+		kept.WorldEvents[1].Input["amount"] != float64(30) || kept.WorldEvents[2].Input["amount"] != float64(99) {
+		t.Fatalf("lethal damage should be lowered to leave 1, kept %+v", kept.WorldEvents)
+	}
+	if len(dropped) != 2 || !strings.Contains(dropped[0], "doesn't allow deaths") {
+		t.Fatalf("dropped %v", dropped)
+	}
+
+	// A scene that allows deaths keeps the full amount.
+	deadly := *node(def, "bandit_raid")
+	deadly.StageDirections.AllowedWorldEvents = []string{"set_character_alive"}
+	kept, _ = gm.Validate(&deadly, g, gm.Decision{WorldEvents: []gm.WorldEvent{dmg("Tomas", 500)}})
+	if kept.WorldEvents[0].Input["amount"] != float64(500) {
+		t.Fatalf("an authored death should stand, kept %+v", kept.WorldEvents)
+	}
+}
