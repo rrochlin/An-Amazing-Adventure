@@ -36,9 +36,26 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: server/go.sum
 
-      - name: Run all tests
+      # Unit tests mock AWS and Bedrock. The SDK is pointed at a recorder
+      # with fake credentials, and the job fails if any request reaches it.
+      # (End-to-end runs against real services are tools/replay and
+      # tools/playtest, run by hand.)
+      - name: Run all tests (no AWS calls allowed)
         working-directory: server
-        run: go test ./... -race -timeout 120s
+        env:
+          AWS_ENDPOINT_URL: http://127.0.0.1:4599
+          AWS_ACCESS_KEY_ID: unit-tests-must-not-call-aws
+          AWS_SECRET_ACCESS_KEY: unit-tests-must-not-call-aws
+          AWS_EC2_METADATA_DISABLED: "true"
+        run: |
+          python3 ../.github/scripts/aws_tripwire.py "$RUNNER_TEMP/aws-calls.log" 4599 &
+          sleep 1
+          go test ./... -race -timeout 120s
+          if [ -s "$RUNNER_TEMP/aws-calls.log" ]; then
+            echo "::error::Unit tests called AWS. Mock the client instead:"
+            cat "$RUNNER_TEMP/aws-calls.log"
+            exit 1
+          fi
 
   deploy:
     name: Build & Deploy Lambdas

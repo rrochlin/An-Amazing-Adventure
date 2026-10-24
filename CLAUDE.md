@@ -258,6 +258,13 @@ turn-by-turn report to `DIR/report.md`. See `docs/story-engine/playtest-6.md`.
 
 ## Testing Notes
 
+- **Unit tests never call AWS or Bedrock.** Anything outside the process sits behind an interface and
+  is faked in tests (see `newDBClient`/`UseClients` in the handlers, `fakeBedrockRuntimeClient` in
+  `internal/ai`). CI points the SDK at a recorder (`.github/scripts/aws_tripwire.py`) and fails if a test
+  reaches it. A test that "passes because AWS is unreachable" isn't testing anything.
+- **End-to-end runs use real services:** `tools/replay` and `tools/playtest` call Bedrock through
+  `aa-debug` on purpose; the cost is expected.
+
 - `db.New()` requires `SESSIONS_TABLE` env var — set with `t.Setenv()` in handler tests
 - WS tests: use `act(() => Promise.resolve())` to flush `useEffect`, not `setTimeout`-based `flushPromises`
 - `vi.mock` factories are hoisted — use `vi.hoisted()` for mock functions needed in factory scope
