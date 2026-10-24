@@ -651,3 +651,19 @@ func (c *Client) SetStreaming(ctx context.Context, connectionID string, streamin
 	_ = sv
 	return err
 }
+
+// EncodeSave and DecodeSave are the DynamoDB round trip a save makes in
+// PutGame and GetGame, for in-memory stand-ins (tools/playtest) that should
+// store a game exactly as the table does.
+func EncodeSave(state game.SaveState) (map[string]types.AttributeValue, error) {
+	return attributevalue.MarshalMap(toDBState(state))
+}
+
+// DecodeSave reads back what EncodeSave stored.
+func DecodeSave(item map[string]types.AttributeValue) (game.SaveState, error) {
+	var d saveStateDB
+	if err := attributevalue.UnmarshalMap(item, &d); err != nil {
+		return game.SaveState{}, err
+	}
+	return fromDBState(d), nil
+}
