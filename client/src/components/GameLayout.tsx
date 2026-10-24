@@ -1,4 +1,4 @@
-import { Box, Paper } from '@mui/material';
+import { Box, Drawer, Paper } from '@mui/material';
 import type { ReactNode } from 'react';
 import { AppTheme } from '../theme/theme';
 
@@ -36,12 +36,17 @@ export function GameLayout({
    alerts,
    info,
    children,
+   infoOpen = false,
+   onCloseInfo,
 }: {
    scene: ReactNode;
    alerts?: ReactNode;
    info: ReactNode;
    /** Overlays such as toasts. */
    children?: ReactNode;
+   /** On a narrow screen the info panel is a drawer: whether it's open. */
+   infoOpen?: boolean;
+   onCloseInfo?: () => void;
 }) {
    return (
       <Box
@@ -57,8 +62,8 @@ export function GameLayout({
             },
             backgroundColor: 'background.default',
             gap: 2,
-            p: 2,
-            pr: 3,
+            p: { xs: 1, md: 2 },
+            pr: { xs: 1, md: 3 },
             width: '100%',
             maxWidth: '100vw',
             boxSizing: 'border-box',
@@ -69,8 +74,9 @@ export function GameLayout({
             <Paper sx={{ flex: 1, overflow: 'hidden', p: 0, ...panelHover }}>{scene}</Paper>
             {alerts}
          </Box>
-         {/* Right — Game Info */}
-         <Box sx={{ flex: '0 0 25%', minWidth: 0, display: 'flex', gap: 2 }}>
+         {/* Right — Game Info (a drawer on narrow screens, where the scene
+             needs the whole width) */}
+         <Box sx={{ flex: '0 0 25%', minWidth: 0, display: { xs: 'none', md: 'flex' }, gap: 2 }}>
             <Paper
                sx={{
                   flex: 1,
@@ -83,6 +89,15 @@ export function GameLayout({
                {info}
             </Paper>
          </Box>
+         <Drawer
+            anchor="right"
+            open={infoOpen}
+            onClose={onCloseInfo}
+            sx={{ display: { md: 'none' } }}
+            slotProps={{ paper: { sx: { width: 'min(360px, 90vw)', display: 'flex', flexDirection: 'column' } } }}
+         >
+            {info}
+         </Drawer>
          {children}
       </Box>
    );

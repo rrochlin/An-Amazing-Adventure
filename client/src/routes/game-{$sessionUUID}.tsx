@@ -279,6 +279,8 @@ function GamePage() {
    // Free roam, except in dialogue: story still on screen to read, the story
    // talking, a choice open, or a conversation (Baldur's Gate style).
    const [storyOnScreen, setStoryOnScreen] = useState(false);
+   // Narrow screens: the character panel opens as a drawer.
+   const [infoOpen, setInfoOpen] = useState(false);
    const movementLocked =
       storyOnScreen ||
       isStreaming ||
@@ -529,6 +531,8 @@ function GamePage() {
 
    return (
       <GameLayout
+         infoOpen={infoOpen}
+         onCloseInfo={() => setInfoOpen(false)}
          scene={
             <SceneScreen
                art={mapArt}
@@ -545,6 +549,7 @@ function GamePage() {
                sceneMap={campaignState?.active_scene_map}
                controlsLocked={movementLocked}
                onWalkToRoom={(roomId) => sendAction('move_to_room', roomId)}
+               onOpenCharacter={() => setInfoOpen(true)}
                onTalkTo={(id, name) => {
                   const said = `I go up to ${name} and talk to them.`;
                   addChatMessage({ type: 'player', content: said });
