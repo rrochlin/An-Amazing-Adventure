@@ -71,6 +71,8 @@ export interface CampaignStateView {
    active_node_title?: string;
    /** The interior the current scene is played on, if any. */
    active_scene_map?: SceneMapView | null;
+   /** The current scene's light: dawn, dusk, night, fire or ashes; none is daylight. */
+   active_mood?: string;
    current_objective?: string;
    bool_flags?: Record<string, boolean>;
    labels?: Record<string, string>;

@@ -216,7 +216,13 @@ type StoryNode struct {
 	// SceneMap names the map in map.scene_maps the scene is played on (an
 	// interior of its location), instead of the room's own.
 	SceneMap string `json:"scene_map,omitempty"`
+	// Mood is the scene's light, for the client to tint the map: one of
+	// SceneMoods ("" is plain daylight).
+	Mood string `json:"mood,omitempty"`
 }
+
+// SceneMoods are the lights a scene can be played in.
+var SceneMoods = []string{"dawn", "dusk", "night", "fire", "ashes"}
 
 // Ending is an authored conclusion to a run (Phase 7 decision 15).
 type Ending struct {

@@ -38,7 +38,9 @@ type CampaignRuntimeState struct {
 	// ActiveNodeTitle is the current scene's authored title, for the client.
 	ActiveNodeTitle string `json:"active_node_title,omitempty" dynamodbav:"active_node_title,omitempty"`
 	// ActiveSceneMap is the interior the current scene is played on, if any.
-	ActiveSceneMap   *SceneMapView                `json:"active_scene_map,omitempty" dynamodbav:"active_scene_map,omitempty"`
+	ActiveSceneMap *SceneMapView `json:"active_scene_map,omitempty" dynamodbav:"active_scene_map,omitempty"`
+	// ActiveMood is the current scene's light ("" is daylight).
+	ActiveMood       string                       `json:"active_mood,omitempty" dynamodbav:"active_mood,omitempty"`
 	CurrentObjective string                       `json:"current_objective,omitempty" dynamodbav:"current_objective,omitempty"`
 	PreviousNodeIDs  []string                     `json:"previous_node_ids,omitempty" dynamodbav:"previous_node_ids,omitempty"`
 	BoolFlags        map[string]bool              `json:"bool_flags,omitempty" dynamodbav:"bool_flags,omitempty"`
@@ -127,6 +129,7 @@ type CampaignStateView struct {
 	ActiveNodeID     string             `json:"active_node_id"`
 	ActiveNodeTitle  string             `json:"active_node_title,omitempty"`
 	ActiveSceneMap   *SceneMapView      `json:"active_scene_map,omitempty"`
+	ActiveMood       string             `json:"active_mood,omitempty"`
 	CurrentObjective string             `json:"current_objective,omitempty"`
 	BoolFlags        map[string]bool    `json:"bool_flags,omitempty"`
 	Labels           map[string]string  `json:"labels,omitempty"`
@@ -992,6 +995,7 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 		ActiveNodeID:     g.Campaign.ActiveNodeID,
 		ActiveNodeTitle:  g.Campaign.ActiveNodeTitle,
 		ActiveSceneMap:   g.Campaign.ActiveSceneMap,
+		ActiveMood:       g.Campaign.ActiveMood,
 		CurrentObjective: g.Campaign.CurrentObjective,
 		BoolFlags:        copyBoolMap(g.Campaign.BoolFlags),
 		Labels:           copyStringMap(g.Campaign.Labels),

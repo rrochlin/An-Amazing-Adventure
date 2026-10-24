@@ -94,3 +94,37 @@ describe('SceneScreen', () => {
       expect(dot()).not.toHaveClass('MuiBadge-invisible');
    });
 });
+
+describe('scene light', () => {
+   const renderWith = (mood?: string) =>
+      render(
+         <ThemeProvider theme={AppTheme}>
+            <SceneScreen
+               art={BRIARWELL_ART}
+               rooms={rooms}
+               currentRoomId="village_square"
+               mood={mood}
+               objectives={[]}
+               renderStage={() => <div />}
+            />
+         </ThemeProvider>,
+      );
+
+   it('tints the map, and only the map, for the scene', () => {
+      // Playtest 6: the rescue said ash was falling over a sunny village.
+      renderWith('ashes');
+      const light = screen.getByTestId('scene-light');
+      expect(light).toHaveAttribute('data-mood', 'ashes');
+      expect(getComputedStyle(light).filter).toContain('grayscale');
+      expect(light).toContainElement(screen.getByTestId('world-map'));
+      expect(light).not.toContainElement(screen.getByTestId('scene-chip'));
+   });
+
+   it('is daylight without a mood, or with one it does not know', () => {
+      const { unmount } = renderWith();
+      expect(screen.getByTestId('scene-light')).toHaveAttribute('data-mood', 'day');
+      unmount();
+      renderWith('disco');
+      expect(screen.getByTestId('scene-light')).toHaveAttribute('data-mood', 'day');
+   });
+});

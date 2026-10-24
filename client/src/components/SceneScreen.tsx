@@ -10,6 +10,23 @@ import { QuestList } from './QuestList';
 import { WorldMap } from './map/WorldMap';
 import { sceneArt, type MapArt } from './map/mapArt';
 
+/**
+ * How each scene light tints the map: a filter on the art and a wash over
+ * it. Only the map changes; the sign, the buttons and the text stay as they
+ * are.
+ */
+const MOODS: Record<string, { filter: string; wash: string; flicker?: boolean }> = {
+   dawn: { filter: 'saturate(0.9) brightness(0.95)', wash: 'linear-gradient(180deg, rgba(255,170,190,0.22), rgba(255,200,140,0.12))' },
+   dusk: { filter: 'saturate(0.85) brightness(0.85)', wash: 'linear-gradient(180deg, rgba(255,120,40,0.25), rgba(90,30,80,0.25))' },
+   night: { filter: 'brightness(0.55) saturate(0.6)', wash: 'rgba(20,30,90,0.35)' },
+   fire: {
+      filter: 'brightness(0.6) saturate(0.8)',
+      wash: 'radial-gradient(ellipse at 50% 60%, rgba(255,120,30,0.38), rgba(20,10,40,0.5) 75%)',
+      flicker: true,
+   },
+   ashes: { filter: 'grayscale(0.75) brightness(0.8) contrast(0.95)', wash: 'rgba(60,55,55,0.25)' },
+};
+
 /** Share of the scene's height the story text box is expected to cover. */
 const TEXT_BOX_SHARE = 0.38;
 
@@ -21,6 +38,8 @@ interface SceneScreenProps {
    currentRoomId?: string;
    /** The interior the scene is played on, if any (shown while the player is in its room). */
    sceneMap?: SceneMapView | null;
+   /** The scene's light (see MOODS); none is daylight. */
+   mood?: string;
    playerName?: string;
    playerScale?: number;
    location?: string;
@@ -49,6 +68,7 @@ export function SceneScreen({
    rooms,
    currentRoomId,
    sceneMap,
+   mood,
    playerName,
    playerScale,
    location,
@@ -62,6 +82,7 @@ export function SceneScreen({
    const [logOpen, setLogOpen] = useState(false);
    const shown = sceneArt(art, sceneMap, currentRoomId);
    const indoors = !!shown?.interior;
+   const light = mood ? MOODS[mood] : undefined;
    const [journalOpen, setJournalOpen] = useState(false);
    const [worldOpen, setWorldOpen] = useState(false);
 
@@ -150,19 +171,41 @@ export function SceneScreen({
          sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: '#08050c', display: 'flex' }}
       >
          {shown ? (
-            <WorldMap
-               // A new map (stepping inside or out) starts fresh: no pan
-               // across from where the other map left off.
-               key={indoors ? `inside:${sceneMap?.id}` : 'outside'}
-               art={shown}
-               rooms={rooms}
-               currentRoomId={currentRoomId}
-               playerName={playerName}
-               playerScale={playerScale}
-               mode="scene"
-               insetTop={chipHeight}
-               insetBottom={framedPanel}
-            />
+            <Box
+               data-testid="scene-light"
+               data-mood={light ? mood : 'day'}
+               sx={{ flex: 1, minWidth: 0, display: 'flex', position: 'relative', filter: light?.filter, transition: 'filter 1.2s ease' }}
+            >
+               <WorldMap
+                  // A new map (stepping inside or out) starts fresh: no pan
+                  // across from where the other map left off.
+                  key={indoors ? `inside:${sceneMap?.id}` : 'outside'}
+                  art={shown}
+                  rooms={rooms}
+                  currentRoomId={currentRoomId}
+                  playerName={playerName}
+                  playerScale={playerScale}
+                  mode="scene"
+                  insetTop={chipHeight}
+                  insetBottom={framedPanel}
+               />
+               {light && (
+                  <Box
+                     aria-hidden
+                     sx={{
+                        position: 'absolute',
+                        inset: 0,
+                        pointerEvents: 'none',
+                        background: light.wash,
+                        ...(light.flicker && {
+                           animation: 'scene-flicker 2.4s ease-in-out infinite alternate',
+                           '@keyframes scene-flicker': { from: { opacity: 0.8 }, to: { opacity: 1 } },
+                           '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+                        }),
+                     }}
+                  />
+               )}
+            </Box>
          ) : (
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 2, pb: `${TEXT_BOX_SHARE * 100}%` }}>
                {fallback}

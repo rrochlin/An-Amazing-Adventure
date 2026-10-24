@@ -236,3 +236,31 @@ func TestBriarwell_TheRaidChangesWhoIsWhere(t *testing.T) {
 		}
 	}
 }
+
+func TestBriarwell_ScenesSetTheirLight(t *testing.T) {
+	def, g, _ := bootstrapBriarwell(t)
+	if g.Campaign.ActiveMood != "" {
+		t.Fatalf("the morning is daylight, got %q", g.Campaign.ActiveMood)
+	}
+	g.Campaign.ActiveNodeID = "birthday"
+	g.Campaign.ActiveDialogue = nil
+	g.Campaign.BoolFlags["gift_given"] = true
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
+		t.Fatal(err)
+	}
+	if g.Campaign.ActiveNodeID != "bandit_raid" || g.BuildCampaignStateView().ActiveMood != "fire" {
+		t.Fatalf("the raid burns: node %s mood %q", g.Campaign.ActiveNodeID, g.Campaign.ActiveMood)
+	}
+
+	bad := *def
+	bad.StoryNodes = map[string]campaigns.StoryNode{}
+	for id, n := range def.StoryNodes {
+		bad.StoryNodes[id] = n
+	}
+	n := bad.StoryNodes["rescue"]
+	n.Mood = "disco"
+	bad.StoryNodes["rescue"] = n
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), `mood "disco"`) {
+		t.Fatalf("expected a mood error, got %v", err)
+	}
+}

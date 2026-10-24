@@ -434,6 +434,7 @@
       "dialogue_start_node": "Birthday",
       "location_id": "family_cottage",
       "scene_map": "cottage_interior",
+      "mood": "dusk",
       "title": "Ros's Birthday",
       "summary": "Back home at dusk. The child can give Ros the gift, or keep it. As the evening ends, smoke rises from the woods.",
       "intro_text": "The sun is low and gold by the time you get home, the gift hidden behind your back.",
@@ -476,6 +477,7 @@
       "mode": "ai_scene",
       "location_id": "family_cottage",
       "scene_map": "cottage_interior",
+      "mood": "fire",
       "title": "Briarwell Burns",
       "stage_directions": {
         "focus": "terror and confusion in the dark; the child's one choice in the middle of it",
@@ -557,6 +559,7 @@
       "mode": "yarn_dialogue",
       "dialogue_asset_id": "rescue",
       "dialogue_start_node": "Rescue",
+      "mood": "ashes",
       "title": "The Stranger in the Ashes",
       "summary": "Master Holloway of the Heroes' Guild finds the child in the ashes and offers to take them away.",
       "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over what is left of Briarwell like snow.",
@@ -583,6 +586,7 @@
     },
     "road_to_guild": {
       "mode": "ai_scene",
+      "mood": "dawn",
       "title": "The Road to the Guild",
       "summary": "Briarwell burns behind them as Master Holloway carries the child toward the Guild. The opening ends here.",
       "intro_text": "Dawn finds you on the back of Master Holloway's horse, wrapped in his cloak. Behind you, a thin thread of smoke is all that is left of Briarwell.",
