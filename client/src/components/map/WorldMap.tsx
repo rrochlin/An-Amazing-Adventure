@@ -512,7 +512,8 @@ export function placeTokens(
          .forEach((c: CharacterView) =>
             people.push({ id: c.id, name: c.name, isPlayer: false, friendly: c.friendly, scale: c.scale || 1, mark: marks[c.id] ?? c.mark }),
          );
-      const slots = freeTiles(art, rect);
+      const area = walkableArea(art, roomId, rooms);
+      const slots = freeTiles(rect, area);
       const key = ([x, y]: [number, number]) => `${x},${y}`;
       const open = new Set(slots.map(key));
       const tile = new Map<string, [number, number]>();
@@ -527,7 +528,7 @@ export function placeTokens(
          const standing = new Set(previous.filter((t) => t.id !== p.id && t.roomId === roomId).map((t) => key([t.x, t.y])));
          const spot = besideIt
             ? ([was.x, was.y] as [number, number])
-            : poi && (markTile(art, rect, poi, new Set([...taken, ...standing])) ?? markTile(art, rect, poi, taken));
+            : poi && (markTile(art, rect, poi, new Set([...taken, ...standing]), area) ?? markTile(art, rect, poi, taken, area));
          if (!spot) continue;
          tile.set(p.id, spot);
          taken.add(key(spot));
@@ -580,13 +581,17 @@ export function markTile(
    [x0, y0, w, h]: [number, number, number, number],
    [px, py]: [number, number],
    taken: Set<string>,
+   /** The room's walkable area (walkableArea); every free tile when absent. */
+   area?: Set<string>,
 ): [number, number] | undefined {
    if (px < x0 - 1 || px > x0 + w || py < y0 - 1 || py > y0 + h) return undefined;
+   const free = (x: number, y: number) => (art.objects[y]?.[x] ?? ' ') === ' ' && art.ground[y]?.[x] !== '_';
+   const reachable = { has: (k: string) => (area ? area.has(k) : free(...(k.split(',').map(Number) as [number, number]))) };
    let best: [number, number] | undefined;
    let bestScore = Infinity;
    for (let y = y0; y < y0 + h; y++) {
       for (let x = x0; x < x0 + w; x++) {
-         if ((art.objects[y]?.[x] ?? ' ') !== ' ' || art.ground[y]?.[x] === '_' || taken.has(`${x},${y}`)) continue;
+         if (!reachable.has(`${x},${y}`) || taken.has(`${x},${y}`)) continue;
          if (x === px && y === py) continue;
          // Distance, then not boxed in (playtest 9: the long grass stood the
          // player in a pocket open on one side), then in front (below) of
@@ -606,15 +611,79 @@ export function markTile(
    return best;
 }
 
+/**
+ * The room's walkable area: the free tiles in it that join up with the ways
+ * in from the rooms it connects to (the largest patch, for a room with no
+ * way in). A corner the buildings seal off (behind Briarwell's barn) isn't
+ * part of it: nobody could walk there, so nobody is put there.
+ */
+export function walkableArea(
+   art: MapArt,
+   roomId: string,
+   rooms: Record<string, { connections?: Record<string, string> }> = {},
+): Set<string> {
+   const [x0, y0, w, h] = art.rooms[roomId] ?? [0, 0, 0, 0];
+   const key = (x: number, y: number) => `${x},${y}`;
+   const freeIn = (x: number, y: number, [rx, ry, rw, rh]: number[]) =>
+      x >= rx && x < rx + rw && y >= ry && y < ry + rh && (art.objects[y]?.[x] ?? ' ') === ' ' && art.ground[y]?.[x] !== '_';
+   const free = (x: number, y: number) => freeIn(x, y, [x0, y0, w, h]);
+   // Ways in: free edge tiles beside a free tile of a room this one connects to.
+   const doors: [number, number][] = [];
+   for (const next of Object.values(rooms[roomId]?.connections ?? {})) {
+      const other = art.rooms[next];
+      if (!other) continue;
+      for (let y = y0; y < y0 + h; y++) {
+         for (let x = x0; x < x0 + w; x++) {
+            if (!free(x, y)) continue;
+            if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => freeIn(x + dx, y + dy, other))) doors.push([x, y]);
+         }
+      }
+   }
+   const seen = new Set<string>();
+   const fill = (x: number, y: number) => {
+      const patch = new Set<string>([key(x, y)]);
+      const queue = [[x, y]];
+      seen.add(key(x, y));
+      while (queue.length) {
+         const [cx, cy] = queue.pop()!;
+         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (!free(nx, ny) || seen.has(key(nx, ny))) continue;
+            seen.add(key(nx, ny));
+            patch.add(key(nx, ny));
+            queue.push([nx, ny]);
+         }
+      }
+      return patch;
+   };
+   if (doors.length) {
+      const area = new Set<string>();
+      for (const [x, y] of doors) if (!seen.has(key(x, y))) fill(x, y).forEach((k) => area.add(k));
+      return area;
+   }
+   let best = new Set<string>();
+   for (let y = y0; y < y0 + h; y++) {
+      for (let x = x0; x < x0 + w; x++) {
+         if (free(x, y) && !seen.has(key(x, y))) {
+            const patch = fill(x, y);
+            if (patch.size > best.size) best = patch;
+         }
+      }
+   }
+   return best;
+}
+
 /** Tiles in a room with no object on them, nearest the centre first. */
-function freeTiles(art: MapArt, [x0, y0, w, h]: [number, number, number, number]): [number, number][] {
+function freeTiles(rect: [number, number, number, number], reachable: Set<string>): [number, number][] {
+   const [x0, y0, w, h] = rect;
    const cx = x0 + w / 2 - 0.5;
    const cy = y0 + h / 2 - 0.5;
    const tiles: [number, number][] = [];
    // Leave the room's edge for its label and neighbours.
    for (let y = y0 + 1; y < y0 + h - 1; y++) {
       for (let x = x0 + 1; x < x0 + w - 1; x++) {
-         if ((art.objects[y]?.[x] ?? ' ') === ' ') tiles.push([x, y]);
+         if (reachable.has(`${x},${y}`)) tiles.push([x, y]);
       }
    }
    // Spread people out: prefer tiles two apart, nearest the centre.

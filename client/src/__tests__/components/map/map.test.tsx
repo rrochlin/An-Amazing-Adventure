@@ -7,7 +7,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { AppTheme } from '@/theme/theme';
 import { BRIARWELL_ART } from '@/components/map/art/briarwell';
 import { GROUND_TILES, OBJECT_TILES, mapArtFor, sceneArt } from '@/components/map/mapArt';
-import { WorldMap, cameraOffset, fogPath, mapScale, placeTokens } from '@/components/map/WorldMap';
+import { WorldMap, cameraOffset, fogPath, mapScale, placeTokens, walkableArea } from '@/components/map/WorldMap';
 import type { CharacterView, RoomView } from '@/types/types';
 
 interface CampaignJSON {
@@ -192,6 +192,19 @@ describe('marks', () => {
       expect(free.length).toBeGreaterThanOrEqual(2);
       const [gx, gy] = BRIARWELL_ART.points_of_interest.long_grass;
       expect(Math.abs(d.x - gx) + Math.abs(d.y - gy)).toBeLessThanOrEqual(3);
+   });
+
+   it("never stands anyone where nobody could walk (behind the barn)", () => {
+      const mill = { ...rooms.village_square, id: 'old_mill', discovered: true, connections: { west: 'village_square' }, occupants: [{ ...person('miller', 'Hob'), mark: 'barn' }] } as RoomView;
+      const all = { ...rooms, old_mill: mill };
+      const placed = placeTokens(BRIARWELL_ART, all, 'old_mill', 'Wren', 1, [], { player: 'barn' });
+      const area = walkableArea(BRIARWELL_ART, 'old_mill', { old_mill: { connections: { west: 'village_square' } } });
+      for (const t of placed.filter((p) => p.roomId === 'old_mill')) {
+         expect(area.has(`${t.x},${t.y}`), `${t.id} at ${t.x},${t.y}`).toBe(true);
+      }
+      // The sealed strip east of the mill isn't part of it.
+      expect(area.has('24,13')).toBe(false);
+      expect(area.has('18,12')).toBe(true);
    });
 
    it("ignores a mark that isn't in the room", () => {
