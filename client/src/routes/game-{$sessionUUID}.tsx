@@ -102,6 +102,7 @@ function GamePage() {
       worldGenReady,
       addChatMessage,
       narrationCaughtUp,
+      narrationPlaying,
       setCampaignState,
       setGameState,
       appendWorldGenLog,
@@ -531,6 +532,14 @@ function GamePage() {
                rooms={gameState?.rooms ?? {}}
                currentRoomId={gameState?.current_room?.id}
                sceneMap={campaignState?.active_scene_map}
+               // Walk freely, except while the story talks or waits on a choice.
+               controlsLocked={
+                  isStreaming ||
+                  narrationPlaying ||
+                  !!pendingChoices?.length ||
+                  campaignState?.run_status === 'ended'
+               }
+               onWalkToRoom={(roomId) => sendAction('move_to_room', roomId)}
                mood={campaignState?.active_mood}
                playerName={gameState?.self?.name}
                playerScale={gameState?.self?.scale || 1}

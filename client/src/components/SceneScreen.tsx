@@ -56,6 +56,10 @@ interface SceneScreenProps {
    renderStage: (logOpen: boolean, onPanelHeight: (px: number) => void) => ReactNode;
    /** Opens the adventure details page. */
    onDetails?: () => void;
+   /** The player can't walk: the story is talking or waiting on a choice. */
+   controlsLocked?: boolean;
+   /** The player walked into another room. */
+   onWalkToRoom?: (roomId: string) => void;
 }
 
 /**
@@ -79,6 +83,8 @@ export function SceneScreen({
    objectives,
    renderStage,
    onDetails,
+   controlsLocked,
+   onWalkToRoom,
 }: SceneScreenProps) {
    const [logOpen, setLogOpen] = useState(false);
    const shown = sceneArt(art, sceneMap, currentRoomId);
@@ -185,6 +191,9 @@ export function SceneScreen({
                   playerScale={playerScale}
                   insetTop={chipHeight}
                   insetBottom={framedPanel}
+                  // An open overlay (journal, map, log) holds the player still too.
+                  controlsLocked={controlsLocked || logOpen || journalOpen || worldOpen}
+                  onWalkToRoom={onWalkToRoom}
                />
                {light && (
                   <Box

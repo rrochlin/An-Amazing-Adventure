@@ -76,3 +76,75 @@ export function stageCamera(
 export function standPoint(x: number, y: number): { x: number; y: number } {
    return { x: x * TILE + TILE / 2, y: (y + 1) * TILE };
 }
+
+export type Tile = { x: number; y: number };
+export type Direction = 'up' | 'down' | 'left' | 'right';
+export const STEPS: Record<Direction, Tile> = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
+
+/** The room a tile belongs to, if any (ground outside every room isn't walkable). */
+export function roomAt(art: MapArt, { x, y }: Tile): string | undefined {
+   for (const [id, [rx, ry, rw, rh]] of Object.entries(art.rooms)) {
+      if (x >= rx && x < rx + rw && y >= ry && y < ry + rh) return id;
+   }
+   return undefined;
+}
+
+/** Whether the player can stand on a tile: inside a room, on ground, with no object on it. */
+export function standable(art: MapArt, t: Tile): boolean {
+   if (t.y < 0 || t.y >= art.height || t.x < 0 || t.x >= art.width) return false;
+   if (art.ground[t.y]?.[t.x] === '_') return false; // outside an interior
+   if ((art.objects[t.y]?.[t.x] ?? ' ') !== ' ') return false;
+   return roomAt(art, t) !== undefined;
+}
+
+/**
+ * Whether the player may step from one tile to the next: the next tile is
+ * standable, free of other characters, and in the same room or one the
+ * current room connects to.
+ */
+export function canStep(
+   art: MapArt,
+   rooms: Record<string, { connections?: Record<string, string> }>,
+   from: Tile,
+   to: Tile,
+   occupied: Set<string>,
+): boolean {
+   if (!standable(art, to) || occupied.has(`${to.x},${to.y}`)) return false;
+   const a = roomAt(art, from);
+   const b = roomAt(art, to);
+   if (a === b) return true;
+   return !!a && !!b && Object.values(rooms[a]?.connections ?? {}).includes(b);
+}
+
+/**
+ * The shortest walk from one tile to another (breadth-first; the maps are
+ * small), as the tiles to step on in order, not counting the start. Empty
+ * when there's no way there.
+ */
+export function findPath(
+   art: MapArt,
+   rooms: Record<string, { connections?: Record<string, string> }>,
+   from: Tile,
+   to: Tile,
+   occupied: Set<string>,
+): Tile[] {
+   const key = (t: Tile) => `${t.x},${t.y}`;
+   if (key(from) === key(to)) return [];
+   const came = new Map<string, Tile | null>([[key(from), null]]);
+   const queue: Tile[] = [from];
+   while (queue.length) {
+      const at = queue.shift()!;
+      if (key(at) === key(to)) {
+         const path: Tile[] = [];
+         for (let t: Tile | null = at; t && key(t) !== key(from); t = came.get(key(t)) ?? null) path.unshift(t);
+         return path;
+      }
+      for (const d of Object.values(STEPS)) {
+         const next = { x: at.x + d.x, y: at.y + d.y };
+         if (came.has(key(next)) || !canStep(art, rooms, at, next, occupied)) continue;
+         came.set(key(next), at);
+         queue.push(next);
+      }
+   }
+   return [];
+}
