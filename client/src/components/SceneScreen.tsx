@@ -178,6 +178,9 @@ export function SceneScreen({
       <Box
          ref={sceneRef}
          data-testid="scene-screen"
+         // The scene is a dark stage whatever the page's colour scheme: its
+         // panels have dark backgrounds, so their text needs the dark palette.
+         className="dark"
          sx={{ position: 'relative', height: '100%', overflow: 'hidden', bgcolor: '#08050c', display: 'flex' }}
       >
          {shown ? (

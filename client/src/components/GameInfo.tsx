@@ -63,6 +63,8 @@ interface GameInfoProps {
    sessionId?: string;
    /** Whether the current user is the session owner */
    isOwner?: boolean;
+   /** In dialogue the player can't move: the exits are disabled. */
+   movementLocked?: boolean;
 }
 
 export const GameInfo = ({
@@ -71,6 +73,7 @@ export const GameInfo = ({
    focusedRoom,
    sessionId,
    isOwner,
+   movementLocked,
 }: GameInfoProps) => {
    // UI-FUT-4: show focusedRoom when hovering/clicking map, otherwise fall back to current room
    const displayRoom = focusedRoom ?? gameState?.current_room;
@@ -376,6 +379,7 @@ export const GameInfo = ({
                                  size="small"
                                  variant="outlined"
                                  onClick={() => sendAction('move', dir)}
+                                 disabled={movementLocked}
                                  sx={{
                                     textTransform: 'capitalize',
                                     fontSize: '0.75rem',

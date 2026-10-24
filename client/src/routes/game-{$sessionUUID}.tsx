@@ -276,6 +276,17 @@ function GamePage() {
    const pendingChoices =
       campaignState?.active_dialogue?.pending_choices ?? undefined;
 
+   // Free roam, except in dialogue: story still on screen to read, the story
+   // talking, a choice open, or a conversation (Baldur's Gate style).
+   const [storyOnScreen, setStoryOnScreen] = useState(false);
+   const movementLocked =
+      storyOnScreen ||
+      isStreaming ||
+      narrationPlaying ||
+      !!pendingChoices?.length ||
+      !!campaignState?.conversation ||
+      campaignState?.run_status === 'ended';
+
    const {
       submitting: isSubmittingChoice,
       submit: handleChoiceSelected,
@@ -532,15 +543,7 @@ function GamePage() {
                rooms={gameState?.rooms ?? {}}
                currentRoomId={gameState?.current_room?.id}
                sceneMap={campaignState?.active_scene_map}
-               // Free roam, except in dialogue: the story talking, a choice
-               // open, or a conversation (Baldur's Gate style).
-               controlsLocked={
-                  isStreaming ||
-                  narrationPlaying ||
-                  !!pendingChoices?.length ||
-                  !!campaignState?.conversation ||
-                  campaignState?.run_status === 'ended'
-               }
+               controlsLocked={movementLocked}
                onWalkToRoom={(roomId) => sendAction('move_to_room', roomId)}
                onTalkTo={(id, name) => {
                   const said = `I go up to ${name} and talk to them.`;
@@ -591,6 +594,7 @@ function GamePage() {
                   onPanelHeight={onPanelHeight}
                   onCaughtUp={narrationCaughtUp}
                   conversationWith={campaignState?.conversation?.name}
+                  onReading={setStoryOnScreen}
                   onLeaveConversation={() => sendAction('end_conversation', '')}
                />
                )}
@@ -624,6 +628,7 @@ function GamePage() {
              <GameInfo
                 gameState={gameState}
                 sendAction={sendAction}
+                movementLocked={movementLocked}
                 focusedRoom={focusedRoom}
                 sessionId={sessionUUID}
                 isOwner={

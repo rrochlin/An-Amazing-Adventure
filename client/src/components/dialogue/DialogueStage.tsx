@@ -23,6 +23,8 @@ import { useTypewriter } from './useTypewriter';
 
 /** How long a scene title card holds before moving on by itself. */
 export const SCENE_CARD_MS = 1800;
+/** Clicks on choices this soon after they appear are ignored (a skip-through click). */
+export const CHOICE_GUARD_MS = 400;
 
 const NOTICE_LABELS: Record<string, string> = {
    campaign_progress: 'New objective',
@@ -67,6 +69,8 @@ interface DialogueStageProps {
    conversationWith?: string;
    /** The player leaves the conversation (back to free roam). */
    onLeaveConversation?: () => void;
+   /** Whether the player still has story on screen to read (they can't walk then). */
+   onReading?: (reading: boolean) => void;
    /** Called whenever the stage has shown the last line it has. */
    onCaughtUp?: () => void;
 }
@@ -101,6 +105,7 @@ export function DialogueStage({
    onCaughtUp,
    conversationWith,
    onLeaveConversation,
+   onReading,
 }: DialogueStageProps) {
    const beats = useMemo(
       () => buildBeats(messages, streamingMessage),
@@ -161,6 +166,16 @@ export function DialogueStage({
    const showInput = atEnd && ack && !hasChoices && !ending && !busy;
    // At rest: the player has finished everything on screen and is waiting.
    const atRest = atEnd && (ack || hasChoices || busy);
+   // When the choices appeared (clicks just after are ignored).
+   const choicesShownAt = useRef(0);
+   useEffect(() => {
+      if (showChoices) choicesShownAt.current = Date.now();
+   }, [showChoices]);
+   // Story still on screen to read: the player stays put until it's done.
+   const reading = !(atEnd && ack);
+   useEffect(() => {
+      onReading?.(reading);
+   }, [reading, onReading]);
 
    const goNext = useCallback(() => {
       if (!hasNext) return;
@@ -577,6 +592,9 @@ export function DialogueStage({
                         variant="outlined"
                         disabled={isSubmittingChoice}
                         onClick={() => {
+                           // A click meant to skip the last line shouldn't
+                           // land on a choice the player hasn't seen yet.
+                           if (Date.now() - choicesShownAt.current < CHOICE_GUARD_MS) return;
                            setWaiting(true);
                            onChoiceSelected!(choice.id);
                         }}
