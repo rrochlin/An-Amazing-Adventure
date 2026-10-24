@@ -160,6 +160,17 @@ describe('marks', () => {
       expect(near('bess', 'stone_well')).toBe(1);
    });
 
+   it('leaves someone already beside their mark where they stand', () => {
+      const [wx, wy] = BRIARWELL_ART.points_of_interest.stone_well;
+      const before = placeTokens(BRIARWELL_ART, rooms, 'village_square', 'Wren', 1, [], { bess: 'stone_well' });
+      const bess = before.find((t) => t.id === 'bess')!;
+      // Somewhere else beside the well (not the best tile).
+      const moved = before.map((t) => (t.id === 'bess' ? { ...t, x: wx - 1, y: wy } : t));
+      expect([bess.x, bess.y]).not.toEqual([wx - 1, wy]);
+      const after = placeTokens(BRIARWELL_ART, rooms, 'village_square', 'Wren', 1, moved, { bess: 'stone_well' });
+      expect(after.find((t) => t.id === 'bess')).toMatchObject({ x: wx - 1, y: wy });
+   });
+
    it("ignores a mark that isn't in the room", () => {
       const tokens = placeTokens(BRIARWELL_ART, rooms, 'village_square', 'Wren', 1, [], { bess: 'old_oak' });
       const [x, y, w, h] = BRIARWELL_ART.rooms.village_square;

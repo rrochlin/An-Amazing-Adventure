@@ -110,6 +110,12 @@ func Validate(node *campaigns.StoryNode, g *game.Game, d Decision) (Decision, []
 			dropped = append(dropped, fmt.Sprintf("move_player: the player is already in %s", room))
 			continue
 		}
+		if who, room, ok := characterAlreadyThere(g, ev); ok {
+			// Playtest 9: it announced "Little Bess arrives." for a girl
+			// who had been standing there all along.
+			dropped = append(dropped, fmt.Sprintf("move_character: %s is already in %s", who, room))
+			continue
+		}
 		if ev.Type == "damage_character" && !allowed["set_character_alive"] {
 			// Who dies is authored: damage can hurt, not kill, unless the
 			// scene allows deaths.
@@ -246,6 +252,29 @@ func alreadyThere(g *game.Game, ev WorldEvent) (string, bool) {
 		return room.Name, true
 	}
 	return "", false
+}
+
+// characterAlreadyThere reports a move_character to the room the character
+// is already in.
+func characterAlreadyThere(g *game.Game, ev WorldEvent) (string, string, bool) {
+	if g == nil || ev.Type != "move_character" {
+		return "", "", false
+	}
+	name, _ := ev.Input["character_name"].(string)
+	npc, err := g.GetNPCByName(strings.TrimSpace(name))
+	if err != nil {
+		return "", "", false
+	}
+	room, err := g.GetRoom(npc.LocationID)
+	if err != nil {
+		return "", "", false
+	}
+	target, _ := ev.Input["room_name"].(string)
+	target = strings.TrimSpace(target)
+	if strings.EqualFold(target, room.Name) || strings.EqualFold(target, room.ID) {
+		return npc.Name, room.Name, true
+	}
+	return "", "", false
 }
 
 // ParseDecision reads the decision a model handed in. Models sometimes

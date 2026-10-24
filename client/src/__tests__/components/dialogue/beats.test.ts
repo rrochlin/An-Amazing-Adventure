@@ -9,6 +9,10 @@ describe('parseLine', () => {
          text: 'Sweets for the sweet.',
       });
    });
+   it('drops quotes around a whole spoken line', () => {
+      expect(parseLine('Bess: "It\'s Molly. My doll."')).toEqual({ speaker: 'Bess', text: "It's Molly. My doll." });
+      expect(parseLine('Bess: “Gone,” she says, “gone.”').text).toBe('“Gone,” she says, “gone.”');
+   });
    it('leaves narration alone', () => {
       expect(parseLine('Father ruffles your hair.')).toEqual({
          text: 'Father ruffles your hair.',

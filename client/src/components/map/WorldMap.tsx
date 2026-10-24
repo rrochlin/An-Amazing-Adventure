@@ -520,7 +520,10 @@ export function placeTokens(
       const taken = new Set<string>();
       for (const p of people) {
          const poi = p.mark ? art.points_of_interest[p.mark] : undefined;
-         const spot = poi && markTile(art, rect, poi, taken);
+         // Already beside it: they stay put (no shuffling round the well).
+         const was = previous.find((t) => t.id === p.id && t.roomId === roomId);
+         const besideIt = poi && was && Math.abs(was.x - poi[0]) <= 1 && Math.abs(was.y - poi[1]) <= 1 && !taken.has(key([was.x, was.y]));
+         const spot = besideIt ? ([was.x, was.y] as [number, number]) : poi && markTile(art, rect, poi, taken);
          if (!spot) continue;
          tile.set(p.id, spot);
          taken.add(key(spot));

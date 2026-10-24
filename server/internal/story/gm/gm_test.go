@@ -335,3 +335,18 @@ func TestSchemaStagesOnlyWhoIsHere(t *testing.T) {
 		t.Error("only who and what is here")
 	}
 }
+
+func TestValidateDropsMovingSomeoneWhereTheyAre(t *testing.T) {
+	def, g := briarwell(t)
+	d := gm.Decision{WorldEvents: []gm.WorldEvent{
+		{Type: "move_character", Input: map[string]any{"character_name": "Little Bess", "room_name": "Village Square"}},
+		{Type: "move_character", Input: map[string]any{"character_name": "Little Bess", "room_name": "Meadow"}},
+	}}
+	kept, dropped := gm.Validate(node(def, "village_deeds"), g, d)
+	if len(kept.WorldEvents) != 1 || kept.WorldEvents[0].Input["room_name"] != "Meadow" {
+		t.Fatalf("kept %+v", kept.WorldEvents)
+	}
+	if len(dropped) != 1 || !strings.Contains(dropped[0], "already in Village Square") {
+		t.Errorf("dropped %v", dropped)
+	}
+}

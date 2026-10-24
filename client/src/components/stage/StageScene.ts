@@ -248,6 +248,7 @@ export class StageScene extends Phaser.Scene {
       const from = this.playerTile!;
       this.face(next.x < from.x ? 'left' : next.x > from.x ? 'right' : next.y < from.y ? 'up' : 'down');
       this.playerTile = next;
+      sprite?.setData('tile', next);
       const at = standPoint(next.x, next.y);
       this.walking = true;
       const arrived = () => {

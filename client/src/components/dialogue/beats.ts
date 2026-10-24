@@ -48,9 +48,14 @@ export const NOTICE_EVENT_TYPES = new Set([
 // short, and followed by ": " so narration like "Later: ..." rarely matches.
 const SPEAKER_LINE = /^([A-Z][A-Za-z'.-]*(?: [A-Z][A-Za-z'.-]*){0,2}): (.+)$/s;
 
+// A spoken line wrapped whole in quotes: the name plate already says who.
+const QUOTED = /^["“]([^"“”]*)["”]$/s;
+
 export function parseLine(text: string): { speaker?: string; text: string } {
    const m = SPEAKER_LINE.exec(text);
-   return m ? { speaker: m[1], text: m[2] } : { text };
+   if (!m) return { text };
+   const q = QUOTED.exec(m[2].trim());
+   return { speaker: m[1], text: q ? q[1] : m[2] };
 }
 
 function messageBeats(
