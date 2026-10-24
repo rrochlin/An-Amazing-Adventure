@@ -80,6 +80,10 @@ func (p GameMaster) RunTurn(ctx context.Context, in TurnInput) (TurnOutput, erro
 	}
 	out.Decision = &kept
 
+	// Staging first: it happens inside the room, before anyone the world
+	// changes send away has left (a mark is only kept in its own room).
+	staging := gm.ApplyStaging(g, kept.Staging, gm.Paragraphs(out.Narrative))
+
 	// World changes, through the same tools the engineer used.
 	for _, ev := range kept.WorldEvents {
 		resultText, event, err := ai.DispatchTool(ctx, g, ev.Type, ev.Input)
@@ -95,9 +99,7 @@ func (p GameMaster) RunTurn(ctx context.Context, in TurnInput) (TurnOutput, erro
 		})
 	}
 
-	// Staging: everyone stands where the narration sent them, and the stage
-	// gets the cues to play.
-	out.NarrativeEvents = append(out.NarrativeEvents, gm.ApplyStaging(g, kept.Staging, gm.Paragraphs(out.Narrative))...)
+	out.NarrativeEvents = append(out.NarrativeEvents, staging...)
 
 	// Campaign progress from the settled beats.
 	if in.Campaign != nil {

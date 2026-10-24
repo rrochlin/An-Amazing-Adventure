@@ -367,6 +367,7 @@ export class StageScene extends Phaser.Scene {
 
    /** Characters in the room: placed where they stand, walking when they move. */
    private syncCharacters(view: StageView, room: string | undefined) {
+      const before = this.placed;
       this.placed = placeTokens(view.art, view.rooms, view.currentRoomId, view.playerName ?? 'You', view.playerScale ?? 1, this.placed, this.markRecord(view));
       const here = this.placed.filter((t) => t.isPlayer || t.roomId === room);
       const seen = new Set<string>();
@@ -400,11 +401,15 @@ export class StageScene extends Phaser.Scene {
          let sprite = this.sprites.get(t.id);
          const was = sprite?.getData('tile') as Tile | undefined;
          if (!sprite) {
-            sprite = this.add.sprite(at.x, at.y, 'dungeon', t.sprite).setOrigin(0.5, 1).setDepth(10);
+            // Someone coming in from next door walks in from where they were.
+            const from = before.find((b) => b.id === t.id && !t.isPlayer && b.roomId !== t.roomId && b.roomId !== undefined);
+            const start = from && this.framedRoom === room ? standPoint(from.x, from.y) : at;
+            sprite = this.add.sprite(start.x, start.y, 'dungeon', t.sprite).setOrigin(0.5, 1).setDepth(10);
             sprite.setInteractive();
             this.nameOnHover(sprite, t.name);
             if (t.isPlayer) this.glow(sprite);
             this.sprites.set(t.id, sprite);
+            if (start !== at) this.moveSprite(sprite, { x: from!.x, y: from!.y }, t, view);
          } else if (t.isPlayer ? sprite.x !== at.x || sprite.y !== at.y : !was || was.x !== t.x || was.y !== t.y) {
             this.moveSprite(sprite, was, t, view);
          }
@@ -413,9 +418,15 @@ export class StageScene extends Phaser.Scene {
          sprite.setData('name', t.name);
       }
       for (const [id, sprite] of this.sprites) {
-         if (!seen.has(id)) {
+         if (seen.has(id)) continue;
+         this.sprites.delete(id);
+         // Someone leaving for next door walks out that way, then is gone.
+         const was = before.find((b) => b.id === id);
+         const now = this.placed.find((p) => p.id === id);
+         if (was && now && was.roomId !== now.roomId && was.roomId === room) {
+            this.walkOff(sprite, { x: was.x, y: was.y }, now, view);
+         } else {
             sprite.destroy();
-            this.sprites.delete(id);
          }
       }
    }
@@ -457,6 +468,34 @@ export class StageScene extends Phaser.Scene {
             sprite.setData('walking', false);
             this.playEmotes();
          },
+      });
+   }
+
+   /** Walk out toward someone's new room and fade at the edge of this one. */
+   private walkOff(sprite: Phaser.GameObjects.Sprite, from: Tile, to: Token, view: StageView) {
+      const full = findPath(view.art, view.rooms, from, { x: to.x, y: to.y }, new Set());
+      // Only as far as the first tile outside this room.
+      const out = full.findIndex((t) => roomAt(view.art, t) !== roomAt(view.art, from));
+      const path = out === -1 ? [] : full.slice(0, out + 1);
+      sprite.disableInteractive();
+      if (!path.length || path.length > MAX_WALK) {
+         this.tweens.add({ targets: sprite, alpha: 0, duration: 400, onComplete: () => sprite.destroy() });
+         return;
+      }
+      this.tweens.killTweensOf(sprite);
+      let prev = from;
+      this.tweens.chain({
+         targets: sprite,
+         tweens: [
+            ...path.map((p) => {
+               const stepFrom = prev;
+               prev = p;
+               const at = standPoint(p.x, p.y);
+               return { x: at.x, y: at.y, duration: NPC_STEP_MS, ease: 'Linear', onStart: () => p.x !== stepFrom.x && sprite.setFlipX(p.x < stepFrom.x) };
+            }),
+            { alpha: 0, duration: 250 },
+         ],
+         onComplete: () => sprite.destroy(),
       });
    }
 
