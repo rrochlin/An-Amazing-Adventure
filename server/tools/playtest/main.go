@@ -9,6 +9,7 @@
 //	go run ./tools/playtest -dir DIR act move north  (a game action)
 //	go run ./tools/playtest -dir DIR state
 //	go run ./tools/playtest -dir DIR rewind 3        (back to just after turn 3)
+//	go run ./tools/playtest -dir DIR views           (what the client got after each turn, for a UI harness)
 //	go run ./tools/playtest -dir DIR -script FILE    (lines of the above, # for comments)
 //
 // Bedrock needs credentials: AWS_PROFILE=aa-debug AWS_REGION=us-west-2.
@@ -89,6 +90,8 @@ func main() {
 			fmt.Print(p.stateSummary())
 		case "rewind":
 			must(p.rewind(args[1]))
+		case "views":
+			must(p.views())
 		case "say", "choose", "act":
 			must(p.turn(ctx, args[0], strings.Join(args[1:], " ")))
 		default:
@@ -178,6 +181,44 @@ func (p *player) save() error {
 		return err
 	}
 	return os.WriteFile(p.path(filepath.Join("snapshots", fmt.Sprintf("%03d.json", p.n))), raw, 0o644)
+}
+
+// views writes DIR/views/NNN.json from each snapshot: the game and campaign
+// state the client is sent, so a UI harness can show every step of a run.
+func (p *player) views() error {
+	snaps, err := filepath.Glob(p.path(filepath.Join("snapshots", "*.json")))
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(p.path("views"), 0o755); err != nil {
+		return err
+	}
+	for _, snap := range snaps {
+		raw, err := os.ReadFile(snap)
+		if err != nil {
+			return err
+		}
+		var f sessionFile
+		if err := json.Unmarshal(raw, &f); err != nil {
+			return err
+		}
+		g, err := game.FromSaveState(f.Save)
+		if err != nil {
+			return err
+		}
+		out, err := json.Marshal(map[string]any{
+			"game":     g.BuildGameStateView(userID, nil),
+			"campaign": g.BuildCampaignStateView(),
+		})
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(p.path(filepath.Join("views", filepath.Base(snap))), out, 0o644); err != nil {
+			return err
+		}
+	}
+	fmt.Printf("%d views in %s\n", len(snaps), p.path("views"))
+	return nil
 }
 
 // rewind restores the session as it was just after turn n.
