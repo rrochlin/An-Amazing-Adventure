@@ -155,6 +155,7 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 	}
 	g.Campaign.CurrentObjective = node.ObjectiveText
 	g.Campaign.ActiveNodeTitle = node.Title
+	g.Campaign.ActiveMood = node.Mood
 	g.Campaign.ActiveSceneMap = nil
 	if sm, ok := def.Map.SceneMaps[node.SceneMap]; ok && node.SceneMap != "" {
 		g.Campaign.ActiveSceneMap = &game.SceneMapView{ID: node.SceneMap, RoomID: sm.RoomID, Name: sm.Name}
@@ -677,17 +678,23 @@ func applyActions(def *CampaignDefinition, g *game.Game, actions []Action) error
 			if def != nil {
 				for _, step := range def.Actors[action.ActorID].Rail.Steps {
 					if step.ID == action.StepID {
-						actorState.CurrentLocationID = step.LocationID
+						actorState.CurrentLocationID = resolveLocation(g, step.LocationID)
 						break
 					}
 				}
 			}
 			state.ActorStates[action.ActorID] = actorState
+			if err := placeActor(def, g, action.ActorID, actorState.CurrentLocationID); err != nil {
+				return err
+			}
 		case "move_actor_to_room":
 			actorState := state.ActorStates[action.ActorID]
 			actorState.ActorID = action.ActorID
-			actorState.CurrentLocationID = action.RoomID
+			actorState.CurrentLocationID = resolveLocation(g, action.RoomID)
 			state.ActorStates[action.ActorID] = actorState
+			if err := placeActor(def, g, action.ActorID, actorState.CurrentLocationID); err != nil {
+				return err
+			}
 		case "start_dialogue":
 			state.ActiveDialogue = &game.DialogueRuntimeState{
 				AssetID:     action.AssetID,
@@ -970,4 +977,56 @@ func takeItemFromPlayer(g *game.Game, names string) {
 			}
 		}
 	}
+}
+
+// PlayerLocation is the location an actor's rail step or move can name to
+// mean wherever the player is: someone arriving to find them.
+const PlayerLocation = "@player"
+
+func resolveLocation(g *game.Game, roomID string) string {
+	if roomID != PlayerLocation {
+		return roomID
+	}
+	if owner, ok := g.OwnerCharacter(); ok {
+		return owner.LocationID
+	}
+	return ""
+}
+
+// placeActor puts an actor's character where the story says they are, so
+// the world (the map, the game master's view of the room) agrees with the
+// actor's state. An actor who isn't in the world yet arrives; an empty room
+// takes them off-stage.
+func placeActor(def *CampaignDefinition, g *game.Game, actorID, roomID string) error {
+	if g.NPCs == nil {
+		g.NPCs = map[string]game.Character{}
+	}
+	npc, exists := g.NPCs[actorID]
+	if !exists {
+		if roomID == "" || def == nil {
+			return nil
+		}
+		actor, ok := def.Actors[actorID]
+		if !ok || actor.Kind == "companion" {
+			return nil
+		}
+		npc = newActorCharacter(actorID, actor)
+	}
+	if npc.LocationID != "" {
+		if old, ok := g.Rooms[npc.LocationID]; ok {
+			_ = old.RemoveOccupant(actorID)
+			g.Rooms[npc.LocationID] = old
+		}
+	}
+	if room, ok := g.Rooms[roomID]; ok {
+		_ = room.AddOccupant(actorID)
+		g.Rooms[roomID] = room
+		npc.LocationID = roomID
+	} else {
+		// Off-stage, or a room this world doesn't have: the actor's state
+		// still says where they are.
+		npc.LocationID = ""
+	}
+	g.NPCs[actorID] = npc
+	return nil
 }

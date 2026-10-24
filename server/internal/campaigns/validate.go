@@ -3,6 +3,7 @@ package campaigns
 import (
 	"fmt"
 	"io/fs"
+	"slices"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
@@ -121,7 +122,7 @@ func (d *CampaignDefinition) Validate() error {
 			if step.ID == "" {
 				return fmt.Errorf("actor %q rail step id is required", actorID)
 			}
-			if step.LocationID != "" {
+			if step.LocationID != "" && step.LocationID != PlayerLocation {
 				if _, ok := d.Map.Rooms[step.LocationID]; !ok {
 					return fmt.Errorf("actor %q rail step %q references unknown room %q", actorID, step.ID, step.LocationID)
 				}
@@ -216,6 +217,9 @@ func (d *CampaignDefinition) Validate() error {
 			if _, ok := d.Map.Rooms[node.LocationID]; !ok {
 				return fmt.Errorf("story node %q location_id %q does not exist in map.rooms", nodeID, node.LocationID)
 			}
+		}
+		if node.Mood != "" && !slices.Contains(SceneMoods, node.Mood) {
+			return fmt.Errorf("story node %q mood %q is not one of %v", nodeID, node.Mood, SceneMoods)
 		}
 		if node.SceneMap != "" {
 			sm, ok := d.Map.SceneMaps[node.SceneMap]

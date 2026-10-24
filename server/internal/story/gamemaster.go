@@ -2,7 +2,6 @@ package story
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -43,7 +42,7 @@ func (p GameMaster) RunTurn(ctx context.Context, in TurnInput) (TurnOutput, erro
 		History:     in.History,
 		PlayerInput: in.PlayerInput,
 		ToolName:    gm.ToolName,
-		ToolSchema:  gm.Schema(node),
+		ToolSchema:  gm.Schema(node, g),
 		OnChunk:     in.OnChunk,
 	})
 	out.Calls = append(out.Calls, result.Calls...)
@@ -62,10 +61,20 @@ func (p GameMaster) RunTurn(ctx context.Context, in TurnInput) (TurnOutput, erro
 	var decision gm.Decision
 	if result.Decision == "" {
 		errorf("game master handed in no decision")
-	} else if err := json.Unmarshal([]byte(result.Decision), &decision); err != nil {
-		errorf("game master decision is not valid JSON: %v", err)
+	} else {
+		parsed, notes, err := gm.ParseDecision(result.Decision)
+		for _, n := range notes {
+			errorf("decision: %s", n)
+		}
+		if err != nil {
+			// Nothing of an unreadable decision is applied: a half-read one
+			// could move the player without the beat that explains it.
+			errorf("game master decision is not valid JSON: %v", err)
+		} else {
+			decision = parsed
+		}
 	}
-	kept, dropped := gm.Validate(node, decision)
+	kept, dropped := gm.Validate(node, g, decision)
 	for _, d := range dropped {
 		errorf("dropped: %s", d)
 	}

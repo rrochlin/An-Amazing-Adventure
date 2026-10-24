@@ -118,7 +118,11 @@
       "goal": "Teach his child that a coin earned honestly is worth more than one taken.",
       "description": "The player's father. A woodcutter, gentle but firm, who wants his child to grow up honest.",
       "start_location_id": "family_cottage",
-      "importance": "primary"
+      "importance": "primary",
+      "rail": { "steps": [
+          { "id": "home", "location_id": "family_cottage" },
+          { "id": "lost" }
+      ] }
     },
     "mother": {
       "name": "Elin",
@@ -126,7 +130,11 @@
       "goal": "Keep the household warm and the birthday a happy one.",
       "description": "The player's mother. Warm and practical; she runs the household and bakes for every birthday.",
       "start_location_id": "family_cottage",
-      "importance": "secondary"
+      "importance": "secondary",
+      "rail": { "steps": [
+          { "id": "home", "location_id": "family_cottage" },
+          { "id": "lost" }
+      ] }
     },
     "sister": {
       "name": "Ros",
@@ -135,7 +143,11 @@
       "description": "The player's little sister, turning seven today. Adores her older sibling.",
       "scale": 0.65,
       "start_location_id": "family_cottage",
-      "importance": "primary"
+      "importance": "primary",
+      "rail": { "steps": [
+          { "id": "home", "location_id": "family_cottage" },
+          { "id": "lost" }
+      ] }
     },
     "trader": {
       "name": "Old Garrick",
@@ -181,7 +193,8 @@
       "rail": {
         "steps": [
           { "id": "lurking", "location_id": "woods_edge" },
-          { "id": "raiding", "location_id": "village_square" }
+          { "id": "raiding", "location_id": "village_square" },
+          { "id": "fled" }
         ]
       }
     },
@@ -195,7 +208,7 @@
       "rail": {
         "steps": [
           { "id": "travelling" },
-          { "id": "arrived", "location_id": "woods_edge" }
+          { "id": "arrived", "location_id": "@player" }
         ]
       }
     }
@@ -421,6 +434,7 @@
       "dialogue_start_node": "Birthday",
       "location_id": "family_cottage",
       "scene_map": "cottage_interior",
+      "mood": "dusk",
       "title": "Ros's Birthday",
       "summary": "Back home at dusk. The child can give Ros the gift, or keep it. As the evening ends, smoke rises from the woods.",
       "intro_text": "The sun is low and gold by the time you get home, the gift hidden behind your back.",
@@ -463,7 +477,30 @@
       "mode": "ai_scene",
       "location_id": "family_cottage",
       "scene_map": "cottage_interior",
+      "mood": "fire",
       "title": "Briarwell Burns",
+      "stage_directions": {
+        "focus": "terror and confusion in the dark; the child's one choice in the middle of it",
+        "setting": "The cottage at night, filling with smoke and torchlight; bandits breaking in at the door.",
+        "must_not_reveal": ["whether Father, Mother or Ros live or die"],
+        "boundaries": [
+          "Nobody dies or is shown dead on screen. Father is driven back, knocked aside or lost from sight in the smoke, never struck down for certain.",
+          "Mother and Ros are gone out the back before the player can reach them; the player may glimpse them, never find them.",
+          "The player is a small child: a fight ends with them knocked aside or hurt, never winning.",
+          "One response settles the raid: when the player has hidden, fought or gone after Mother and Ros, the night ends."
+        ],
+        "tone": ["frightening but not gory", "fairy-tale dread, never grimdark"]
+      },
+      "beats": [
+        {
+          "key": "raid_response", "kind": "label", "description": "What the child does when the bandits break in",
+          "outcomes": [
+            { "value": "hid", "meaning": "The player hides (under the bed, in the woodpile, anywhere) and stays hidden." },
+            { "value": "fought", "meaning": "The player attacks or stands against the bandits, even briefly." },
+            { "value": "searched_family", "meaning": "The player goes out after Mother and Ros." }
+          ]
+        }
+      ],
       "summary": "Night. Red Corwin's bandits torch the village. Father falls defending the door; Mother and Ros vanish in the chaos. The child must decide what to do.",
       "intro_text": "You wake to screaming. Orange light flickers through the shutters and the air is thick with smoke. Father is at the door with his woodaxe, shouting for Mother to take Ros out the back. Then the door splinters: Red Corwin's bandits are in Briarwell. You can hide, fight, or go looking for Mother and Ros.",
       "objective_text": "Survive the night: hide, fight, or search for Mother and Ros.",
@@ -477,7 +514,11 @@
           "actions": [
             { "type": "set_flag", "key": "stayed_hidden", "value": true },
             { "type": "complete_objective", "objective_id": "survive_raid" },
-            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" },
+            { "type": "move_actor_to_step", "actor_id": "father", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "mother", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "sister", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "bandit_leader", "step_id": "fled" }
           ]
         },
         {
@@ -486,7 +527,11 @@
           "actions": [
             { "type": "set_flag", "key": "wounded", "value": true },
             { "type": "complete_objective", "objective_id": "survive_raid" },
-            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" },
+            { "type": "move_actor_to_step", "actor_id": "father", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "mother", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "sister", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "bandit_leader", "step_id": "fled" }
           ]
         },
         {
@@ -495,7 +540,11 @@
           "actions": [
             { "type": "set_flag", "key": "saw_ros_taken", "value": true },
             { "type": "complete_objective", "objective_id": "survive_raid" },
-            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" }
+            { "type": "move_actor_to_step", "actor_id": "guild_master", "step_id": "arrived" },
+            { "type": "move_actor_to_step", "actor_id": "father", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "mother", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "sister", "step_id": "lost" },
+            { "type": "move_actor_to_step", "actor_id": "bandit_leader", "step_id": "fled" }
           ]
         }
       ],
@@ -510,8 +559,9 @@
       "mode": "yarn_dialogue",
       "dialogue_asset_id": "rescue",
       "dialogue_start_node": "Rescue",
+      "mood": "ashes",
       "title": "The Stranger in the Ashes",
-      "summary": "Master Holloway of the Heroes' Guild finds the child at the woods' edge and offers to take them away.",
+      "summary": "Master Holloway of the Heroes' Guild finds the child in the ashes and offers to take them away.",
       "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over what is left of Briarwell like snow.",
       "objective_text": "Answer the stranger.",
       "on_enter": [
@@ -536,6 +586,7 @@
     },
     "road_to_guild": {
       "mode": "ai_scene",
+      "mood": "dawn",
       "title": "The Road to the Guild",
       "summary": "Briarwell burns behind them as Master Holloway carries the child toward the Guild. The opening ends here.",
       "intro_text": "Dawn finds you on the back of Master Holloway's horse, wrapped in his cloak. Behind you, a thin thread of smoke is all that is left of Briarwell.",

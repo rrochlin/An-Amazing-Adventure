@@ -53,8 +53,8 @@ An-Amazing-Adventure/
 │   │   ├── world-gen/       # Async Lambda: procedural world-gen + narrative framing → WS progress
 │   │   ├── ws-connect/      # WebSocket $connect
 │   │   ├── ws-disconnect/   # WebSocket $disconnect
-│   │   ├── ws-chat/         # WebSocket chat action → Bedrock streaming
-│   │   └── ws-game-action/  # WebSocket game_action (move/pick_up/drop/equip/unequip)
+│   │   ├── ws-chat/         # WebSocket chat action → Bedrock streaming (handler: internal/lambdas/wschat)
+│   │   └── ws-game-action/  # WebSocket game_action (move/pick_up/drop/equip/unequip; handler: internal/lambdas/wsgameaction)
 │   └── internal/
 │       ├── ai/              # Bedrock client, NarrateStream, EngineerScan, GenerateNarrativeFraming
 │       ├── db/              # DynamoDB client (BinaryID type for B-typed keys)
@@ -251,6 +251,10 @@ full protocol.
 `server/testdata/turns/` is the saved **reference turn set** (real failure cases, see its README): run it
 with `-from testdata/turns -pipeline recorded` offline, or `-pipeline current` against Bedrock; add turns
 from a session with `-save`.
+
+`go run ./tools/playtest -dir DIR new|say TEXT|choose N|rewind N|views` plays a campaign locally through
+the real ws-chat and ws-game-action handlers (in-memory session, real Bedrock via `aa-debug`), writing a
+turn-by-turn report to `DIR/report.md`. See `docs/story-engine/playtest-6.md`.
 
 ## Testing Notes
 
