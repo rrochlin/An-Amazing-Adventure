@@ -171,6 +171,18 @@ describe('marks', () => {
       expect(after.find((t) => t.id === 'bess')).toMatchObject({ x: wx - 1, y: wy });
    });
 
+   it("doesn't push a bystander off their tile to reach a mark", () => {
+      const crowd = { ...rooms.village_square, occupants: [person('bess', 'Little Bess'), person('bully', 'Dunstan')] } as RoomView;
+      const all = { ...rooms, village_square: crowd };
+      const first = placeTokens(BRIARWELL_ART, all, 'village_square', 'Wren', 1, [], { bully: 'stone_well' });
+      const dunstan = first.find((t) => t.id === 'bully')!;
+      const after = placeTokens(BRIARWELL_ART, all, 'village_square', 'Wren', 1, first, { bess: 'stone_well' });
+      expect(after.find((t) => t.id === 'bully')).toMatchObject({ x: dunstan.x, y: dunstan.y });
+      const bess = after.find((t) => t.id === 'bess')!;
+      const [wx, wy] = BRIARWELL_ART.points_of_interest.stone_well;
+      expect(Math.abs(bess.x - wx) <= 1 && Math.abs(bess.y - wy) <= 1).toBe(true);
+   });
+
    it("ignores a mark that isn't in the room", () => {
       const tokens = placeTokens(BRIARWELL_ART, rooms, 'village_square', 'Wren', 1, [], { bess: 'old_oak' });
       const [x, y, w, h] = BRIARWELL_ART.rooms.village_square;

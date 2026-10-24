@@ -270,6 +270,16 @@ describe('DialogueStage', () => {
 });
 
 describe('free roam and dialogue', () => {
+   it('focuses the text box on Enter and gives the keys back on Esc', () => {
+      setup(inProgress, { overlay: true });
+      const box = screen.getByPlaceholderText('Explore, or press Enter to say what you do');
+      expect(box).not.toHaveFocus();
+      fireEvent.keyDown(window, { key: 'Enter' });
+      expect(box).toHaveFocus();
+      fireEvent.keyDown(box, { key: 'Escape' });
+      expect(box).not.toHaveFocus();
+   });
+
    it('shows an arrival at once, with nothing to dismiss and the text box ready', () => {
       const { update } = setup(inProgress, { overlay: true });
       update({

@@ -317,7 +317,7 @@ export function DialogueStage({
    }, [overlay, onPanelHeight]);
 
    // Over the scene: Enter focuses the text box (free roam keeps the keys
-   // for walking); Esc leaves a conversation.
+   // for walking) and Esc gives them back; in a conversation Esc leaves it.
    const inputRef = useRef<HTMLInputElement>(null);
    // In a conversation the text box takes the keys as soon as it appears.
    useEffect(() => {
@@ -332,6 +332,9 @@ export function DialogueStage({
             inputRef.current?.focus();
          } else if (e.key === 'Escape' && conversationWith && onLeaveConversation && atRest && !busy) {
             onLeaveConversation();
+         } else if (e.key === 'Escape' && typing && !conversationWith) {
+            // Free roam: Esc hands the keys back to walking.
+            inputRef.current?.blur();
          }
       };
       window.addEventListener('keydown', onKey);
