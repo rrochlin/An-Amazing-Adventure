@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { RoomView } from '@/types/types';
+import type { PointOfInterest, RoomView } from '@/types/types';
 import type { PopTone, SpokenLine, StageCue } from '../dialogue/beats';
 import { DUNGEON_SHEET, TILE, TOWN_SHEET, type MapArt } from '../map/mapArt';
 import { placeTokens, type Token } from '../map/WorldMap';
@@ -31,6 +31,8 @@ export interface StageView {
    cues?: StageCue[];
    /** The spoken line on screen: a bubble over the speaker. */
    speaking?: SpokenLine | null;
+   /** The marks shown in place of the room's (an interior's own). */
+   places?: PointOfInterest[];
    /** Pixels covered at the top (the location sign) and bottom (the text panel). */
    insetTop: number;
    insetBottom: number;
@@ -426,7 +428,7 @@ export class StageScene extends Phaser.Scene {
       this.places.forEach((p) => p.destroy());
       this.places = [];
       const room = roomId ? view.rooms[roomId] : undefined;
-      for (const poi of room?.points_of_interest ?? []) {
+      for (const poi of view.places ?? room?.points_of_interest ?? []) {
          const at = view.art.points_of_interest[poi.id];
          if (!at) continue;
          const diamond = this.add

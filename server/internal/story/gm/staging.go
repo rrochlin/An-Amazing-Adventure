@@ -42,10 +42,8 @@ func stagingSchema(g *game.Game) map[string]any {
 		for _, npc := range present(g) {
 			who = append(who, npc.Name)
 		}
-		if room, ok := playerRoom(g); ok {
-			for _, p := range room.PointsOfInterest {
-				marks = append(marks, p.ID)
-			}
+		for _, p := range g.MarksHere() {
+			marks = append(marks, p.ID)
 		}
 	}
 	cue := map[string]any{
@@ -82,7 +80,7 @@ func validateStaging(g *game.Game, cues []Cue) ([]Cue, []string) {
 		return nil, nil
 	}
 	marks := map[string]bool{}
-	for _, p := range room.PointsOfInterest {
+	for _, p := range g.MarksHere() {
 		marks[p.ID] = true
 	}
 	known := map[string]bool{}
@@ -174,12 +172,13 @@ func Paragraphs(narration string) int {
 // stagingBrief tells the game master where everyone stands and how to stage.
 func stagingBrief(g *game.Game) string {
 	room, ok := playerRoom(g)
-	if !ok || len(room.PointsOfInterest) == 0 {
+	here := g.MarksHere()
+	if !ok || len(here) == 0 {
 		return ""
 	}
 	var b strings.Builder
-	marks := make([]string, 0, len(room.PointsOfInterest))
-	for _, p := range room.PointsOfInterest {
+	marks := make([]string, 0, len(here))
+	for _, p := range here {
 		marks = append(marks, fmt.Sprintf("%s (%s)", p.ID, p.Name))
 	}
 	fmt.Fprintf(&b, "Marks here: %s. They are all in %s: when someone leaves it this turn (move_player, move_character), stage nothing for them; the stage walks them out.\n", strings.Join(marks, ", "), room.Name)

@@ -201,6 +201,16 @@ func (d *CampaignDefinition) Validate() error {
 		if _, ok := d.Map.Rooms[sm.RoomID]; !ok {
 			return fmt.Errorf("map.scene_maps %q room_id %q does not exist in map.rooms", id, sm.RoomID)
 		}
+		seen := map[string]bool{}
+		for _, poi := range sm.PointsOfInterest {
+			if poi.ID == "" || poi.Name == "" {
+				return fmt.Errorf("map.scene_maps %q has a point of interest without an id or name", id)
+			}
+			if seen[poi.ID] {
+				return fmt.Errorf("map.scene_maps %q has duplicate point of interest %q", id, poi.ID)
+			}
+			seen[poi.ID] = true
+		}
 	}
 	for nodeID, node := range d.StoryNodes {
 		if node.Title == "" {

@@ -13,7 +13,7 @@ import type { CharacterView, RoomView } from '@/types/types';
 interface CampaignJSON {
    map: {
       rooms: Record<string, { name: string; points_of_interest?: { id: string }[] }>;
-      scene_maps?: Record<string, { room_id: string; name: string }>;
+      scene_maps?: Record<string, { room_id: string; name: string; points_of_interest?: { id: string }[] }>;
    };
    actors: Record<string, unknown>;
 }
@@ -324,8 +324,9 @@ describe('Briarwell interiors', () => {
       for (const [id, inside] of Object.entries(BRIARWELL_ART.interiors ?? {})) {
          expect(inside.interior, id).toBe(true);
          expect(Object.keys(inside.rooms), id).toEqual([sceneMaps[id].room_id]);
-         const roomPOIs = (campaign.map.rooms[sceneMaps[id].room_id].points_of_interest ?? []).map((p) => p.id);
-         for (const poi of Object.keys(inside.points_of_interest)) expect(roomPOIs, `${id} ${poi}`).toContain(poi);
+         // The interior's own marks (else the room's), each with a tile.
+         const marks = (sceneMaps[id].points_of_interest ?? campaign.map.rooms[sceneMaps[id].room_id].points_of_interest ?? []).map((p) => p.id);
+         expect(Object.keys(inside.points_of_interest).sort(), id).toEqual([...marks].sort());
          for (const [layer, legend] of [
             [inside.ground, GROUND_TILES],
             [inside.objects, { ...OBJECT_TILES, ' ': 0 }],

@@ -90,6 +90,9 @@ type SceneMap struct {
 	RoomID      string `json:"room_id"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	// PointsOfInterest are the marks inside (the table, the barrel by the
+	// door). While the player is in the interior they replace the room's.
+	PointsOfInterest []game.PointOfInterest `json:"points_of_interest,omitempty"`
 }
 
 type CampaignRoom struct {

@@ -32,7 +32,17 @@ const COTTAGE_INTERIOR: MapArt = {
       " LMMMDMMMMK ",
    ],
    rooms: { family_cottage: [0, 0, 12, 9] },
-   points_of_interest: { hearth: [4, 1], front_door: [5, 8] },
+   points_of_interest: {
+      hearth: [4, 1],
+      window: [2, 1],
+      table: [5, 4],
+      parents_bed: [8, 2],
+      cot: [9, 4],
+      chest: [1, 6],
+      barrel: [1, 7],
+      shelf: [4, 7],
+      front_door: [5, 8],
+   },
    cast: {},
 };
 

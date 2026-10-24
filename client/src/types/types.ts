@@ -61,6 +61,8 @@ export interface SceneMapView {
    id: string;
    room_id: string;
    name: string;
+   /** The interior's marks; they replace the room's while the player is inside. */
+   points_of_interest?: PointOfInterest[];
 }
 
 export interface CampaignStateView {

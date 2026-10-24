@@ -37,6 +37,11 @@ func (d *CampaignDefinition) validateStaging() error {
 			marks[p.ID] = true
 		}
 	}
+	for _, sm := range d.Map.SceneMaps {
+		for _, p := range sm.PointsOfInterest {
+			marks[p.ID] = true
+		}
+	}
 	emotes := map[string]bool{}
 	for _, e := range Emotes {
 		emotes[e] = true

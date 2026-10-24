@@ -142,9 +142,9 @@ func worldSlice(g *game.Game) string {
 	}
 	sort.Strings(exits)
 	line("Place: %s. %s Exits: %s.", room.Name, room.Description, strings.Join(exits, ", "))
-	if len(room.PointsOfInterest) > 0 {
-		pois := make([]string, 0, len(room.PointsOfInterest))
-		for _, p := range room.PointsOfInterest {
+	if here := g.MarksHere(); len(here) > 0 {
+		pois := make([]string, 0, len(here))
+		for _, p := range here {
 			pois = append(pois, p.Name)
 		}
 		line("Here: %s.", strings.Join(pois, ", "))
