@@ -17,6 +17,7 @@ import (
 	"log"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
@@ -291,6 +292,29 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		}
 	}
 
+	// Take the session's turn: a second turn (sent from a reloaded page while
+	// this one runs, its connection already gone) waits instead of racing
+	// this one and overwriting it. The save is version-checked, so of two
+	// turns starting at once only one gets it.
+	if g.TurnInProgress(time.Now()) {
+		tr.Errorf("turn already in progress")
+		_ = ws.Send(ctx, connID, wsutil.Frame{Type: wsutil.FrameStreamingBlocked})
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+	g.TurnStartedAt = time.Now().UnixMilli()
+	g.Version++
+	if err := dbClient.PutGame(ctx, g.ToSaveState(saveState.Narrative, saveState.ChatHistory)); err != nil {
+		tr.Errorf("take turn: %v", err)
+		_ = ws.Send(ctx, connID, wsutil.Frame{Type: wsutil.FrameStreamingBlocked})
+		return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+	}
+	turnSaved := false
+	defer func() {
+		if !turnSaved {
+			releaseTurn(ctx, dbClient, conn.GameID, g.TurnStartedAt)
+		}
+	}()
+
 	// Steps 1-3: run the story pipeline. Narration streams to every party
 	// member as it arrives; narrative_end goes out as soon as it's complete,
 	// so the client never waits on the post-narration work.
@@ -386,6 +410,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 	g.TotalTokens += turn.Tokens.Total()
 
 	// Step 5: Persist updated game state with optimistic locking retry.
+	g.TurnStartedAt = 0
 	g.Version++
 	saved := g.ToSaveState(turn.NewMessages, history)
 	for attempt := 0; attempt < 3; attempt++ {
@@ -403,6 +428,7 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			}
 			continue
 		}
+		turnSaved = true
 		break
 	}
 
@@ -468,6 +494,21 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 
 	log.Printf("ws-chat: complete conn=%s user=%s game=%s turns=%d tokens=%d", connID, userID, conn.GameID, g.ConversationCount, g.TotalTokens)
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+}
+
+// releaseTurn clears a turn that ended without saving (an error mid-turn),
+// so the player can try again at once rather than after TurnLockTTL. Best
+// effort: if it fails, the lock expires on its own.
+func releaseTurn(ctx context.Context, dbClient dbClient, gameID string, startedAt int64) {
+	fresh, err := dbClient.GetGame(ctx, gameID)
+	if err != nil || fresh.TurnStartedAt != startedAt {
+		return
+	}
+	fresh.TurnStartedAt = 0
+	fresh.Version++
+	if err := dbClient.PutGame(ctx, fresh); err != nil {
+		log.Printf("ws-chat: release turn: %v", err)
+	}
 }
 
 func putMutations(ctx context.Context, dbClient dbClient, mutations []game.MutationEntry) {

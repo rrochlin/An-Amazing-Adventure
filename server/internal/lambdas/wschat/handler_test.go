@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/rrochlin/an-amazing-adventure/internal/ai"
@@ -126,6 +127,10 @@ type fakeDBClient struct {
 	putMutations    []game.MutationEntry
 	putGameState    game.SaveState
 	updateTokenArgs []int
+	// puts records every save; failNextPut makes the next one fail (a
+	// version conflict).
+	puts        []game.SaveState
+	failNextPut error
 }
 
 func (f *fakeDBClient) GetConnection(context.Context, string) (db.Connection, error) {
@@ -150,6 +155,11 @@ func (f *fakeDBClient) PutMutation(_ context.Context, entry game.MutationEntry) 
 	return nil
 }
 func (f *fakeDBClient) PutGame(_ context.Context, save game.SaveState) error {
+	if err := f.failNextPut; err != nil {
+		f.failNextPut = nil
+		return err
+	}
+	f.puts = append(f.puts, save)
 	f.putGameState = save
 	return nil
 }
@@ -655,5 +665,92 @@ func TestHandlerChat_EndedRunIsReadOnly(t *testing.T) {
 	}
 	if aiFake.narratorCalls != 0 || aiFake.engineerCalls != 0 || aiFake.resolverCalls != 0 {
 		t.Fatalf("expected no AI calls on an ended run, got narrator=%d engineer=%d resolver=%d", aiFake.narratorCalls, aiFake.engineerCalls, aiFake.resolverCalls)
+	}
+}
+
+// turnLockSetup is a game-master turn served by fakes, with the save as given.
+func turnLockSetup(t *testing.T, save game.SaveState) (*fakeDBClient, *fakeAIClient) {
+	t.Helper()
+	t.Setenv("MUTATIONS_TABLE", "mutations-test")
+	dbFake := &fakeDBClient{
+		connection: db.Connection{ConnectionID: "conn-1", GameID: "game-briarwell", UserID: db.BinaryID("user-1")},
+		user:       &db.UserRecord{UserID: db.BinaryID("user-1"), AIEnabled: true},
+		save:       save,
+	}
+	aiFake := &fakeAIClient{}
+	origNewDBClient, origNewWSSender, origNewAIClient := newDBClient, newWSSender, newAIClient
+	newDBClient = func(context.Context) (dbClient, error) { return dbFake, nil }
+	newWSSender = func(context.Context) (wsSender, error) { return &fakeWSSender{}, nil }
+	newAIClient = func(context.Context) (aiClient, error) { return aiFake, nil }
+	t.Cleanup(func() { newDBClient, newWSSender, newAIClient = origNewDBClient, origNewWSSender, origNewAIClient })
+	return dbFake, aiFake
+}
+
+func deedsSave(t *testing.T) game.SaveState {
+	t.Helper()
+	save := makeBootstrappedCampaignSaveState(t, "briarwell")
+	g, err := game.FromSaveState(save)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, _ := campaigns.LoadEmbeddedRegistry()
+	def, _ := reg.Get("briarwell")
+	if _, err := campaigns.ResumeDialogueWithChoice(def, g, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
+		t.Fatal(err)
+	}
+	return g.ToSaveState(save.Narrative, save.ChatHistory)
+}
+
+func chat(t *testing.T, content string) {
+	t.Helper()
+	body, _ := json.Marshal(chatRequest{Action: "chat", Content: content})
+	if _, err := handler(context.Background(), makeWSChatReq("conn-1", string(body))); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerChat_ATurnHoldsTheSessionUntilItSaves(t *testing.T) {
+	dbFake, aiFake := turnLockSetup(t, deedsSave(t))
+	chat(t, "I look around")
+	if len(aiFake.gmRequests) != 1 || len(dbFake.puts) != 2 {
+		t.Fatalf("one model call, two saves (take the turn, then the turn), got %d and %d", len(aiFake.gmRequests), len(dbFake.puts))
+	}
+	if dbFake.puts[0].TurnStartedAt == 0 {
+		t.Error("the first save takes the turn")
+	}
+	if dbFake.puts[1].TurnStartedAt != 0 || dbFake.puts[1].Version != dbFake.puts[0].Version+1 {
+		t.Errorf("the turn's save frees it: %d, version %d after %d", dbFake.puts[1].TurnStartedAt, dbFake.puts[1].Version, dbFake.puts[0].Version)
+	}
+}
+
+func TestHandlerChat_ASecondTurnWaitsForTheFirst(t *testing.T) {
+	// Playtest 8: a reload mid-turn dropped the first turn's connection (and
+	// its streaming flag), so a second message raced the first.
+	save := deedsSave(t)
+	save.TurnStartedAt = time.Now().Add(-10 * time.Second).UnixMilli()
+	dbFake, aiFake := turnLockSetup(t, save)
+	chat(t, "hello?")
+	if len(aiFake.gmRequests) != 0 || len(dbFake.puts) != 0 {
+		t.Fatalf("a turn is running: no model call, no save; got %d and %d", len(aiFake.gmRequests), len(dbFake.puts))
+	}
+
+	// A turn that died long ago doesn't lock the game.
+	save.TurnStartedAt = time.Now().Add(-game.TurnLockTTL - time.Second).UnixMilli()
+	dbFake.save = save
+	chat(t, "hello?")
+	if len(aiFake.gmRequests) != 1 {
+		t.Fatal("a stale lock is taken over")
+	}
+}
+
+func TestHandlerChat_TwoTurnsStartingAtOnceOnlyOneRuns(t *testing.T) {
+	dbFake, aiFake := turnLockSetup(t, deedsSave(t))
+	dbFake.failNextPut = errors.New("conditional check failed") // the other turn saved first
+	chat(t, "I look around")
+	if len(aiFake.gmRequests) != 0 {
+		t.Fatal("losing the race for the turn: no model call")
 	}
 }
