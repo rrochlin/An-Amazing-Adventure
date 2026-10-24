@@ -340,7 +340,9 @@ export function SceneScreen({
                fullWidth
                maxWidth="lg"
                aria-label="World map"
-               slotProps={{ paper: { sx: { height: '85vh', bgcolor: '#08050c', display: 'flex' } } }}
+               // A portal, outside the scene's dark stage: it needs the dark
+               // palette of its own.
+               slotProps={{ paper: { className: 'dark', sx: { height: '85vh', bgcolor: '#08050c', display: 'flex' } } }}
             >
                <Box sx={{ display: 'flex', alignItems: 'center', px: 2, pt: 1.5 }}>
                   <Typography sx={{ flex: 1, fontFamily: 'Cinzel, Georgia, serif', color: 'primary.main' }}>World map</Typography>
