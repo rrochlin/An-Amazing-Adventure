@@ -60,6 +60,8 @@ interface SceneScreenProps {
    controlsLocked?: boolean;
    /** The player walked into another room. */
    onWalkToRoom?: (roomId: string) => void;
+   /** The player walked up to a character to talk to them. */
+   onTalkTo?: (characterId: string, name: string) => void;
 }
 
 /**
@@ -85,6 +87,7 @@ export function SceneScreen({
    onDetails,
    controlsLocked,
    onWalkToRoom,
+   onTalkTo,
 }: SceneScreenProps) {
    const [logOpen, setLogOpen] = useState(false);
    const shown = sceneArt(art, sceneMap, currentRoomId);
@@ -194,6 +197,7 @@ export function SceneScreen({
                   // An open overlay (journal, map, log) holds the player still too.
                   controlsLocked={controlsLocked || logOpen || journalOpen || worldOpen}
                   onWalkToRoom={onWalkToRoom}
+                  onTalkTo={onTalkTo}
                />
                {light && (
                   <Box

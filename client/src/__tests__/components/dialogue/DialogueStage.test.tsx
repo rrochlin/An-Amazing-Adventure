@@ -248,3 +248,33 @@ describe('DialogueStage', () => {
       expect(onCaughtUp).toHaveBeenCalledTimes(2);
    });
 });
+
+describe('free roam and dialogue', () => {
+   it('shows an arrival at once, with nothing to dismiss and the text box ready', () => {
+      const { update } = setup(inProgress, { overlay: true });
+      update({
+         overlay: true,
+         messages: [...inProgress, { type: 'arrival', content: 'Village Square. Little Bess is here.' }],
+      });
+      // No typing, no "continue": the player is walking on.
+      expect(stageText()).toBe('Village Square. Little Bess is here.');
+      expect(screen.queryByLabelText('continue')).not.toBeInTheDocument();
+      const box = screen.getByPlaceholderText('Explore, or press Enter to say what you do');
+      // Free roam over the scene keeps the keys for walking: the box isn't focused.
+      expect(document.activeElement).not.toBe(box);
+      // Enter takes the player to the box.
+      fireEvent.keyDown(window, { key: 'Enter' });
+      expect(document.activeElement).toBe(box);
+   });
+
+   it('speaks to the character in a conversation, and leaves with the button or Esc', () => {
+      const onLeave = vi.fn();
+      setup(inProgress, { overlay: true, conversationWith: 'Tomas', onLeaveConversation: onLeave });
+      const box = screen.getByPlaceholderText('Say something to Tomas…');
+      expect(document.activeElement).toBe(box); // the conversation takes the keys
+      fireEvent.click(screen.getByRole('button', { name: 'leave the conversation with Tomas' }));
+      expect(onLeave).toHaveBeenCalledTimes(1);
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(onLeave).toHaveBeenCalledTimes(2);
+   });
+});

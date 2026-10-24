@@ -356,6 +356,21 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 		}
 	}
 
+	// The full state carries the world, not the story: the campaign (scene,
+	// objectives, an open conversation) goes as a delta, which the client
+	// applies once any narration sent above has played.
+	if g.Campaign != nil && g.Campaign.CampaignID != "" {
+		conns := allConns
+		if len(conns) == 0 {
+			conns = []db.Connection{conn}
+		}
+		delta := game.StateDelta{Campaign: g.BuildCampaignStateView(), Events: tr.Events}
+		for _, gc := range conns {
+			tr.Frame(string(wsutil.FrameStateDelta), gc.ConnectionID, delta)
+			_ = ws.SendDelta(ctx, gc.ConnectionID, delta)
+		}
+	}
+
 	return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 }
 

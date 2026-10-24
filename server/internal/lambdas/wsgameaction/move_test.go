@@ -167,6 +167,9 @@ func TestMoveToRoom_ArrivingCanStartAScene(t *testing.T) {
 	if store.save.Campaign.ActiveNodeID != "gift_stall" {
 		t.Fatalf("arriving in Market Lane should open the stall, node %s", store.save.Campaign.ActiveNodeID)
 	}
+	if d := sender.deltas[len(sender.deltas)-1]; d.Campaign == nil || d.Campaign.ActiveNodeID != "gift_stall" {
+		t.Fatalf("the client should get the new scene, got %+v", d.Campaign)
+	}
 	var streamed strings.Builder
 	for _, f := range sender.frames {
 		if f.Type == wsutil.FrameNarrativeChunk {
@@ -220,6 +223,11 @@ func TestConversation_LocksWalkingUntilThePlayerLeaves(t *testing.T) {
 	}
 	if store.save.Campaign.Conversation != nil {
 		t.Fatal("leaving should close the conversation")
+	}
+	// The client learns it too: the campaign goes out as a delta.
+	last := sender.deltas[len(sender.deltas)-1]
+	if last.Campaign == nil || last.Campaign.Conversation != nil {
+		t.Fatalf("the client should be told the conversation closed, got %+v", last.Campaign)
 	}
 	walk(t, "village_square")
 	if playerRoom(t, store.save) != "village_square" {

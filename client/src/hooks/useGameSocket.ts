@@ -162,10 +162,11 @@ export function useGameSocket({
       };
    }, [sessionId, handleMessage, setWsStatus, setWsError]);
 
-   // Send a chat message through the WebSocket
-   const sendChat = useCallback((content: string) => {
+   // Send a chat message through the WebSocket; talkTo opens a conversation
+   // with that character (the player walked up to them).
+   const sendChat = useCallback((content: string, talkTo?: string) => {
       if (wsRef.current?.readyState !== WebSocket.OPEN) return;
-      wsRef.current.send(JSON.stringify({ action: 'chat', content }));
+      wsRef.current.send(JSON.stringify({ action: 'chat', content, ...(talkTo && { talk_to: talkTo }) }));
    }, []);
 
    // Send a game action (move, pick_up, drop)
