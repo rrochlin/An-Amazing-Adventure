@@ -9,6 +9,23 @@ force are summarised at the end of this file.
 
 ---
 
+## 2026-10-24 — The game master stages the scene: marks and cues
+
+**Decision:** Characters stand at **marks**, a room's points of interest, and the server keeps each
+character's mark (per room, so leaving the room drops it). The game master's `end_turn` gains a
+`staging` list: who walks to which mark and who reacts (a fixed set of emotes), on which paragraph of the
+narration. Code validates every cue against who is in the room and the room's marks; the stage plays
+them line by line, walking characters tile by tile. Spoken lines are written as `Name: words`
+paragraphs so they come from a character. Narration stays a streamed prose string: staging is a second
+list keyed to its paragraphs, not a replacement for it.
+
+**Why:** #182. Story movement was a straight glide between rooms, and nothing tied a line or a reaction
+to a sprite. Keeping the narration as one streamed string kept first-line latency where it was (about a
+second) while still giving the stage a performance to play. Authored Yarn commands for the same cues are
+the next step.
+
+---
+
 ## 2026-10-24 — Free roam and dialogue, Baldur's Gate style
 
 **Decision:** The game has two modes. In **free roam** the player walks freely and nothing waits on them.

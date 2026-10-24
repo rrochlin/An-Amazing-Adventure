@@ -22,6 +22,18 @@ export interface Beat {
    streaming?: boolean;
    /** The player walked into a room: shown at once, nothing to dismiss. */
    arrival?: boolean;
+   /** Staging the scene plays when this beat starts: walks and reactions. */
+   cues?: StageCue[];
+}
+
+/** One staging cue, as the scene plays it. */
+export interface StageCue {
+   /** Stable: "<msg>-C<n>", so a cue plays once. */
+   id: string;
+   /** An NPC id, or "player". */
+   character: string;
+   mark?: string;
+   emote?: string;
 }
 
 /** Event types announced as toasts rather than shown in the dialogue. */
@@ -36,9 +48,14 @@ export const NOTICE_EVENT_TYPES = new Set([
 // short, and followed by ": " so narration like "Later: ..." rarely matches.
 const SPEAKER_LINE = /^([A-Z][A-Za-z'.-]*(?: [A-Z][A-Za-z'.-]*){0,2}): (.+)$/s;
 
+// A spoken line wrapped whole in quotes: the name plate already says who.
+const QUOTED = /^["“]([^"“”]*)["”]$/s;
+
 export function parseLine(text: string): { speaker?: string; text: string } {
    const m = SPEAKER_LINE.exec(text);
-   return m ? { speaker: m[1], text: m[2] } : { text };
+   if (!m) return { text };
+   const q = QUOTED.exec(m[2].trim());
+   return { speaker: m[1], text: q ? q[1] : m[2] };
 }
 
 function messageBeats(
@@ -70,6 +87,14 @@ function messageBeats(
    if (notices.length && beats.length) {
       beats[0] = { ...beats[0], notices };
    }
+   // Each cue rides on the line it plays with (the last, if it's past the end).
+   const lineAt = beats.flatMap((b, i) => (b.kind === 'line' ? [i] : []));
+   events.forEach((e, n) => {
+      if (e.type !== 'cue' || !e.character || !lineAt.length) return;
+      const at = lineAt[Math.min(e.line ?? 0, lineAt.length - 1)];
+      const cue: StageCue = { id: `${index}-C${n}`, character: e.character, mark: e.mark || undefined, emote: e.emote || undefined };
+      beats[at] = { ...beats[at], cues: [...(beats[at].cues ?? []), cue] };
+   });
    return beats;
 }
 

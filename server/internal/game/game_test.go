@@ -626,3 +626,41 @@ func TestDiscoveredByWorldKind(t *testing.T) {
 		t.Fatalf("campaign discovery uses DiscoveredRoomIDs, got %v", campaign.Campaign.DiscoveredRoomIDs)
 	}
 }
+
+func TestMarksSurviveASaveAndStayInTheirRoom(t *testing.T) {
+	g := newTestGame()
+	square := game.NewArea("Square", "A square")
+	meadow := game.NewArea("Meadow", "Long grass")
+	_ = g.AddRoom(square)
+	_ = g.AddRoom(meadow)
+	_ = g.PlacePlayer(square.ID)
+	npc := game.NewCharacter("Bess", "A girl")
+	_ = g.AddNPC(npc)
+	_ = g.MoveNPC(npc.ID, square.ID)
+	bess := g.NPCs[npc.ID]
+	bess.SetMark("stone_well")
+	g.NPCs[npc.ID] = bess
+	owner, _ := g.OwnerCharacter()
+	owner.SetMark("market_benches")
+	g.SetPlayerCharacter(g.OwnerID, owner)
+
+	restored, err := game.FromSaveState(g.ToSaveState(nil, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := restored.NPCs[npc.ID].MarkHere(); m != "stone_well" {
+		t.Errorf("NPC mark after a save: %q", m)
+	}
+	view := restored.BuildGameStateView("user-1", nil)
+	if view.Self.Mark != "market_benches" {
+		t.Errorf("the player's mark should be in the view, got %q", view.Self.Mark)
+	}
+	if occ := view.Rooms[square.ID].Occupants; len(occ) != 1 || occ[0].Mark != "stone_well" {
+		t.Errorf("occupants carry their mark: %+v", occ)
+	}
+
+	_ = restored.MoveNPC(npc.ID, meadow.ID)
+	if m := restored.NPCs[npc.ID].MarkHere(); m != "" {
+		t.Errorf("a mark doesn't follow them to another room, got %q", m)
+	}
+}

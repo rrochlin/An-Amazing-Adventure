@@ -23,6 +23,9 @@ type Decision struct {
 	// Beats settles the scene's beats this turn: label key → one of its
 	// outcomes, flag key → true. Keys the scene doesn't define are dropped.
 	Beats map[string]any `json:"beats"`
+	// Staging is who walks to which mark and who reacts, on which
+	// paragraph of the narration.
+	Staging []Cue `json:"staging,omitempty"`
 	// OffScript says how the game master handled an action the script
 	// didn't cover, if it did.
 	OffScript *OffScript `json:"off_script,omitempty"`
@@ -107,6 +110,12 @@ func Validate(node *campaigns.StoryNode, g *game.Game, d Decision) (Decision, []
 			dropped = append(dropped, fmt.Sprintf("move_player: the player is already in %s", room))
 			continue
 		}
+		if who, room, ok := characterAlreadyThere(g, ev); ok {
+			// Playtest 9: it announced "Little Bess arrives." for a girl
+			// who had been standing there all along.
+			dropped = append(dropped, fmt.Sprintf("move_character: %s is already in %s", who, room))
+			continue
+		}
 		if ev.Type == "damage_character" && !allowed["set_character_alive"] {
 			// Who dies is authored: damage can hurt, not kill, unless the
 			// scene allows deaths.
@@ -162,6 +171,9 @@ func Validate(node *campaigns.StoryNode, g *game.Game, d Decision) (Decision, []
 			dropped = append(dropped, fmt.Sprintf("beat %q (%s) can't be settled by the game master", key, spec.Type))
 		}
 	}
+	staging, notes := validateStaging(g, d.Staging)
+	kept.Staging = staging
+	dropped = append(dropped, notes...)
 	if d.OffScript != nil {
 		switch d.OffScript.Kind {
 		case OffScriptImprovised, OffScriptSteered, OffScriptRefused:
@@ -242,6 +254,29 @@ func alreadyThere(g *game.Game, ev WorldEvent) (string, bool) {
 	return "", false
 }
 
+// characterAlreadyThere reports a move_character to the room the character
+// is already in.
+func characterAlreadyThere(g *game.Game, ev WorldEvent) (string, string, bool) {
+	if g == nil || ev.Type != "move_character" {
+		return "", "", false
+	}
+	name, _ := ev.Input["character_name"].(string)
+	npc, err := g.GetNPCByName(strings.TrimSpace(name))
+	if err != nil {
+		return "", "", false
+	}
+	room, err := g.GetRoom(npc.LocationID)
+	if err != nil {
+		return "", "", false
+	}
+	target, _ := ev.Input["room_name"].(string)
+	target = strings.TrimSpace(target)
+	if strings.EqualFold(target, room.Name) || strings.EqualFold(target, room.ID) {
+		return npc.Name, room.Name, true
+	}
+	return "", "", false
+}
+
 // ParseDecision reads the decision a model handed in. Models sometimes
 // write a nested value as a string: empty ("") for nothing, or the JSON
 // itself quoted ("{\"deed_doll\": \"kept\"}"). Those are read as what they
@@ -252,7 +287,7 @@ func ParseDecision(raw string) (Decision, []string, error) {
 		return Decision{}, nil, err
 	}
 	var notes []string
-	for _, key := range []string{"world_events", "beats", "off_script"} {
+	for _, key := range []string{"world_events", "beats", "staging", "off_script"} {
 		v, ok := fields[key]
 		if !ok {
 			continue

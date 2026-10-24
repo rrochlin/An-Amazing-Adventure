@@ -497,25 +497,44 @@ export function placeTokens(
    playerName: string,
    playerScale = 1,
    previous: Token[] = [],
+   marks: Record<string, string> = {},
 ): Token[] {
    const tokens: Token[] = [];
    for (const [roomId, rect] of Object.entries(art.rooms)) {
       const room = rooms[roomId];
       if (!room?.discovered && roomId !== currentRoomId) continue;
-      const people: { id: string; name: string; isPlayer: boolean; friendly: boolean; scale: number }[] = [];
+      const people: { id: string; name: string; isPlayer: boolean; friendly: boolean; scale: number; mark?: string }[] = [];
       if (roomId === currentRoomId) {
-         people.push({ id: 'player', name: playerName, isPlayer: true, friendly: true, scale: playerScale });
+         people.push({ id: 'player', name: playerName, isPlayer: true, friendly: true, scale: playerScale, mark: marks.player });
       }
       [...(room?.occupants ?? [])]
          .sort((a, b) => a.id.localeCompare(b.id))
          .forEach((c: CharacterView) =>
-            people.push({ id: c.id, name: c.name, isPlayer: false, friendly: c.friendly, scale: c.scale || 1 }),
+            people.push({ id: c.id, name: c.name, isPlayer: false, friendly: c.friendly, scale: c.scale || 1, mark: marks[c.id] ?? c.mark }),
          );
       const slots = freeTiles(art, rect);
       const key = ([x, y]: [number, number]) => `${x},${y}`;
       const open = new Set(slots.map(key));
       const tile = new Map<string, [number, number]>();
+      // Someone at a mark stands beside it, before anyone else is placed.
+      const taken = new Set<string>();
       for (const p of people) {
+         const poi = p.mark ? art.points_of_interest[p.mark] : undefined;
+         // Already beside it: they stay put (no shuffling round the well).
+         const was = previous.find((t) => t.id === p.id && t.roomId === roomId);
+         const besideIt = poi && was && Math.abs(was.x - poi[0]) <= 1 && Math.abs(was.y - poi[1]) <= 1 && !taken.has(key([was.x, was.y]));
+         // Going there: a free tile beside it, not one someone stands on.
+         const standing = new Set(previous.filter((t) => t.id !== p.id && t.roomId === roomId).map((t) => key([t.x, t.y])));
+         const spot = besideIt
+            ? ([was.x, was.y] as [number, number])
+            : poi && (markTile(art, rect, poi, new Set([...taken, ...standing])) ?? markTile(art, rect, poi, taken));
+         if (!spot) continue;
+         tile.set(p.id, spot);
+         taken.add(key(spot));
+         open.delete(key(spot));
+      }
+      for (const p of people) {
+         if (tile.has(p.id)) continue;
          const was = previous.find((t) => t.id === p.id && t.roomId === roomId);
          if (was && open.has(key([was.x, was.y]))) {
             tile.set(p.id, [was.x, was.y]);
@@ -549,6 +568,35 @@ export function placeTokens(
       });
    }
    return tokens;
+}
+
+/**
+ * Where someone at a mark stands: the free tile in the room nearest the
+ * point of interest (the well itself is an object), in front of it on a tie.
+ * None when the mark isn't in this room.
+ */
+export function markTile(
+   art: MapArt,
+   [x0, y0, w, h]: [number, number, number, number],
+   [px, py]: [number, number],
+   taken: Set<string>,
+): [number, number] | undefined {
+   if (px < x0 - 1 || px > x0 + w || py < y0 - 1 || py > y0 + h) return undefined;
+   let best: [number, number] | undefined;
+   let bestScore = Infinity;
+   for (let y = y0; y < y0 + h; y++) {
+      for (let x = x0; x < x0 + w; x++) {
+         if ((art.objects[y]?.[x] ?? ' ') !== ' ' || art.ground[y]?.[x] === '_' || taken.has(`${x},${y}`)) continue;
+         if (x === px && y === py) continue;
+         // Distance, then in front (below) of it, then left to right.
+         const score = Math.abs(x - px) + Math.abs(y - py) + (y > py ? 0 : 0.5) + (x - px) * 0.01;
+         if (score < bestScore) {
+            bestScore = score;
+            best = [x, y];
+         }
+      }
+   }
+   return best;
 }
 
 /** Tiles in a room with no object on them, nearest the centre first. */

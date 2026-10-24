@@ -17,7 +17,7 @@ import type {
    WorldEvent,
 } from '@/types/types';
 import { EndingPanel } from '../Chat';
-import { buildBeats, buildTranscript, type Beat } from './beats';
+import { buildBeats, buildTranscript, type Beat, type StageCue } from './beats';
 import { renderInline } from './inline';
 import { useTypewriter } from './useTypewriter';
 
@@ -71,6 +71,8 @@ interface DialogueStageProps {
    onLeaveConversation?: () => void;
    /** Whether the player still has story on screen to read (they can't walk then). */
    onReading?: (reading: boolean) => void;
+   /** Staging reached in the story, each cue once: the scene plays it. */
+   onCues?: (cues: StageCue[]) => void;
    /** Called whenever the stage has shown the last line it has. */
    onCaughtUp?: () => void;
 }
@@ -106,6 +108,7 @@ export function DialogueStage({
    conversationWith,
    onLeaveConversation,
    onReading,
+   onCues,
 }: DialogueStageProps) {
    const beats = useMemo(
       () => buildBeats(messages, streamingMessage),
@@ -226,6 +229,27 @@ export function DialogueStage({
       if (fresh.length) setToasts((t) => [...t, ...fresh]);
    }, [beats, index]);
 
+   // Staging plays once its beat is reached (including cues that arrive
+   // just after their text). What was already read on load has played: the
+   // world already has everyone where it put them.
+   const staged = useRef<Set<string> | null>(null);
+   if (staged.current === null) {
+      staged.current = new Set(
+         beats.filter((b) => alreadyRead.current!.has(b.id)).flatMap((b) => (b.cues ?? []).map((c) => c.id)),
+      );
+   }
+   useEffect(() => {
+      const fresh: StageCue[] = [];
+      for (const beat of beats.slice(0, index + 1)) {
+         for (const cue of beat.cues ?? []) {
+            if (staged.current!.has(cue.id)) continue;
+            staged.current!.add(cue.id);
+            fresh.push(cue);
+         }
+      }
+      if (fresh.length) onCues?.(fresh);
+   }, [beats, index, onCues]);
+
    // Space / Enter advance, unless the player is typing in the text box.
    useEffect(() => {
       const onKey = (e: KeyboardEvent) => {
@@ -293,7 +317,7 @@ export function DialogueStage({
    }, [overlay, onPanelHeight]);
 
    // Over the scene: Enter focuses the text box (free roam keeps the keys
-   // for walking); Esc leaves a conversation.
+   // for walking) and Esc gives them back; in a conversation Esc leaves it.
    const inputRef = useRef<HTMLInputElement>(null);
    // In a conversation the text box takes the keys as soon as it appears.
    useEffect(() => {
@@ -308,6 +332,9 @@ export function DialogueStage({
             inputRef.current?.focus();
          } else if (e.key === 'Escape' && conversationWith && onLeaveConversation && atRest && !busy) {
             onLeaveConversation();
+         } else if (e.key === 'Escape' && typing && !conversationWith) {
+            // Free roam: Esc hands the keys back to walking.
+            inputRef.current?.blur();
          }
       };
       window.addEventListener('keydown', onKey);

@@ -37,6 +37,11 @@ The prose, streamed as it is written, then one tool call, `end_turn`, carrying a
 {
   "world_events": [ { "type": "move_player", "input": { "room_name": "Meadow" } } ],
   "beats": { "deed_bully": "stopped" },
+  "staging": [
+    { "line": 0, "who": "player", "move_to": "old_fence_post" },
+    { "line": 2, "who": "Dunstan", "move_to": "long_grass" },
+    { "line": 2, "who": "Dunstan", "emote": "shake" }
+  ],
   "off_script": { "kind": "improvised", "reason": "the player climbed the fence post" }
 }
 ```
@@ -47,6 +52,15 @@ The prose, streamed as it is written, then one tool call, `end_turn`, carrying a
   written meaning has clearly happened. Converted by `gm.Resolution` into the campaign's condition
   resolution, which the existing orchestration (`OrchestrateTurn`) applies: objectives, their
   `on_success` actions, scene transitions.
+- `staging`: how the scene is played on the stage, in order (#182). Each cue names who (a character
+  here, by name, or `player`), the narration paragraph it plays on (from 0), and a **mark** to walk to
+  (one of the room's points of interest) and/or an **emote** (`hop`, `shake`, `startle`, `bow`,
+  `laugh`, `cry`). `gm.Validate` keeps only cues for people in the room, marks of that room and known
+  emotes. `gm.ApplyStaging` stands people at their marks (kept per room on the character, so any move
+  to another room leaves the mark behind) before the world events apply, and the cues go to the client
+  as `cue` events on the narration message. The client plays each when its paragraph comes up:
+  characters walk tile by tile to a free tile beside the mark, and reactions play once they stop.
+  Spoken lines are their own paragraphs, as `Name: words`, so they come from that character.
 - `off_script`: present when the player's action wasn't scripted, and how it was handled.
 
 The tool's JSON schema (`gm.Schema`) is built per scene: the event `type` enum is the scene's allowlist

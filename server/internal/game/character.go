@@ -24,6 +24,26 @@ type Character struct {
 	// for an older child, 0.6 for a small child, 2 for a giant. Zero means
 	// 1. The map draws sprites at this size; spells and story can change it.
 	Scale float64 `json:"scale,omitempty" dynamodbav:"scale,omitempty"`
+	// Mark is the point of interest the character stands at (the stone
+	// well, the hearth), in MarkRoom. A mark only holds in its room, so
+	// moving the character anywhere leaves it behind without every move
+	// having to clear it.
+	Mark     string `json:"mark,omitempty" dynamodbav:"mark,omitempty"`
+	MarkRoom string `json:"mark_room,omitempty" dynamodbav:"mark_room,omitempty"`
+}
+
+// MarkHere is the mark the character stands at in their current room, if any.
+func (c Character) MarkHere() string {
+	if c.Mark == "" || c.MarkRoom != c.LocationID {
+		return ""
+	}
+	return c.Mark
+}
+
+// SetMark stands the character at a mark in the room they're in.
+func (c *Character) SetMark(mark string) {
+	c.Mark = mark
+	c.MarkRoom = c.LocationID
 }
 
 // MaxScale bounds character scale (a gargantuan creature is about 4).

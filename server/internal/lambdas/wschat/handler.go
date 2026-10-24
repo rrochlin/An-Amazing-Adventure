@@ -448,6 +448,13 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			// Every room, so characters moving anywhere show on the map.
 			UpdatedRooms: memberView.Rooms,
 		}
+		// Each message keeps its own events, as the saved history does (the
+		// stage plays a cue on the line of the narration it was written for).
+		if turn.AuthoredDialogue != "" {
+			delta.Events = turn.NarrativeEvents
+			delta.SceneEvents = turn.SceneEvents
+			delta.Authored = true
+		}
 		if postTurnOwnerLoc != preTurnPlayerLoc || true { // always send current room
 			delta.CurrentRoom = &memberView.CurrentRoom
 		}

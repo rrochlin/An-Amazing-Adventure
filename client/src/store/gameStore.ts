@@ -28,7 +28,10 @@ function sameChatMessage(left: ChatMessage, right: ChatMessage): boolean {
    return leftEvents.every(
       (event, index) =>
          event.type === rightEvents[index]?.type &&
-         event.message === rightEvents[index]?.message,
+         event.message === rightEvents[index]?.message &&
+         event.character === rightEvents[index]?.character &&
+         event.mark === rightEvents[index]?.mark &&
+         event.emote === rightEvents[index]?.emote,
    );
 }
 
@@ -61,7 +64,8 @@ interface GameStore {
    applyDelta: (delta: StateDelta) => void;
    /** The stage has shown the last line: apply what was waiting. */
    narrationCaughtUp: () => void;
-   attachEventsToLastMessage: (events: WorldEvent[]) => void;
+   /** Events for the last message, or the one `back` messages before it. */
+   attachEventsToLastMessage: (events: WorldEvent[], back?: number) => void;
    appendStreamChunk: (chunk: string) => void;
    finalizeStreamingMessage: () => void;
    addChatMessage: (msg: ChatMessage) => void;
@@ -195,15 +199,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       pendingDeltas.forEach((d) => get().applyDelta(d));
    },
 
-   attachEventsToLastMessage: (events) => {
+   attachEventsToLastMessage: (events, back = 0) => {
       if (!events.length) return;
       const { chatMessages } = get();
-      if (!chatMessages.length) return;
-      const last = chatMessages[chatMessages.length - 1];
+      const at = chatMessages.length - 1 - back;
+      if (at < 0) return;
+      const msg = chatMessages[at];
       // Only attach to narrative messages (not player messages)
-      if (last.type !== 'narrative') return;
+      if (msg.type !== 'narrative') return;
       const updated = [...chatMessages];
-      updated[updated.length - 1] = { ...last, events };
+      updated[at] = { ...msg, events };
       set({ chatMessages: updated });
    },
 

@@ -270,6 +270,16 @@ describe('DialogueStage', () => {
 });
 
 describe('free roam and dialogue', () => {
+   it('focuses the text box on Enter and gives the keys back on Esc', () => {
+      setup(inProgress, { overlay: true });
+      const box = screen.getByPlaceholderText('Explore, or press Enter to say what you do');
+      expect(box).not.toHaveFocus();
+      fireEvent.keyDown(window, { key: 'Enter' });
+      expect(box).toHaveFocus();
+      fireEvent.keyDown(box, { key: 'Escape' });
+      expect(box).not.toHaveFocus();
+   });
+
    it('shows an arrival at once, with nothing to dismiss and the text box ready', () => {
       const { update } = setup(inProgress, { overlay: true });
       update({
@@ -296,5 +306,38 @@ describe('free roam and dialogue', () => {
       expect(onLeave).toHaveBeenCalledTimes(1);
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(onLeave).toHaveBeenCalledTimes(2);
+   });
+
+   it('hands each staging cue to the scene once, when its line is reached', () => {
+      const onCues = vi.fn();
+      const staged: ChatMessage = {
+         type: 'narrative',
+         content: 'Bess runs to the well.\nLittle Bess: Look!',
+         events: [{ type: 'cue', message: '', character: 'bess', emote: 'hop', line: 1 }],
+      };
+      // Already read on load: it has played; the world has her where she is.
+      const { update } = setup([...inProgress, { type: 'player', content: 'hi' }, staged], { onCues });
+      expect(onCues).not.toHaveBeenCalled();
+
+      const next: ChatMessage = {
+         type: 'narrative',
+         content: 'Bess runs to the well.\nLittle Bess: Look!',
+         events: [
+            { type: 'cue', message: '', character: 'bess', mark: 'stone_well', line: 0 },
+            { type: 'cue', message: '', character: 'bess', emote: 'hop', line: 1 },
+         ],
+      };
+      const messages = [...inProgress, { type: 'player', content: 'hi' } as ChatMessage, staged, { type: 'player', content: 'again' } as ChatMessage, next];
+      update({ messages, onCues });
+      tick(100);
+      expect(onCues).toHaveBeenCalledTimes(1);
+      expect(onCues.mock.calls[0][0].map((c: { mark?: string }) => c.mark)).toEqual(['stone_well']);
+
+      fireEvent.click(stage()); // finish the line
+      fireEvent.click(stage()); // on to Bess's line
+      expect(onCues).toHaveBeenCalledTimes(2);
+      expect(onCues.mock.calls[1][0][0].emote).toBe('hop');
+      update({ messages: [...messages], onCues });
+      expect(onCues).toHaveBeenCalledTimes(2);
    });
 });

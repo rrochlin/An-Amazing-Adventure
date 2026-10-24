@@ -148,3 +148,40 @@ func TestPipelineForFollowsTheCampaignSwitch(t *testing.T) {
 		t.Fatal("no campaign: current")
 	}
 }
+
+func TestGameMaster_StagesTheSceneBeforeAnyoneLeaves(t *testing.T) {
+	// Playtest 9: Dunstan walks off into the long grass, then leaves the
+	// meadow. His mark belongs to the meadow, and the stage gets the cues.
+	def, g := briarwellAt(t, "village_deeds")
+	if err := g.PlaceCharacter(g.OwnerID, "meadow"); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeGM{
+		narrative: "You plant your feet.\n\nDunstan: Not worth my time.\n\nHe stalks off through the grass.",
+		decision: `{"world_events":[{"type":"move_character","input":{"character_name":"Dunstan","room_name":"Village Square"}}],
+		  "beats":{},
+		  "staging":[{"line":0,"who":"player","move_to":"old_fence_post"},
+		             {"line":2,"who":"Dunstan","move_to":"long_grass"},
+		             {"line":7,"who":"Dunstan","emote":"shake"}]}`,
+	}
+	out, err := story.GameMaster{Models: fake}.RunTurn(context.Background(), story.TurnInput{Game: g, Campaign: def, PlayerInput: "I face Dunstan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dunstan := g.NPCs["bully"]
+	if dunstan.Mark != "long_grass" || dunstan.MarkRoom != "meadow" || dunstan.MarkHere() != "" {
+		t.Errorf("his mark stays in the meadow he left: %+v", dunstan)
+	}
+	if owner, _ := g.OwnerCharacter(); owner.MarkHere() != "old_fence_post" {
+		t.Errorf("player mark %q", owner.MarkHere())
+	}
+	var cues []game.WorldEvent
+	for _, e := range out.NarrativeEvents {
+		if e.Type == "cue" {
+			cues = append(cues, e)
+		}
+	}
+	if len(cues) != 3 || cues[1].Character != "bully" || cues[2].Line != 2 {
+		t.Errorf("cues for the stage, the late one on the last paragraph: %+v", cues)
+	}
+}

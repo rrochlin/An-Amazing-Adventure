@@ -23,6 +23,7 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 	line("Narrate only what the player's action achieves this turn, where they are. Stop at the next decision point and leave the next step to the player: never carry them through a second errand or on to a second place in one turn.")
 	line("The player decides what their character does, says and feels: play out what they attempt. Never make their character hesitate, change their mind or decline. When something can't work, or a beat is already settled, show the world's answer instead (someone refuses, shrugs, pays nothing).")
 	line("Keep to the cast: don't give names to new characters (an unnamed passer-by is fine).")
+	line("Everyone listed as here is in the room, beside the player, when the turn starts: they can leave during it (report move_character), but never narrate them as already gone.")
 	line("End on the moment itself: a line of dialogue, a sight, a question someone asks. Never end by listing what the player could do (\"You could..., or you could...\") and never recap the errands or places still open; the journal does that.")
 
 	node := scene(def, g)
@@ -42,6 +43,9 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 		line("\n%s", strings.TrimSpace(campaignBrief))
 	}
 	line("\n%s", strings.TrimSpace(worldSlice(g)))
+	if staging := stagingBrief(g); staging != "" {
+		line("%s", strings.TrimSpace(staging))
+	}
 	if known := whatTheyKnow(def, g, node); known != "" {
 		line("%s", known)
 	}
