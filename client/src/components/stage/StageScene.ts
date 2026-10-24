@@ -92,6 +92,8 @@ export class StageScene extends Phaser.Scene {
    private playerToMark = false;
    /** The story's walk for the player: plays even while the controls are locked. */
    private storyPath: Tile[] = [];
+   /** The story's walk is taking the player to the room it moved them to (no room changes to report). */
+   private crossing = false;
    /** Reactions waiting for their character to stop walking. */
    private emotes: { id: string; emote: string }[] = [];
    /** The speech bubble on screen, over whoever is speaking. */
@@ -196,8 +198,17 @@ export class StageScene extends Phaser.Scene {
       // The story walks the player first, whatever the controls.
       if (this.storyPath.length) {
          const next = this.storyPath.shift()!;
-         if (canStep(view.art, view.rooms, this.playerTile, next, this.occupied())) this.step(next);
-         else this.storyPath = [];
+         if (canStep(view.art, view.rooms, this.playerTile, next, this.occupied())) {
+            this.step(next);
+         } else {
+            this.storyPath = [];
+            if (this.crossing) {
+               // Blocked on the way: they're put where the story has them.
+               this.crossing = false;
+               this.playerTile = undefined;
+               this.render(view);
+            }
+         }
          return;
       }
       if (view.controlsLocked) {
@@ -264,6 +275,11 @@ export class StageScene extends Phaser.Scene {
          // The view as it is now: the server may have answered mid-step.
          const now = this.view ?? view;
          const room = roomAt(now.art, next);
+         if (this.crossing) {
+            // The story's walk: the server already has them where it's going.
+            if (!this.storyPath.length) this.crossing = false;
+            return;
+         }
          if (room && room !== this.roomShown(now)) {
             this.walkedInto = room;
             this.walkedAt = Date.now();
@@ -329,6 +345,7 @@ export class StageScene extends Phaser.Scene {
       this.walkedInto = undefined;
       this.path = [];
       this.storyPath = [];
+      this.crossing = false;
       this.marks.clear();
       const { pad, ground, objects } = sceneLayers(art);
       for (const [i, grid] of [ground, objects].entries()) {
@@ -395,11 +412,24 @@ export class StageScene extends Phaser.Scene {
                this.path = [];
                this.goingToTalk = undefined;
             }
-            if (this.playerTile && roomAt(view.art, this.playerTile) === room) {
+            if (this.playerTile && (this.crossing || roomAt(view.art, this.playerTile) === room)) {
                t.x = this.playerTile.x;
                t.y = this.playerTile.y;
             } else if (!this.walking) {
-               this.playerTile = { x: t.x, y: t.y };
+               // The story moved the player to another room: they walk there
+               // when it's a short way, and are put there otherwise.
+               const others = new Set(this.placed.filter((o) => !o.isPlayer).map((o) => `${o.x},${o.y}`));
+               const path = this.playerTile && this.sprites.has('player') ? findPath(view.art, view.rooms, this.playerTile, { x: t.x, y: t.y }, others) : [];
+               if (path.length && path.length <= MAX_WALK) {
+                  this.storyPath = path;
+                  this.crossing = true;
+                  this.path = [];
+                  this.goingToTalk = undefined;
+                  t.x = this.playerTile!.x;
+                  t.y = this.playerTile!.y;
+               } else {
+                  this.playerTile = { x: t.x, y: t.y };
+               }
             }
          }
          if (t.isPlayer && this.walking) {
