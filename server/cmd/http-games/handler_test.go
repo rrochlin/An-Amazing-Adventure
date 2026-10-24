@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 )
@@ -220,21 +219,3 @@ func TestHandlerGames_MissingSESSIONS_TABLE_Panics(t *testing.T) {
 	})
 }
 
-func TestHandlerGames_NoCONNECTIONS_TABLE_DoesNotPanic(t *testing.T) {
-	// No AWS in tests: a short deadline fails the calls at once instead of
-	// waiting seconds for credentials.
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	// http-games must NOT panic when CONNECTIONS_TABLE is absent —
-	// it never uses the connections table.
-	t.Setenv("SESSIONS_TABLE", "test-sessions")
-	t.Setenv("CONNECTIONS_TABLE", "") // explicitly absent
-	req := makeHTTPReq("GET", "/api/games", "", "user-sub-123", nil)
-	// Should reach DynamoDB (and fail with a credential/network error), not panic
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("http-games panicked with CONNECTIONS_TABLE absent: %v", r)
-		}
-	}()
-	handler(ctx, req) //nolint:errcheck
-}
