@@ -382,6 +382,9 @@ type Condition struct {
 	RoomID      string   `json:"room_id,omitempty"`
 	ObjectiveID string   `json:"objective_id,omitempty"`
 	Status      string   `json:"status,omitempty"`
+	// Item is what player_has_item looks for in the pack, matched like
+	// take_item ("copper coin|coin"); Value is how many (1 if unset).
+	Item string `json:"item,omitempty"`
 }
 
 type AllowedConditionSpec struct {

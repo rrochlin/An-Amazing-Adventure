@@ -337,6 +337,15 @@ func (d *CampaignDefinition) validateConditions(conditions []Condition, context 
 					return fmt.Errorf("%s[%d] room_id %q does not exist", context, i, cond.RoomID)
 				}
 			}
+		case "player_has_item":
+			if strings.TrimSpace(cond.Item) == "" {
+				return fmt.Errorf("%s[%d] item is required for type %q", context, i, cond.Type)
+			}
+			if cond.Value != nil {
+				if n, err := intValue(cond.Value); err != nil || n < 1 {
+					return fmt.Errorf("%s[%d] value must be a count of at least 1 for type %q", context, i, cond.Type)
+				}
+			}
 		case "player_in_room":
 			if cond.RoomID == "" {
 				return fmt.Errorf("%s[%d] room_id is required for type %q", context, i, cond.Type)

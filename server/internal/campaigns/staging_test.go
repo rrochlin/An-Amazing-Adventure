@@ -11,6 +11,7 @@ import (
 	yarnpb "drjosh.dev/yarn/bytecode"
 
 	"github.com/rrochlin/an-amazing-adventure/internal/campaigns"
+	"github.com/rrochlin/an-amazing-adventure/internal/game"
 )
 
 // cueLine finds the line of text a cue plays on, as the stage splits it.
@@ -189,5 +190,41 @@ func TestScenesCanRedescribeThePlaces(t *testing.T) {
 	bad.StoryNodes["bandit_raid"] = raid
 	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "the_moon") {
 		t.Errorf("an unknown room is rejected, got %v", err)
+	}
+}
+
+func TestTheErrandEndsWhenThePackHoldsTwoCoins(t *testing.T) {
+	def, g, _ := bootstrapBriarwell(t)
+	if _, err := campaigns.ResumeDialogueWithChoice(def, g, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
+		t.Fatal(err)
+	}
+	give := func() {
+		coin := game.NewItem("copper coin", "")
+		_ = g.AddItem(coin)
+		_ = g.GiveItemToPlayer(coin.ID)
+	}
+	give()
+	if r, _ := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); r.Transition.Transitioned {
+		t.Fatal("one coin isn't enough")
+	}
+	give()
+	r, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{})
+	if err != nil || r.Transition.ToNodeID != "gift_stall" {
+		t.Fatalf("two coins in the pack: on to the stall, got %+v %v", r.Transition, err)
+	}
+
+	bad := *def
+	bad.StoryNodes = map[string]campaigns.StoryNode{}
+	for id, n := range def.StoryNodes {
+		bad.StoryNodes[id] = n
+	}
+	deeds := bad.StoryNodes["village_deeds"]
+	deeds.CompletionRules = []campaigns.TransitionRule{{Conditions: []campaigns.Condition{{Type: "player_has_item"}}, NextNodeID: "gift_stall"}}
+	bad.StoryNodes["village_deeds"] = deeds
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "item is required") {
+		t.Errorf("player_has_item needs an item, got %v", err)
 	}
 }

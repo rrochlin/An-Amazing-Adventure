@@ -693,6 +693,16 @@ func conditionMatches(def *CampaignDefinition, g *game.Game, cond Condition) (bo
 	case "player_in_room":
 		owner, ok := g.OwnerCharacter()
 		return ok && owner.LocationID == cond.RoomID, nil
+	case "player_has_item":
+		want := 1
+		if cond.Value != nil {
+			n, err := intValue(cond.Value)
+			if err != nil {
+				return false, err
+			}
+			want = n
+		}
+		return countInPack(g, cond.Item) >= want, nil
 	case "objective_status":
 		for _, objective := range state.ActiveObjectives {
 			if objective.ID == cond.ObjectiveID {
@@ -1062,6 +1072,23 @@ func SceneStartedEvent(node StoryNode) game.WorldEvent {
 // of the "|"-separated names that matches exactly (ignoring case), else the
 // first item whose name contains it. Nothing happens when none match; the
 // story doesn't fail because the player lost something.
+// countInPack counts the player's items matching a take_item style pattern
+// ("copper coin|coin": any of them, exact name or contained).
+func countInPack(g *game.Game, names string) int {
+	n := 0
+	for _, name := range g.PackNames() {
+		name = strings.ToLower(name)
+		for _, want := range strings.Split(names, "|") {
+			want = strings.ToLower(strings.TrimSpace(want))
+			if want != "" && (name == want || strings.Contains(name, want)) {
+				n++
+				break
+			}
+		}
+	}
+	return n
+}
+
 func takeItemFromPlayer(g *game.Game, names string) {
 	owner, ok := g.OwnerCharacter()
 	if !ok {
