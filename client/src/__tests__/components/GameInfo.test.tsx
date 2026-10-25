@@ -150,4 +150,13 @@ describe('GameInfo', () => {
        await userEvent.click(screen.getByRole('button', { name: /drop/i }));
        expect(sendAction).toHaveBeenCalledWith('drop', 'Health Potion');
     });
+
+   it('greys out an exit the scene keeps the player out of, and says why', () => {
+      render(
+         <ThemeProvider theme={AppTheme}>
+            <GameInfo gameState={makeGameState()} sendAction={vi.fn()} blocked={{ 'room-2': 'Mother told you not to go.' }} />
+         </ThemeProvider>,
+      );
+      expect(screen.getByRole('button', { name: /north: Mother told you not to go/i })).toBeDisabled();
+   });
 });

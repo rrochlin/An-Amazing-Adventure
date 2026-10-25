@@ -65,6 +65,8 @@ interface GameInfoProps {
    isOwner?: boolean;
    /** In dialogue the player can't move: the exits are disabled. */
    movementLocked?: boolean;
+   /** Places the scene keeps the player out of: room ID → the reason. */
+   blocked?: Record<string, string>;
 }
 
 export const GameInfo = ({
@@ -74,6 +76,7 @@ export const GameInfo = ({
    sessionId,
    isOwner,
    movementLocked,
+   blocked,
 }: GameInfoProps) => {
    // UI-FUT-4: show focusedRoom when hovering/clicking map, otherwise fall back to current room
    const displayRoom = focusedRoom ?? gameState?.current_room;
@@ -373,22 +376,29 @@ export const GameInfo = ({
                         <Box
                            sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}
                         >
-                           {Object.keys(currentRoom.connections).map((dir) => (
-                              <Button
-                                 key={dir}
-                                 size="small"
-                                 variant="outlined"
-                                 onClick={() => sendAction('move', dir)}
-                                 disabled={movementLocked}
-                                 sx={{
-                                    textTransform: 'capitalize',
-                                    fontSize: '0.75rem',
-                                    py: 0.25,
-                                 }}
-                              >
-                                 {dir}
-                              </Button>
-                           ))}
+                           {Object.entries(currentRoom.connections).map(([dir, to]) => {
+                              const why = blocked?.[to];
+                              return (
+                                 <Tooltip key={dir} title={why ?? ''}>
+                                    <span>
+                                       <Button
+                                          size="small"
+                                          variant="outlined"
+                                          onClick={() => sendAction('move', dir)}
+                                          disabled={movementLocked || !!why}
+                                          aria-label={why ? `${dir}: ${why}` : dir}
+                                          sx={{
+                                             textTransform: 'capitalize',
+                                             fontSize: '0.75rem',
+                                             py: 0.25,
+                                          }}
+                                       >
+                                          {dir}
+                                       </Button>
+                                    </span>
+                                 </Tooltip>
+                              );
+                           })}
                         </Box>
                      </Box>
                   )}

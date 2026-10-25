@@ -51,6 +51,8 @@ interface SceneScreenProps {
    cues?: StageCue[];
    /** The spoken line on screen: shown in a bubble over the speaker. */
    speaking?: SpokenLine | null;
+   /** Places the scene keeps the player out of: room ID → the reason. */
+   blocked?: Record<string, string>;
    location?: string;
    sceneTitle?: string;
    objective?: string;
@@ -91,6 +93,7 @@ export function SceneScreen({
    playerMark,
    cues,
    speaking,
+   blocked,
    location,
    sceneTitle,
    objective,
@@ -212,6 +215,7 @@ export function SceneScreen({
                   playerMark={playerMark}
                   cues={cues}
                   speaking={speaking}
+                  blocked={blocked}
                   places={indoors ? sceneMap?.points_of_interest : undefined}
                   insetTop={chipHeight}
                   insetBottom={framedPanel}

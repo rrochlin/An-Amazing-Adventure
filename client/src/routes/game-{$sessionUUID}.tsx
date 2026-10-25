@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
    Alert,
    Box,
@@ -285,6 +285,11 @@ function GamePage() {
    const addStageCues = useCallback((cues: StageCue[]) => setStageCues((had) => [...had, ...cues]), []);
    // The spoken line on screen, shown over the speaker.
    const [speaking, setSpeaking] = useState<SpokenLine | null>(null);
+   // Places the scene keeps the player out of: room ID → the reason.
+   const blocked = useMemo(
+      () => Object.fromEntries((campaignState?.blocked_rooms ?? []).map((b) => [b.room_id, b.reason])),
+      [campaignState?.blocked_rooms],
+   );
    // Narrow screens: the character panel opens as a drawer.
    const [infoOpen, setInfoOpen] = useState(false);
    const movementLocked =
@@ -566,6 +571,7 @@ function GamePage() {
                playerMark={gameState?.self?.mark}
                cues={stageCues}
                speaking={speaking}
+               blocked={blocked}
                location={gameState?.current_room?.name}
                sceneTitle={campaignState?.active_node_title}
                objective={campaignState?.current_objective}
@@ -644,6 +650,7 @@ function GamePage() {
                 gameState={gameState}
                 sendAction={sendAction}
                 movementLocked={movementLocked}
+                blocked={blocked}
                 focusedRoom={focusedRoom}
                 sessionId={sessionUUID}
                 isOwner={
