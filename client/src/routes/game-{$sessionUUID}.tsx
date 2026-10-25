@@ -528,9 +528,8 @@ function GamePage() {
        );
     }
 
-   // displayMessages contains only committed (finalized) messages.
-   // The in-flight streamingMessage is passed separately to Chat so it can
-   // render a dedicated StreamingChatMessage bubble rather than a plain entry.
+   // displayMessages contains only committed (finalized) messages; the
+   // in-flight streamingMessage is passed to the dialogue stage separately.
    const displayMessages = chatMessages;
    // Campaigns with pixel-art maps get the world map; others the room graph.
    const mapArt = mapArtFor(campaignState?.campaign_id);

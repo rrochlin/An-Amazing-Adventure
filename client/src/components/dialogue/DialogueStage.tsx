@@ -16,7 +16,7 @@ import type {
    EndingView,
    WorldEvent,
 } from '@/types/types';
-import { EndingPanel } from '../Chat';
+import { EndingPanel } from './EndingPanel';
 import { buildBeats, buildTranscript, type Beat, type SpokenLine, type StageCue } from './beats';
 import { renderInline } from './inline';
 import { useTypewriter } from './useTypewriter';
