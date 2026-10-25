@@ -222,6 +222,20 @@ func handler(ctx context.Context, req events.APIGatewayWebsocketProxyRequest) (e
 			_ = sender.SendError(ctx, connID, reason)
 			return events.APIGatewayProxyResponse{StatusCode: 200}, nil
 		}
+		// The scene may keep the player out of where they're heading.
+		dest := msg.Payload
+		if msg.SubAction == "move" {
+			if owner, ok := g.OwnerCharacter(); ok {
+				if room, err := g.GetRoom(owner.LocationID); err == nil {
+					dest = room.Connections[msg.Payload]
+				}
+			}
+		}
+		if reason, blocked := g.Campaign.Blocked(dest); blocked {
+			tr.Errorf("blocked: %s", reason)
+			_ = sender.SendError(ctx, connID, reason)
+			return events.APIGatewayProxyResponse{StatusCode: 200}, nil
+		}
 		// Either way the destination is discovered (fog of war).
 		if msg.SubAction == "move" {
 			_, actionErr = g.MovePlayer(msg.Payload)

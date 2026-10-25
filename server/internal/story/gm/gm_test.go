@@ -399,3 +399,17 @@ func TestIndoorsTheInteriorsMarksAreOffered(t *testing.T) {
 		t.Error("outside, the room's own marks")
 	}
 }
+
+func TestTheGameMasterCantMoveThePlayerWhereTheSceneForbids(t *testing.T) {
+	def, g := briarwell(t)
+	g.Campaign.BlockedRooms = def.StoryNodes["village_deeds"].BlockedRooms
+	kept, dropped := gm.Validate(node(def, "village_deeds"), g, gm.Decision{WorldEvents: []gm.WorldEvent{
+		{Type: "move_player", Input: map[string]any{"room_name": "Woods' Edge"}},
+	}})
+	if len(kept.WorldEvents) != 0 || len(dropped) != 1 || !strings.Contains(dropped[0], "Mother told you") {
+		t.Fatalf("kept %+v dropped %v", kept.WorldEvents, dropped)
+	}
+	if !strings.Contains(gm.Brief(def, g), "can't go to these places in this scene: Woods' Edge") {
+		t.Error("the brief says where the player can't go")
+	}
+}

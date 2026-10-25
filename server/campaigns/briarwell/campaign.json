@@ -351,6 +351,9 @@
       }
     },
     "village_deeds": {
+      "blocked_rooms": [
+        { "room_id": "woods_edge", "reason": "Mother told you not to go past the meadow." }
+      ],
       "mode": "ai_scene",
       "title": "Good Turns and Bad",
       "beats": [
@@ -498,6 +501,9 @@
     },
     "bandit_raid": {
       "mode": "ai_scene",
+      "blocked_rooms": [
+        { "room_id": "village_square", "reason": "Fire and bandits fill the square; there's no way out that way." }
+      ],
       "on_enter": [
         { "type": "describe_room", "room_id": "family_cottage", "description": "The cottage is full of smoke; the thatch is catching, and the front door hangs broken on its hinges." },
         { "type": "describe_room", "room_id": "village_square", "description": "Torches and running shapes; the well stands in a ring of burning roofs, and someone is screaming for help." },

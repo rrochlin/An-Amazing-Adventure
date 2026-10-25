@@ -232,6 +232,14 @@ func (d *CampaignDefinition) Validate() error {
 				return fmt.Errorf("story node %q mode %q requires dialogue_start_node", nodeID, node.Mode)
 			}
 		}
+		for _, b := range node.BlockedRooms {
+			if _, ok := d.Map.Rooms[b.RoomID]; !ok {
+				return fmt.Errorf("story node %q blocks room %q, which does not exist", nodeID, b.RoomID)
+			}
+			if strings.TrimSpace(b.Reason) == "" {
+				return fmt.Errorf("story node %q blocks room %q without a reason for the player", nodeID, b.RoomID)
+			}
+		}
 		if err := d.validateActions(node.OnEnter, fmt.Sprintf("story node %q on_enter", nodeID)); err != nil {
 			return err
 		}
