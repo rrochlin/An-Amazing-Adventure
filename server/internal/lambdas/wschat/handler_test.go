@@ -754,3 +754,31 @@ func TestHandlerChat_TwoTurnsStartingAtOnceOnlyOneRuns(t *testing.T) {
 		t.Fatal("losing the race for the turn: no model call")
 	}
 }
+
+func TestHandlerChat_TheStoryMovingThePlayerReachesSaveAndClient(t *testing.T) {
+	// #115: moving by narration. The game master's move_player lands in the
+	// saved game, the delta's current room and every room's occupants.
+	dbFake, aiFake := turnLockSetup(t, deedsSave(t))
+	aiFake.gmDecision = `{"world_events":[{"type":"move_player","input":{"room_name":"Meadow"}}],"beats":{}}`
+	ws := &fakeWSSender{}
+	newWSSender = func(context.Context) (wsSender, error) { return ws, nil }
+	chat(t, "I run down to the meadow")
+
+	g, err := game.FromSaveState(dbFake.putGameState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owner, _ := g.OwnerCharacter(); owner.LocationID != "meadow" {
+		t.Fatalf("saved: the player is in %q", owner.LocationID)
+	}
+	if len(ws.deltas) != 1 || ws.deltas[0].CurrentRoom == nil || ws.deltas[0].CurrentRoom.ID != "meadow" {
+		t.Fatalf("the client is told the player is in the meadow: %+v", ws.deltas)
+	}
+	var moved bool
+	for _, e := range ws.deltas[0].Events {
+		moved = moved || e.Type == "player_moved"
+	}
+	if !moved {
+		t.Errorf("the move is an event the story shows: %+v", ws.deltas[0].Events)
+	}
+}
