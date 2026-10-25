@@ -814,6 +814,15 @@ func applyActions(def *CampaignDefinition, g *game.Game, actions []Action) error
 			if err := g.PlaceCharacter(g.OwnerID, action.RoomID); err != nil {
 				return err
 			}
+		case "describe_room":
+			// The place as it is now (the square burning, then in ashes): what
+			// the player, the brief and arrival lines see from here on.
+			room, err := g.GetRoom(action.RoomID)
+			if err != nil {
+				return err
+			}
+			room.Description = action.Description
+			g.UpdateRoom(room)
 		default:
 			return fmt.Errorf("unsupported action type %q", action.Type)
 		}

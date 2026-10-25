@@ -498,6 +498,13 @@
     },
     "bandit_raid": {
       "mode": "ai_scene",
+      "on_enter": [
+        { "type": "describe_room", "room_id": "family_cottage", "description": "The cottage is full of smoke; the thatch is catching, and the front door hangs broken on its hinges." },
+        { "type": "describe_room", "room_id": "village_square", "description": "Torches and running shapes; the well stands in a ring of burning roofs, and someone is screaming for help." },
+        { "type": "describe_room", "room_id": "market_lane", "description": "Old Garrick's stall lies overturned, its ribbons trampled into the mud; the cottages either side are burning." },
+        { "type": "describe_room", "room_id": "old_mill", "description": "The barn is ablaze, lighting the turning water wheel orange." },
+        { "type": "describe_room", "room_id": "meadow", "description": "Smoke rolls low over the long grass; the fence post stands black against the glow of the village." }
+      ],
       "location_id": "family_cottage",
       "scene_map": "cottage_interior",
       "mood": "fire",
@@ -588,6 +595,11 @@
       "intro_text": "When the shouting finally stops, the silence is worse. Grey ash drifts down over what is left of Briarwell like snow.",
       "objective_text": "Answer the stranger.",
       "on_enter": [
+        { "type": "describe_room", "room_id": "family_cottage", "description": "Blackened beams and grey ash where the cottage stood; the garden gate still hangs from its post." },
+        { "type": "describe_room", "room_id": "village_square", "description": "The square is grey with ash. The well is untouched; nothing else is." },
+        { "type": "describe_room", "room_id": "market_lane", "description": "Charred timber and ash; nothing is left of Garrick's stall." },
+        { "type": "describe_room", "room_id": "old_mill", "description": "The barn is a heap of embers. The water wheel still turns." },
+        { "type": "describe_room", "room_id": "meadow", "description": "Ash drifts over the trampled grass; the village beyond is smoke and silence." },
         { "type": "start_dialogue", "asset_id": "rescue", "start_node": "Rescue" }
       ],
       "allowed_conditions": [

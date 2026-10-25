@@ -73,6 +73,18 @@ free roam first, add a condition the player meets by acting, such as `player_in_
 Until the player walks to Market Lane, the scene stays open and the other deeds can still be done.
 Briarwell moves on at once; `TestFreeRoamBufferBeforeTheNextScene` shows the paused version.
 
+### Places that change with the story
+
+A scene's `on_enter` can redescribe a room for the rest of the run, so the player, the game master's
+brief and arrival lines see the place as it is now:
+
+```json
+{ "type": "describe_room", "room_id": "village_square",
+  "description": "Torches and running shapes; the well stands in a ring of burning roofs." }
+```
+
+Briarwell's raid sets the village burning and the rescue leaves it in ashes.
+
 ### Staging in authored dialogue
 
 Yarn dialogue stages a scene with the same cues the game master hands in ([[game-master]]):

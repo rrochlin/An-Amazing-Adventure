@@ -161,3 +161,33 @@ func TestCalledNamesReachTheStage(t *testing.T) {
 		t.Errorf("two characters can't share a name in spoken lines, got %v", err)
 	}
 }
+
+func TestScenesCanRedescribeThePlaces(t *testing.T) {
+	// Playtest 8: after the raid the square still had "gossiping neighbours".
+	def, g, _ := bootstrapBriarwell(t)
+	square := func() string { r, _ := g.GetRoom("village_square"); return r.Description }
+	if !strings.Contains(square(), "gossiping") {
+		t.Fatalf("setup: %q", square())
+	}
+	for node, want := range map[string]string{"bandit_raid": "burning roofs", "rescue": "grey with ash"} {
+		g.Campaign.ActiveNodeID = node
+		if _, err := campaigns.EnterActiveNode(def, g); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(square(), want) {
+			t.Errorf("%s: the square should read %q, got %q", node, want, square())
+		}
+	}
+
+	bad := *def
+	bad.StoryNodes = map[string]campaigns.StoryNode{}
+	for id, n := range def.StoryNodes {
+		bad.StoryNodes[id] = n
+	}
+	raid := bad.StoryNodes["bandit_raid"]
+	raid.OnEnter = []campaigns.Action{{Type: "describe_room", RoomID: "the_moon", Description: "Cold."}}
+	bad.StoryNodes["bandit_raid"] = raid
+	if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "the_moon") {
+		t.Errorf("an unknown room is rejected, got %v", err)
+	}
+}

@@ -380,6 +380,13 @@ func (d *CampaignDefinition) validateActions(actions []Action, context string) e
 			if _, ok := d.Map.Rooms[action.RoomID]; !ok {
 				return fmt.Errorf("%s[%d] room_id %q does not exist", context, i, action.RoomID)
 			}
+		case "describe_room":
+			if _, ok := d.Map.Rooms[action.RoomID]; !ok {
+				return fmt.Errorf("%s[%d] room_id %q does not exist", context, i, action.RoomID)
+			}
+			if strings.TrimSpace(action.Description) == "" {
+				return fmt.Errorf("%s[%d] describe_room needs a description", context, i)
+			}
 		case "activate_objective", "complete_objective", "fail_objective":
 			if action.ObjectiveID == "" {
 				return fmt.Errorf("%s[%d] objective_id is required for type %q", context, i, action.Type)
