@@ -390,24 +390,7 @@
       "completion_rules": [
         {
           "conditions": [
-            { "type": "label_in", "key": "deed_doll", "values": ["returned", "kept"] },
-            { "type": "label_in", "key": "deed_miller", "values": ["told_wife", "took_bribe"] }
-          ],
-          "next_node_id": "gift_stall",
-          "actions": [{ "type": "complete_objective", "objective_id": "earn_coins" }]
-        },
-        {
-          "conditions": [
-            { "type": "label_in", "key": "deed_doll", "values": ["returned", "kept"] },
-            { "type": "label_in", "key": "deed_bully", "values": ["stopped", "joined"] }
-          ],
-          "next_node_id": "gift_stall",
-          "actions": [{ "type": "complete_objective", "objective_id": "earn_coins" }]
-        },
-        {
-          "conditions": [
-            { "type": "label_in", "key": "deed_miller", "values": ["told_wife", "took_bribe"] },
-            { "type": "label_in", "key": "deed_bully", "values": ["stopped", "joined"] }
+            { "type": "player_has_item", "item": "copper coin", "value": 2 }
           ],
           "next_node_id": "gift_stall",
           "actions": [{ "type": "complete_objective", "objective_id": "earn_coins" }]

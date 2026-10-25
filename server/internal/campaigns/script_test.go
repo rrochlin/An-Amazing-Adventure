@@ -97,8 +97,12 @@ func TestScript_ValidationErrors(t *testing.T) {
 		"tier \"boss\"":                   func(n *campaigns.StoryNode, _ *campaigns.CampaignDefinition) { n.Cast[0].Tier = "boss" },
 		"appears_in":                      func(n *campaigns.StoryNode, _ *campaigns.CampaignDefinition) { n.Cast[0].ActorID = "bandit_leader" },
 		"without a value or meaning":      func(n *campaigns.StoryNode, _ *campaigns.CampaignDefinition) { n.Beats[0].Outcomes[0].Meaning = "" },
-		"isn't one of its label beats":    func(n *campaigns.StoryNode, _ *campaigns.CampaignDefinition) { n.Beats = n.Beats[1:] },
+		"isn't one of its label beats": func(n *campaigns.StoryNode, _ *campaigns.CampaignDefinition) {
+			readsBeat(n, 0)
+			n.Beats = n.Beats[1:]
+		},
 		"doesn't define": func(n *campaigns.StoryNode, _ *campaigns.CampaignDefinition) {
+			readsBeat(n, 0)
 			n.Beats[0].Outcomes = n.Beats[0].Outcomes[:1]
 		},
 		"unknown actor \"ghost\"": func(_ *campaigns.StoryNode, d *campaigns.CampaignDefinition) {
@@ -143,4 +147,20 @@ func TestNarratorBrief_StageDirectionsAndSceneCast(t *testing.T) {
 			t.Errorf("brief missing %q\n%s", want, brief)
 		}
 	}
+}
+
+// readsBeat adds a completion rule that reads every outcome of beat i (the
+// deeds scene moves on by coins, not by its beats).
+func readsBeat(n *campaigns.StoryNode, i int) {
+	beat := n.Beats[i]
+	values := make([]string, 0, len(beat.Outcomes))
+	for _, o := range beat.Outcomes {
+		values = append(values, o.Value)
+	}
+	n.CompletionRules = append(append([]campaigns.TransitionRule(nil), n.CompletionRules...), campaigns.TransitionRule{
+		Conditions: []campaigns.Condition{{Type: "label_in", Key: beat.Key, Values: values}},
+		NextNodeID: "gift_stall",
+	})
+	n.Beats = append([]campaigns.Beat(nil), n.Beats...)
+	n.Beats[i].Outcomes = append([]campaigns.BeatOutcome(nil), beat.Outcomes...)
 }

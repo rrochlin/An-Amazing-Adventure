@@ -73,6 +73,12 @@ free roam first, add a condition the player meets by acting, such as `player_in_
 Until the player walks to Market Lane, the scene stays open and the other deeds can still be done.
 Briarwell moves on at once; `TestFreeRoamBufferBeforeTheNextScene` shows the paused version.
 
+### Rules that read the pack
+
+A rule can check what the player carries: `{ "type": "player_has_item", "item": "copper coin", "value": 2 }`
+holds once the pack has two items matching `item` (matched like `take_item`, so `"rag doll|doll"` tries
+each). Briarwell's errand ends when the player has earned two coins, however they earned them.
+
 ### Places that change with the story
 
 A scene's `on_enter` can redescribe a room for the rest of the run, so the player, the game master's
