@@ -49,6 +49,15 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 	if known := whatTheyKnow(def, g, node); known != "" {
 		line("%s", known)
 	}
+	if c := g.Campaign; c != nil && len(c.BlockedRooms) > 0 {
+		var out []string
+		for _, br := range c.BlockedRooms {
+			if room, err := g.GetRoom(br.RoomID); err == nil {
+				out = append(out, fmt.Sprintf("%s (%s)", room.Name, br.Reason))
+			}
+		}
+		line("The player can't go to these places in this scene: %s. Don't move them there; if they try, the reason stops them.", strings.Join(out, "; "))
+	}
 	if c := g.Campaign; c != nil && c.Conversation != nil {
 		line("\nThe player is in a conversation with %s, who is right beside them. Play %s's side of it: answer, react, ask back. The conversation goes on until the player leaves it.", c.Conversation.Name, c.Conversation.Name)
 	}

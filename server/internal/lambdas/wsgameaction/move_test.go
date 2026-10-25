@@ -347,3 +347,17 @@ func TestDialogueChoice_TellsWhatThePackGainedAndLost(t *testing.T) {
 		t.Fatalf("the choice's events: %+v", d.Events)
 	}
 }
+
+func TestMoveToRoom_TheSceneCanKeepThePlayerOut(t *testing.T) {
+	def := briarwell(t)
+	store, sender := walkingSession(t, def)
+	walk(t, "village_square")
+	walk(t, "meadow")
+	walk(t, "woods_edge")
+	if got := playerRoom(t, store.save); got != "meadow" {
+		t.Fatalf("Mother said not past the meadow; the player is in %s", got)
+	}
+	if len(sender.errors) == 0 || !strings.Contains(sender.errors[len(sender.errors)-1], "Mother told you") {
+		t.Errorf("the player is told why: %v", sender.errors)
+	}
+}

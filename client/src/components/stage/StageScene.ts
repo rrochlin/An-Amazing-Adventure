@@ -31,6 +31,8 @@ export interface StageView {
    cues?: StageCue[];
    /** The spoken line on screen: a bubble over the speaker. */
    speaking?: SpokenLine | null;
+   /** Places the scene keeps the player out of: room ID → the reason. */
+   blocked?: Record<string, string>;
    /** The marks shown in place of the room's (an interior's own). */
    places?: PointOfInterest[];
    /** Pixels covered at the top (the location sign) and bottom (the text panel). */
@@ -104,6 +106,10 @@ export class StageScene extends Phaser.Scene {
    private emotes: { id: string; emote: string }[] = [];
    /** What happened to someone, to show rising over them. */
    private pops: { id: string; text: string; tone: PopTone }[] = [];
+   /** The rooms with their connections, less the places the scene keeps the player out of. */
+   private open?: { view: StageView; rooms: Record<string, RoomView> };
+   /** When the last "you can't go there" was shown (so holding a key doesn't repeat it). */
+   private noticedAt = 0;
    /** The speech bubble on screen, over whoever is speaking. */
    private bubble?: { line: string; who: string; box: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text; panel: Phaser.GameObjects.Graphics };
 
@@ -162,7 +168,10 @@ export class StageScene extends Phaser.Scene {
             return;
          }
          this.goingToTalk = undefined;
-         this.path = findPath(this.view.art, this.view.rooms, this.playerTile, to, this.occupied());
+         this.path = findPath(this.view.art, this.openRooms(this.view), this.playerTile, to, this.occupied());
+         // A tile in a place the scene keeps them out of: say why.
+         const there = roomAt(this.view.art, to);
+         if (!this.path.length && there && this.view.blocked?.[there]) this.notice(this.view.blocked[there]);
       });
    }
 
@@ -177,7 +186,7 @@ export class StageScene extends Phaser.Scene {
       let best: Tile[] | undefined;
       for (const d of Object.values(STEPS)) {
          const spot = { x: who.x + d.x, y: who.y + d.y };
-         const path = findPath(view.art, view.rooms, this.playerTile!, spot, occupied);
+         const path = findPath(view.art, this.openRooms(view), this.playerTile!, spot, occupied);
          if (path.length && (!best || path.length < best.length)) best = path;
       }
       if (!best) return;
@@ -216,7 +225,7 @@ export class StageScene extends Phaser.Scene {
       // The story walks the player first, whatever the controls.
       if (this.storyPath.length) {
          const next = this.storyPath.shift()!;
-         if (canStep(view.art, view.rooms, this.playerTile, next, this.occupied())) {
+         if (canStep(view.art, this.openRooms(view), this.playerTile, next, this.occupied())) {
             this.step(next);
          } else {
             this.storyPath = [];
@@ -259,9 +268,11 @@ export class StageScene extends Phaser.Scene {
          next = this.path.shift();
       }
       if (!next) return;
-      if (!canStep(view.art, view.rooms, this.playerTile, next, this.occupied())) {
+      if (!canStep(view.art, this.openRooms(view), this.playerTile, next, this.occupied())) {
          this.path = [];
          if (held) this.face(held);
+         const there = roomAt(view.art, next);
+         if (there && view.blocked?.[there]) this.notice(view.blocked[there]);
          return;
       }
       this.step(next);
@@ -472,7 +483,7 @@ export class StageScene extends Phaser.Scene {
                // The story sends the player to their mark: they walk there.
                this.playerToMark = false;
                const others = new Set(this.placed.filter((o) => !o.isPlayer).map((o) => `${o.x},${o.y}`));
-               this.storyPath = findPath(view.art, view.rooms, this.playerTile, { x: t.x, y: t.y }, others);
+               this.storyPath = findPath(view.art, this.openRooms(view), this.playerTile, { x: t.x, y: t.y }, others);
                this.path = [];
                this.goingToTalk = undefined;
             }
@@ -635,7 +646,7 @@ export class StageScene extends Phaser.Scene {
       for (const d of Object.values(STEPS)) {
          const spot = { x: target.x + d.x, y: target.y + d.y };
          if (occupied.has(`${spot.x},${spot.y}`)) continue;
-         const path = findPath(view.art, view.rooms, mover, spot, occupied);
+         const path = findPath(view.art, this.openRooms(view), mover, spot, occupied);
          if (path.length && (!best || path.length < best.length)) best = path;
       }
       if (!best) return;
@@ -821,6 +832,44 @@ export class StageScene extends Phaser.Scene {
          }
       }
       this.pops = [];
+   }
+
+   /** Rooms as the player may walk them: a blocked place isn't connected to anything. */
+   private openRooms(view: StageView): Record<string, RoomView> {
+      if (!view.blocked || !Object.keys(view.blocked).length) return view.rooms;
+      if (this.open?.view === view) return this.open.rooms;
+      const blocked = view.blocked;
+      const rooms = Object.fromEntries(
+         Object.entries(view.rooms).map(([id, r]) => [
+            id,
+            { ...r, connections: Object.fromEntries(Object.entries(r.connections ?? {}).filter(([, to]) => !blocked[to])) },
+         ]),
+      );
+      this.open = { view, rooms };
+      return rooms;
+   }
+
+   /** Why the player can't go somewhere, for a moment over their head. */
+   private notice(text: string) {
+      const sprite = this.sprites.get('player');
+      if (!sprite || Date.now() - this.noticedAt < 2500) return;
+      this.noticedAt = Date.now();
+      const zoom = this.cameras.main.zoom;
+      const note = this.add
+         .text(sprite.x, sprite.y - sprite.displayHeight - 2, text, {
+            fontFamily: '"Crimson Text", Georgia, serif',
+            fontSize: '14px',
+            fontStyle: 'italic',
+            color: '#f3e9d2',
+            backgroundColor: '#0c0810cc',
+            padding: { x: 5, y: 3 },
+            wordWrap: { width: 180, useAdvancedWrap: true },
+            align: 'center',
+         })
+         .setOrigin(0.5, 1)
+         .setScale(1 / zoom)
+         .setDepth(104);
+      this.tweens.add({ targets: note, alpha: 0, delay: 2200, duration: 400, onComplete: () => note.destroy() });
    }
 
    /** A "!" over someone's head for a moment. */

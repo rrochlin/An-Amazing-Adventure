@@ -208,11 +208,14 @@ type StoryNode struct {
 	Summary           string `json:"summary,omitempty"`
 	// IntroText is authored narration shown to the player when the node is
 	// entered, before any dialogue. It orients them in the new scene.
-	IntroText       string           `json:"intro_text,omitempty"`
-	ObjectiveText   string           `json:"objective_text,omitempty"`
-	OnEnter         []Action         `json:"on_enter,omitempty"`
-	CompletionRules []TransitionRule `json:"completion_rules,omitempty"`
-	FailureRules    []TransitionRule `json:"failure_rules,omitempty"`
+	IntroText     string   `json:"intro_text,omitempty"`
+	ObjectiveText string   `json:"objective_text,omitempty"`
+	OnEnter       []Action `json:"on_enter,omitempty"`
+	// BlockedRooms are places the player can't go during this scene, each
+	// with the reason they're told ("Mother said not past the meadow").
+	BlockedRooms    []game.BlockedRoom `json:"blocked_rooms,omitempty"`
+	CompletionRules []TransitionRule   `json:"completion_rules,omitempty"`
+	FailureRules    []TransitionRule   `json:"failure_rules,omitempty"`
 	// NarratorContract is the older name for StageDirections; the loader
 	// copies it over when stage_directions is absent.
 	NarratorContract  NodeNarratorContract   `json:"narrator_contract,omitempty"`

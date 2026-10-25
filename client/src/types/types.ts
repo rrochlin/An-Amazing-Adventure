@@ -75,6 +75,8 @@ export interface CampaignStateView {
    active_scene_map?: SceneMapView | null;
    /** The current scene's light: dawn, dusk, night, fire or ashes; none is daylight. */
    active_mood?: string;
+   /** Places the current scene keeps the player out of, and why. */
+   blocked_rooms?: { room_id: string; reason: string }[];
    /** Who the player is talking to: while set, the game is in dialogue. */
    conversation?: { with: string; name: string } | null;
    current_objective?: string;

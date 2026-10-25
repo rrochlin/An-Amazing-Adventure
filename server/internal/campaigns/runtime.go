@@ -156,6 +156,7 @@ func EnterActiveNode(def *CampaignDefinition, g *game.Game) (string, error) {
 	g.Campaign.CurrentObjective = node.ObjectiveText
 	g.Campaign.ActiveNodeTitle = node.Title
 	g.Campaign.ActiveMood = node.Mood
+	g.Campaign.BlockedRooms = append([]game.BlockedRoom(nil), node.BlockedRooms...)
 	g.Campaign.ActiveSceneMap = nil
 	if sm, ok := def.Map.SceneMaps[node.SceneMap]; ok && node.SceneMap != "" {
 		g.Campaign.ActiveSceneMap = &game.SceneMapView{ID: node.SceneMap, RoomID: sm.RoomID, Name: sm.Name, PointsOfInterest: append([]game.PointOfInterest(nil), sm.PointsOfInterest...)}

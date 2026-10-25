@@ -110,6 +110,10 @@ func Validate(node *campaigns.StoryNode, g *game.Game, d Decision) (Decision, []
 			dropped = append(dropped, fmt.Sprintf("move_player: the player is already in %s", room))
 			continue
 		}
+		if reason, ok := blockedMove(g, ev); ok {
+			dropped = append(dropped, fmt.Sprintf("move_player: the scene keeps the player out of there (%s)", reason))
+			continue
+		}
 		if who, room, ok := characterAlreadyThere(g, ev); ok {
 			// Playtest 9: it announced "Little Bess arrives." for a girl
 			// who had been standing there all along.
@@ -252,6 +256,21 @@ func alreadyThere(g *game.Game, ev WorldEvent) (string, bool) {
 		return room.Name, true
 	}
 	return "", false
+}
+
+// blockedMove reports a move_player into a room the scene keeps the player out of.
+func blockedMove(g *game.Game, ev WorldEvent) (string, bool) {
+	if g == nil || g.Campaign == nil || ev.Type != "move_player" {
+		return "", false
+	}
+	target, _ := ev.Input["room_name"].(string)
+	room, err := g.GetRoomByName(strings.TrimSpace(target))
+	if err != nil {
+		if room, err = g.GetRoom(strings.TrimSpace(target)); err != nil {
+			return "", false
+		}
+	}
+	return g.Campaign.Blocked(room.ID)
 }
 
 // characterAlreadyThere reports a move_character to the room the character

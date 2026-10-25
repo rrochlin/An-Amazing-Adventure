@@ -44,6 +44,9 @@ type CampaignRuntimeState struct {
 	ActiveSceneMap *SceneMapView `json:"active_scene_map,omitempty" dynamodbav:"active_scene_map,omitempty"`
 	// ActiveMood is the current scene's light ("" is daylight).
 	ActiveMood string `json:"active_mood,omitempty" dynamodbav:"active_mood,omitempty"`
+	// BlockedRooms are the places the current scene keeps the player out
+	// of, each with the reason the player is told.
+	BlockedRooms []BlockedRoom `json:"blocked_rooms,omitempty" dynamodbav:"blocked_rooms,omitempty"`
 	// Conversation is who the player is talking to. While it is open the
 	// game is in dialogue: the player can't walk.
 	Conversation     *ConversationView            `json:"conversation,omitempty" dynamodbav:"conversation,omitempty"`
@@ -156,6 +159,25 @@ type ConversationView struct {
 
 // InDialogue reports whether the game is in dialogue: a choice is open or
 // the player is in a conversation. The player can't walk then.
+// BlockedRoom is a place the scene keeps the player out of, and why.
+type BlockedRoom struct {
+	RoomID string `json:"room_id" dynamodbav:"room_id"`
+	Reason string `json:"reason" dynamodbav:"reason"`
+}
+
+// Blocked reports whether the scene keeps the player out of a room, and why.
+func (s *CampaignRuntimeState) Blocked(roomID string) (string, bool) {
+	if s == nil {
+		return "", false
+	}
+	for _, b := range s.BlockedRooms {
+		if b.RoomID == roomID {
+			return b.Reason, true
+		}
+	}
+	return "", false
+}
+
 func (s *CampaignRuntimeState) InDialogue() bool {
 	if s == nil {
 		return false
@@ -170,6 +192,7 @@ type CampaignStateView struct {
 	ActiveNodeTitle  string             `json:"active_node_title,omitempty"`
 	ActiveSceneMap   *SceneMapView      `json:"active_scene_map,omitempty"`
 	ActiveMood       string             `json:"active_mood,omitempty"`
+	BlockedRooms     []BlockedRoom      `json:"blocked_rooms,omitempty"`
 	Conversation     *ConversationView  `json:"conversation,omitempty"`
 	CurrentObjective string             `json:"current_objective,omitempty"`
 	BoolFlags        map[string]bool    `json:"bool_flags,omitempty"`
@@ -1165,6 +1188,7 @@ func (g *Game) BuildCampaignStateView() *CampaignStateView {
 		ActiveNodeTitle:  g.Campaign.ActiveNodeTitle,
 		ActiveSceneMap:   g.Campaign.ActiveSceneMap,
 		ActiveMood:       g.Campaign.ActiveMood,
+		BlockedRooms:     g.Campaign.BlockedRooms,
 		Conversation:     g.Campaign.Conversation,
 		CurrentObjective: g.Campaign.CurrentObjective,
 		BoolFlags:        copyBoolMap(g.Campaign.BoolFlags),
