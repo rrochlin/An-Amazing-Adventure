@@ -18,6 +18,7 @@ import { GameLayout } from '../components/GameLayout';
 import { isAuthenticated, getIdTokenClaims } from '../services/auth.service';
 import { LoadGame, RetryWorldGen } from '../services/api.game';
 import { useGameStore } from '../store/gameStore';
+import { friendlyError } from '../services/errors';
 import { useChoiceSubmit } from '@/hooks/useChoiceSubmit';
 import { useGameSocket } from '../hooks/useGameSocket';
 import { WorldGenTerminal } from '../components/WorldGenTerminal';
@@ -256,14 +257,19 @@ function GamePage() {
    }, [sessionUUID]); // eslint-disable-line react-hooks/exhaustive-deps
 
    // UI-FUT-8: detect reconnection (disconnected/error → connected)
+   // Only after a real connection dropped: the first connection of a page
+   // (which starts out "disconnected") is not a reconnection.
+   const wasConnected = useRef(false);
    useEffect(() => {
       if (
          wsStatus === 'connected' &&
+         wasConnected.current &&
          (prevWsStatus.current === 'disconnected' ||
             prevWsStatus.current === 'error')
       ) {
          setReconnectToast(true);
       }
+      if (wsStatus === 'connected') wasConnected.current = true;
       prevWsStatus.current = wsStatus;
    }, [wsStatus]);
 
@@ -640,7 +646,7 @@ function GamePage() {
                wsError !== 'quota_exceeded' &&
                wsError !== 'run_ended' && (
                   <Alert severity="warning" sx={{ mt: 1 }}>
-                     {wsError ?? 'Connection lost — retrying...'}
+                     {friendlyError(wsError)}
                   </Alert>
                )}
             </>

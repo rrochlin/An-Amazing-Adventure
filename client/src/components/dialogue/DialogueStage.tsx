@@ -134,7 +134,10 @@ export function DialogueStage({
    });
    // Whether the player has dismissed the last beat (freeing the text box).
    const [acknowledged, setAcknowledged] = useState(!fresh);
-   const [toasts, setToasts] = useState<WorldEvent[]>([]);
+   // Quest updates waiting to be shown, one at a time, each with its own key
+   // so each gets its own timer.
+   const [toasts, setToasts] = useState<(WorldEvent & { key: number })[]>([]);
+   const toastSeq = useRef(0);
    // The player acted and the story hasn't answered yet. Covers the gap
    // before the first streamed chunk, when isLoading is still false.
    const [waiting, setWaiting] = useState(false);
@@ -241,7 +244,9 @@ export function DialogueStage({
             fresh.push(...beat.notices);
          }
       }
-      if (fresh.length) setToasts((t) => [...t, ...fresh]);
+      // Only the latest few: a backlog shown late reads as wrong (the panel
+      // saw "Choose a gift" during the raid).
+      if (fresh.length) setToasts((t) => [...t, ...fresh.map((e) => ({ ...e, key: ++toastSeq.current }))].slice(-3));
    }, [beats, index]);
 
    // Staging plays once its beat is reached (including cues that arrive
@@ -712,6 +717,9 @@ export function DialogueStage({
          </Box>
 
          <Snackbar
+            // A new Snackbar per toast: one that stays open between toasts
+            // never starts another auto-hide timer, so the rest stayed up.
+            key={toasts[0]?.key}
             open={toasts.length > 0}
             autoHideDuration={3500}
             onClose={(_, reason) => {

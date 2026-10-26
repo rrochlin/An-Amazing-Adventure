@@ -268,9 +268,7 @@ func TestDialogueChoice_TellsTheClientWhereAMovedPlayerIs(t *testing.T) {
 	def := briarwell(t)
 	store, sender := walkingSession(t, def)
 	g, _ := game.FromSaveState(store.save)
-	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"}}); err != nil {
-		t.Fatal(err)
-	}
+	toTheStall(t, def, g)
 	if g.Campaign.ActiveNodeID != "gift_stall" {
 		t.Fatalf("setup: node %s", g.Campaign.ActiveNodeID)
 	}
@@ -295,9 +293,7 @@ func TestDialogueChoice_SendsEachMessagesStaging(t *testing.T) {
 	def := briarwell(t)
 	store, sender := walkingSession(t, def)
 	g, _ := game.FromSaveState(store.save)
-	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"}}); err != nil {
-		t.Fatal(err)
-	}
+	toTheStall(t, def, g)
 	g.Version++
 	store.save = g.ToSaveState(store.save.Narrative, store.save.ChatHistory)
 	body, _ := json.Marshal(actionRequest{Action: "game_action", SubAction: "dialogue_choice", Payload: "0"})
@@ -328,9 +324,7 @@ func TestDialogueChoice_TellsWhatThePackGainedAndLost(t *testing.T) {
 	def := briarwell(t)
 	store, sender := walkingSession(t, def)
 	g, _ := game.FromSaveState(store.save)
-	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"}}); err != nil {
-		t.Fatal(err)
-	}
+	toTheStall(t, def, g)
 	g.Version++
 	store.save = g.ToSaveState(store.save.Narrative, store.save.ChatHistory)
 	body, _ := json.Marshal(actionRequest{Action: "game_action", SubAction: "dialogue_choice", Payload: "0"})
@@ -359,5 +353,20 @@ func TestMoveToRoom_TheSceneCanKeepThePlayerOut(t *testing.T) {
 	}
 	if len(sender.errors) == 0 || !strings.Contains(sender.errors[len(sender.errors)-1], "Mother told you") {
 		t.Errorf("the player is told why: %v", sender.errors)
+	}
+}
+
+// toTheStall does two deeds, then walks the player to Market Lane, where the
+// stall scene opens.
+func toTheStall(t *testing.T, def *campaigns.CampaignDefinition, g *game.Game) {
+	t.Helper()
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.PlaceCharacter(g.OwnerID, "market_lane"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
+		t.Fatal(err)
 	}
 }

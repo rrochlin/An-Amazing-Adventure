@@ -80,9 +80,10 @@ export const NOTICE_EVENT_TYPES = new Set([
    'objective_unfinished',
 ]);
 
-// "Old Garrick: Sweets for the sweet." → speaker "Old Garrick". Capitalised,
-// short, and followed by ": " so narration like "Later: ..." rarely matches.
-const SPEAKER_LINE = /^([A-Z][A-Za-z'.-]*(?: [A-Z][A-Za-z'.-]*){0,2}): (.+)$/s;
+// "Old Garrick: Sweets for the sweet." → speaker "Old Garrick". Capitalised
+// words (with "the" or "of" between them: "Hob the Miller"), short, and
+// followed by ": " so narration like "Later: ..." rarely matches.
+const SPEAKER_LINE = /^([A-Z][A-Za-z'.-]*(?: (?:(?:the|of) )?[A-Z][A-Za-z'.-]*){0,2}): (.+)$/s;
 
 // A spoken line wrapped whole in quotes: the name plate already says who.
 const QUOTED = /^["“]([^"“”]*)["”]$/s;

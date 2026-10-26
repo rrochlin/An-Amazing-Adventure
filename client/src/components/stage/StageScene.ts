@@ -78,6 +78,8 @@ export class StageScene extends Phaser.Scene {
    private sprites = new Map<string, Phaser.GameObjects.Sprite>();
    private placed: Token[] = [];
    private label?: Phaser.GameObjects.Text;
+   /** What the name label is over. */
+   private hovered?: Phaser.GameObjects.GameObject;
    private framedRoom?: string;
    /** Where the player stands; theirs to move while they walk. */
    private playerTile?: Tile;
@@ -220,6 +222,7 @@ export class StageScene extends Phaser.Scene {
    update(time: number) {
       this.sleepWhenIdle(time);
       this.placeBubble();
+      this.placeLabel();
       const view = this.view;
       if (!view || this.walking || !this.playerTile) return;
       // The story walks the player first, whatever the controls.
@@ -896,14 +899,28 @@ export class StageScene extends Phaser.Scene {
    private nameOnHover(target: Phaser.GameObjects.GameObject & { x: number; y: number; displayHeight?: number }, name: string) {
       target.on('pointerover', () => {
          if (!this.label) return;
-         const zoom = this.cameras.main.zoom;
-         this.label
-            .setText(target.getData('name') ?? name)
-            .setScale(1 / zoom)
-            .setPosition(target.x, target.y - (target.displayHeight ?? TILE) - 2)
-            .setVisible(true);
+         this.hovered = target;
+         this.label.setText(target.getData('name') ?? name).setVisible(true);
+         this.placeLabel();
       });
-      target.on('pointerout', () => this.label?.setVisible(false));
+      target.on('pointerout', () => this.hideLabel(target));
+      // Someone who walks off or leaves takes their name with them (the
+      // panel found names left floating where people had stood).
+      target.once('destroy', () => this.hideLabel(target));
+   }
+
+   private hideLabel(target?: Phaser.GameObjects.GameObject) {
+      if (target && this.hovered !== target) return;
+      this.hovered = undefined;
+      this.label?.setVisible(false);
+   }
+
+   /** The name label follows whoever it names. */
+   private placeLabel() {
+      const t = this.hovered as (Phaser.GameObjects.GameObject & { x: number; y: number; displayHeight?: number; active: boolean }) | undefined;
+      if (!this.label || !t) return;
+      if (!t.active) return this.hideLabel();
+      this.label.setScale(1 / this.cameras.main.zoom).setPosition(t.x, t.y - (t.displayHeight ?? TILE) - 2);
    }
 
    /** Frame the current room between the sign and the text panel. */

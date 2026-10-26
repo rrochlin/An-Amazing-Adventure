@@ -381,4 +381,30 @@ describe('free roam and dialogue', () => {
       fireEvent.click(stage()); // on to the title card
       expect(onCaughtUp).toHaveBeenCalled();
    });
+
+   it('shows quest updates one at a time and lets every one of them go', () => {
+      const { update } = setup(inProgress);
+      update({
+         messages: [
+            ...inProgress,
+            { type: 'player', content: 'hi' },
+            {
+               type: 'narrative',
+               content: 'Dunstan runs off.',
+               events: [
+                  { type: 'objective_completed', message: 'Objective complete: Trouble in the Meadow' },
+                  { type: 'objective_unfinished', message: "Left unfinished: The Miller's Secret" },
+               ],
+            },
+         ],
+      });
+      tick(200);
+      expect(screen.getByText(/Trouble in the Meadow/)).toBeInTheDocument();
+      tick(4500);
+      expect(screen.queryByText(/Trouble in the Meadow/)).not.toBeInTheDocument();
+      expect(screen.getByText(/The Miller's Secret/)).toBeInTheDocument();
+      tick(4500);
+      // The second one goes too (it used to stay up for the rest of the game).
+      expect(screen.queryByText(/The Miller's Secret/)).not.toBeInTheDocument();
+   });
 });

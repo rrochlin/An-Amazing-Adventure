@@ -71,7 +71,11 @@ free roam first, add a condition the player meets by acting, such as `player_in_
 ```
 
 Until the player walks to Market Lane, the scene stays open and the other deeds can still be done.
-Briarwell moves on at once; `TestFreeRoamBufferBeforeTheNextScene` shows the paused version.
+Briarwell uses the paused version (the playtest panel disliked being whisked away mid-quest): its
+errand completes at two coins (`success_when` with `player_has_item`), its `on_success` changes the
+sign with `set_objective_text` ("Take them to Old Garrick's stall"), and the stall scene opens when the
+player walks into Market Lane. The deeds still open are left unfinished only then. Objectives are
+checked until nothing changes, so a deed's coin can finish the errand in the same turn.
 
 ### Rules that read the pack
 

@@ -13,6 +13,11 @@ describe('parseLine', () => {
       expect(parseLine('Bess: "It\'s Molly. My doll."')).toEqual({ speaker: 'Bess', text: "It's Molly. My doll." });
       expect(parseLine('Bess: “Gone,” she says, “gone.”').text).toBe('“Gone,” she says, “gone.”');
    });
+   it('reads a name with "the" or "of" in it', () => {
+      expect(parseLine("Hob the Miller: You didn't see anything.")).toEqual({ speaker: 'Hob the Miller', text: "You didn't see anything." });
+      expect(parseLine('Master of Coin: Pay up.').speaker).toBe('Master of Coin');
+      expect(parseLine('Then the miller: nothing.').speaker).toBeUndefined();
+   });
    it('leaves narration alone', () => {
       expect(parseLine('Father ruffles your hair.')).toEqual({
          text: 'Father ruffles your hair.',
