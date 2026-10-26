@@ -413,3 +413,17 @@ func TestTheGameMasterCantMoveThePlayerWhereTheSceneForbids(t *testing.T) {
 		t.Error("the brief says where the player can't go")
 	}
 }
+
+func TestTheBriefNamesPeopleAsThePlayerDoes(t *testing.T) {
+	def, g := briarwell(t)
+	if err := g.PlaceCharacter(g.OwnerID, "family_cottage"); err != nil {
+		t.Fatal(err)
+	}
+	brief := gm.Brief(def, g)
+	if !strings.Contains(brief, "whom the player calls Father: write their lines as Father:") {
+		t.Errorf("Tomas's lines should be Father's (the panel saw FATHER and TOMAS):\n%s", brief)
+	}
+	if strings.Contains(brief, "handled by the story") {
+		t.Error("the narration shouldn't learn to say 'the story' pays")
+	}
+}

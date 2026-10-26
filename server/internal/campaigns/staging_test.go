@@ -211,9 +211,15 @@ func TestTheErrandEndsWhenThePackHoldsTwoCoins(t *testing.T) {
 		t.Fatal("one coin isn't enough")
 	}
 	give()
+	if r, _ := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); r.Transition.Transitioned {
+		t.Fatal("two coins finish the errand; the stall waits for the player to walk there")
+	}
+	if err := g.PlaceCharacter(g.OwnerID, "market_lane"); err != nil {
+		t.Fatal(err)
+	}
 	r, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{})
 	if err != nil || r.Transition.ToNodeID != "gift_stall" {
-		t.Fatalf("two coins in the pack: on to the stall, got %+v %v", r.Transition, err)
+		t.Fatalf("two coins and at the stall: on to the scene, got %+v %v", r.Transition, err)
 	}
 
 	bad := *def

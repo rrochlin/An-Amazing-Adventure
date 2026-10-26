@@ -74,8 +74,20 @@ func TestBriarwell_DeedObjectivesTickOffAndUntouchedOneIsLeftUnfinished(t *testi
 	if err != nil {
 		t.Fatalf("second deed: %v", err)
 	}
-	if second.Transition.ToNodeID != "gift_stall" {
-		t.Fatalf("expected two deeds to move on to the gift stall, got %#v", second.Transition)
+	// Two coins: the errand is done, and the player is free to roam until
+	// they walk to the stall (the panel: being whisked away mid-quest).
+	if second.Transition.Transitioned || objectiveStatus(g, "earn_coins") != "completed" || objectiveStatus(g, "return_doll") != "active" {
+		t.Fatalf("two deeds: errand done, story waits; got %#v, earn_coins %q, return_doll %q", second.Transition, objectiveStatus(g, "earn_coins"), objectiveStatus(g, "return_doll"))
+	}
+	if !strings.Contains(g.Campaign.CurrentObjective, "Take them to Old Garrick's stall") {
+		t.Errorf("the sign should say where to go now, got %q", g.Campaign.CurrentObjective)
+	}
+	if err := g.PlaceCharacter(g.OwnerID, "market_lane"); err != nil {
+		t.Fatal(err)
+	}
+	third, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{})
+	if err != nil || third.Transition.ToNodeID != "gift_stall" {
+		t.Fatalf("walking to Market Lane opens the stall, got %#v %v", third.Transition, err)
 	}
 	for id, want := range map[string]string{"miller_secret": "completed", "return_doll": "unfinished", "earn_coins": "completed"} {
 		if got := objectiveStatus(g, id); got != want {
@@ -83,7 +95,7 @@ func TestBriarwell_DeedObjectivesTickOffAndUntouchedOneIsLeftUnfinished(t *testi
 		}
 	}
 	var messages []string
-	for _, e := range second.Events {
+	for _, e := range append(second.Events, third.Events...) {
 		messages = append(messages, e.Message)
 	}
 	joined := strings.Join(messages, " | ")
@@ -117,6 +129,15 @@ func TestBriarwell_UnfinishedQuestTakesItsItems(t *testing.T) {
 		Labels: map[string]string{"deed_bully": "stopped", "deed_miller": "took_bribe"},
 	})
 	if err != nil {
+		t.Fatal(err)
+	}
+	if turn.Transition.Transitioned {
+		t.Fatal("the stall waits for the player to walk there")
+	}
+	if err := g.PlaceCharacter(g.OwnerID, "market_lane"); err != nil {
+		t.Fatal(err)
+	}
+	if turn, err = campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
 		t.Fatal(err)
 	}
 	if turn.Transition.ToNodeID != "gift_stall" || objectiveStatus(g, "return_doll") != "unfinished" {

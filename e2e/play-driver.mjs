@@ -1,11 +1,13 @@
-// A long-running browser for playing the game by hand: HTTP commands on :9333.
+// A long-running browser for playing the game by hand: HTTP commands on :9333
+// (PORT to change it; SUB to play as another user, so several drivers can play at once).
 import { chromium } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs';
 const OUT = process.argv[2];
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
 const jwt = (claims) => `${b64({ alg: 'none', typ: 'JWT' })}.${b64(claims)}.sig`;
-const sub = 'rob-e2e';
+const sub = process.env.SUB || 'rob-e2e';
+const PORT = +(process.env.PORT || 9333);
 const tokens = { accessToken: jwt({ sub }), idToken: jwt({ sub, email: 'e2e@local', 'cognito:groups': [] }), refreshToken: 'r', expiresAt: Date.now() + 864e5, userSub: sub };
 
 const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -80,4 +82,4 @@ http.createServer(async (req, res) => {
       default: return reply({ error: 'unknown' });
     }
   } catch (e) { reply({ error: String(e).slice(0, 500), state: await state().catch(() => null) }); }
-}).listen(9333, () => console.log('driver on :9333'));
+}).listen(PORT, () => console.log(`driver on :${PORT} as ${sub}`));

@@ -22,7 +22,7 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 	line("You hand in the whole turn with the %s tool: first the narration (vivid prose, 2-4 paragraphs: sights, sounds, dialogue, action; no option lists, no tallies), then the world changes that actually happened, then the beats that were settled.", ToolName)
 	line("Narrate only what the player's action achieves this turn, where they are. Stop at the next decision point and leave the next step to the player: never carry them through a second errand or on to a second place in one turn.")
 	line("The player decides what their character does, says and feels: play out what they attempt. Never make their character hesitate, change their mind or decline. When something can't work, or a beat is already settled, show the world's answer instead (someone refuses, shrugs, pays nothing).")
-	line("Keep to the cast: don't give names to new characters (an unnamed passer-by is fine).")
+	line("Keep to the cast: don't give names to new characters. Only the people listed as here are in this place: don't put anyone else in it (no extra children, onlookers or neighbours), because the player can see who is there. Voices or figures somewhere else (across the square, beyond the fence) are fine.")
 	line("Everyone listed as here is in the room, beside the player, when the turn starts: they can leave during it (report move_character), but never narrate them as already gone.")
 	line("End on the moment itself: a line of dialogue, a sight, a question someone asks. Never end by listing what the player could do (\"You could..., or you could...\") and never recap the errands or places still open; the journal does that.")
 
@@ -70,7 +70,7 @@ func Brief(def *campaigns.CampaignDefinition, g *game.Game) string {
 	line("\n## Handing in your decision")
 	line("Allowed world changes in this scene: %s. Report only changes the narration made happen, never ones it mentioned or foreshadowed.", strings.Join(AllowedWorldEvents(node), ", "))
 	line("The narration and the world must agree. If the player picks something up or is handed something, report it (create_item for a new thing, then give_item_to_player), or it won't be in their pack; if they give something away, report take_item_from_player. If the scene doesn't allow the change, don't narrate it.")
-	line("Money and rewards are handled by the story: never create or give coins. In the narration, coins or items change hands only when a beat you settle this turn pays them (listed with the beat), or a world change you report hands them over. Nobody else pays the player.")
+	line("Money and rewards are paid by the deeds themselves: never create or give coins. In the narration, coins or items change hands only when a beat you settle this turn pays them (listed with the beat; whoever the deed was for hands it over), or a world change you report hands them over. Nobody else pays the player. Never mention the story, the game or the rules in the narration.")
 	if node != nil {
 		var open, settled []string
 		for _, s := range campaigns.AllowedConditionSpecsForNode(*node) {
@@ -166,7 +166,13 @@ func worldSlice(g *game.Game) string {
 			if !npc.Alive {
 				state = ", dead"
 			}
-			people = append(people, fmt.Sprintf("%s (%s%s)", npc.Name, npc.Description, state))
+			called := ""
+			if len(npc.Called) > 0 {
+				// The player's name for them is what their spoken lines use
+				// (the panel saw FATHER and TOMAS for one man).
+				called = fmt.Sprintf(", whom the player calls %s: write their lines as %s:", npc.Called[0], npc.Called[0])
+			}
+			people = append(people, fmt.Sprintf("%s (%s%s%s)", npc.Name, npc.Description, state, called))
 		}
 	}
 	sort.Strings(people)

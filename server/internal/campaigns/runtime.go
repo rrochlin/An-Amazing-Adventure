@@ -266,6 +266,24 @@ func AdvanceCampaign(def *CampaignDefinition, g *game.Game) (TransitionResult, e
 // returns an event for each one so the player sees the change. An objective
 // closed without success takes its quest items with it.
 func EvaluateObjectives(def *CampaignDefinition, g *game.Game) ([]game.WorldEvent, error) {
+	// Until nothing changes: one objective closing can settle another (a
+	// deed pays the coin that finishes the errand). Bounded, in case a
+	// script ever loops.
+	var events []game.WorldEvent
+	for pass := 0; pass < 5; pass++ {
+		more, err := evaluateObjectivesOnce(def, g)
+		if err != nil {
+			return nil, err
+		}
+		if len(more) == 0 {
+			break
+		}
+		events = append(events, more...)
+	}
+	return events, nil
+}
+
+func evaluateObjectivesOnce(def *CampaignDefinition, g *game.Game) ([]game.WorldEvent, error) {
 	var events []game.WorldEvent
 	for i := range g.Campaign.ActiveObjectives {
 		o := &g.Campaign.ActiveObjectives[i]
@@ -825,6 +843,10 @@ func applyActions(def *CampaignDefinition, g *game.Game, actions []Action) error
 			if err := g.PlaceCharacter(g.OwnerID, action.RoomID); err != nil {
 				return err
 			}
+		case "set_objective_text":
+			// What the player should do next, on the sign (the errand's coins
+			// earned: now take them to the stall).
+			state.CurrentObjective = action.Description
 		case "describe_room":
 			// The place as it is now (the square burning, then in ashes): what
 			// the player, the brief and arrival lines see from here on.

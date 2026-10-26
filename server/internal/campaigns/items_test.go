@@ -48,6 +48,10 @@ func TestBriarwell_GiftIsAnItemAndScenesMoveThePlayer(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	walkToStall(t, def, g)
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
+		t.Fatal(err)
+	}
 	if g.Campaign.ActiveNodeID != "gift_stall" || loc(g) != "market_lane" {
 		t.Fatalf("the stall scene should put the player on Market Lane, got node %q at %q", g.Campaign.ActiveNodeID, loc(g))
 	}
@@ -75,6 +79,10 @@ func TestTakeItemIsHarmlessWhenTheItemIsMissing(t *testing.T) {
 	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{
 		Labels: map[string]string{"deed_bully": "stopped", "deed_doll": "returned"},
 	}); err != nil {
+		t.Fatal(err)
+	}
+	walkToStall(t, def, g)
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
 		t.Fatal(err)
 	}
 	// No coins in the pack: the purchase still goes through.
@@ -115,7 +123,11 @@ func TestBriarwell_DeedsPayAndTakeTheirItems(t *testing.T) {
 	if got := inventoryNames(g); len(got) != 2 || got[0] != "copper coin" || got[1] != "copper coin" {
 		t.Fatalf("returning the doll hands it over and pays a coin, got %v", got)
 	}
-	// Two deeds done: on to the stall, where both coins are spent.
+	// Two deeds done: walk to the stall, where both coins are spent.
+	walkToStall(t, def, g)
+	if _, err := campaigns.OrchestrateTurn(def, g, campaigns.ConditionResolution{}); err != nil {
+		t.Fatal(err)
+	}
 	if g.Campaign.ActiveNodeID != "gift_stall" {
 		t.Fatalf("expected gift_stall, got %q", g.Campaign.ActiveNodeID)
 	}

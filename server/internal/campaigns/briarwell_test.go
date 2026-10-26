@@ -88,6 +88,10 @@ func chooseAndStay(t *testing.T, def *campaigns.CampaignDefinition, g *game.Game
 func advanceTo(t *testing.T, def *campaigns.CampaignDefinition, g *game.Game, wantNode string) {
 	t.Helper()
 	from := g.Campaign.ActiveNodeID
+	if wantNode == "gift_stall" {
+		// The errand done, the stall scene waits for the player to walk there.
+		walkToStall(t, def, g)
+	}
 	result, err := campaigns.AdvanceCampaign(def, g)
 	if err != nil {
 		t.Fatalf("advance from %q: %v", from, err)
@@ -220,5 +224,17 @@ func TestBriarwell_ResolverCannotSkipAhead(t *testing.T) {
 	})
 	if len(filtered.Labels) != 1 || filtered.Labels["deed_doll"] != "returned" {
 		t.Fatalf("expected only deed_doll=returned to survive filtering, got %#v", filtered.Labels)
+	}
+}
+
+// walkToStall settles what the errand's deeds paid, checks the story waits
+// (free roam), then walks the player to Market Lane.
+func walkToStall(t *testing.T, def *campaigns.CampaignDefinition, g *game.Game) {
+	t.Helper()
+	if r, err := campaigns.AdvanceCampaign(def, g); err != nil || r.Transitioned {
+		t.Fatalf("the stall scene should wait for the player to walk there: %+v %v", r, err)
+	}
+	if err := g.PlaceCharacter(g.OwnerID, "market_lane"); err != nil {
+		t.Fatal(err)
 	}
 }

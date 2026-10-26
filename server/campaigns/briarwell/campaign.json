@@ -242,7 +242,11 @@
     },
     "earn_coins": {
       "title": "Earn Some Coin",
-      "description": "Do good turns (or bad ones) around Briarwell to earn coin for Ros's gift. Two will do."
+      "description": "Do good turns (or bad ones) around Briarwell to earn coin for Ros's gift. Two will do.",
+      "success_when": [{ "type": "player_has_item", "item": "copper coin", "value": 2 }],
+      "on_success": [
+        { "type": "set_objective_text", "description": "Two coins! Take them to Old Garrick's stall in Market Lane, or finish what you started first." }
+      ]
     },
     "return_doll": {
       "on_success": [
@@ -254,7 +258,7 @@
       "optional": true,
       "success_when": [{ "type": "label_in", "key": "deed_doll", "values": ["returned", "kept"] }],
       "quest_items": ["rag doll|doll"],
-      "unfinished_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
+      "unfinished_when": [{ "type": "objective_status", "objective_id": "buy_gift", "status": "active" }]
     },
     "miller_secret": {
       "on_success": [
@@ -264,7 +268,7 @@
       "description": "Hob the Miller is up to something behind the barn.",
       "optional": true,
       "success_when": [{ "type": "label_in", "key": "deed_miller", "values": ["told_wife", "took_bribe"] }],
-      "unfinished_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
+      "unfinished_when": [{ "type": "objective_status", "objective_id": "buy_gift", "status": "active" }]
     },
     "meadow_bully": {
       "on_success": [
@@ -274,7 +278,7 @@
       "description": "Dunstan is picking on the smaller children again.",
       "optional": true,
       "success_when": [{ "type": "label_in", "key": "deed_bully", "values": ["stopped", "joined"] }],
-      "unfinished_when": [{ "type": "objective_status", "objective_id": "earn_coins", "status": "completed" }]
+      "unfinished_when": [{ "type": "objective_status", "objective_id": "buy_gift", "status": "active" }]
     },
     "buy_gift": {
       "title": "Buy Ros a Gift",
@@ -390,10 +394,10 @@
       "completion_rules": [
         {
           "conditions": [
-            { "type": "player_has_item", "item": "copper coin", "value": 2 }
+            { "type": "objective_status", "objective_id": "earn_coins", "status": "completed" },
+            { "type": "player_in_room", "room_id": "market_lane" }
           ],
-          "next_node_id": "gift_stall",
-          "actions": [{ "type": "complete_objective", "objective_id": "earn_coins" }]
+          "next_node_id": "gift_stall"
         }
       ],
       "narrator_contract": {
